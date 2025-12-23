@@ -11,9 +11,15 @@ export function useSignaling(displayName) {
 
     useEffect(() => {
         // Connect to server on the same hostname but port 3001
+        // Priority 1: Environment Variable (for production/custom setup)
+        const envUrl = import.meta.env.VITE_SERVER_URL;
+
+        // Priority 2: Auto-detect (for local LAN development)
         const protocol = window.location.protocol;
         const hostname = window.location.hostname;
-        const url = `${protocol}//${hostname}:${SIGNALING_SERVER_PORT}`;
+        const localUrl = `${protocol}//${hostname}:${SIGNALING_SERVER_PORT}`;
+
+        const url = envUrl || localUrl;
 
         console.log("Connecting to signaling server:", url);
 
