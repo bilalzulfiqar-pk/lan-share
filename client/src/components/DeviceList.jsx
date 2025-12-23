@@ -19,10 +19,13 @@ export const DeviceList = ({ devices, onToogle, selectedDevice }) => {
             const seed = device.id;
             // Angle between 0 and 360
             const angle = seededRandom(seed + 'angle') * 360;
-            // Radius between 30% and 130px (approx 3rd circle)
-            // Max radius of container is about 150-200px based on circles
-            // Let's use % relative to center
-            const radius = 60 + seededRandom(seed + 'dist') * 140; // 60px to 200px
+
+            // Radius as percentage of container (0 to 50%)
+            // We want them distributed in the outer circles mostly
+            // Circles are 25vmin, 50vmin, 75vmin, 100vmin. 
+            // Max radius is 50vmin (half of 100vmin diameter).
+            // Let's place them between 10% and 45% radius.
+            const radius = 10 + seededRandom(seed + 'dist') * 35; // 10% to 45%
 
             return {
                 ...device,
@@ -49,6 +52,8 @@ export const DeviceList = ({ devices, onToogle, selectedDevice }) => {
             {/* Devices */}
             <AnimatePresence>
                 {devicePositions.map((device) => {
+                    // Convert polar to cartesian (percentages)
+                    // x, y are offsets from center in %. 
                     const x = Math.cos(device.angle * Math.PI / 180) * device.radius;
                     const y = Math.sin(device.angle * Math.PI / 180) * device.radius;
 
@@ -57,8 +62,8 @@ export const DeviceList = ({ devices, onToogle, selectedDevice }) => {
                             key={device.id}
                             className={`radar-blip ${selectedDevice === device.id ? 'selected' : ''}`}
                             style={{
-                                top: `calc(50% + ${y}px)`,
-                                left: `calc(50% + ${x}px)`,
+                                top: `${50 + y}%`,
+                                left: `${50 + x}%`,
                             }}
                             onClick={() => onToogle(device.id)}
                             initial={{ scale: 0, opacity: 0 }}

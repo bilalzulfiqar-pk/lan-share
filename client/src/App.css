@@ -271,6 +271,8 @@ body {
   gap: 2rem;
   flex: 1;
   width: 100%;
+  position: relative;
+  /* Context for breakout */
 }
 
 @media (min-width: 900px) {
@@ -280,15 +282,16 @@ body {
 /* Sections */
 .radar-section {
   /* Hero section for Radar */
-  width: 100%;
+  width: 100vw;
+  /* Full viewport width */
+  margin-left: calc(-50vw + 50%);
+  /* Breakout of container centering */
+  margin-right: calc(-50vw + 50%);
   height: 60vh;
-  /* Takes up 60% of viewport height */
-  min-height: 400px;
+  min-height: 450px;
   position: relative;
-  /* Removal of card styling for cleaner look, or keep it */
-  /* background: var(--glass); 
-     border: 1px solid var(--glass-border);
-     border-radius: var(--radius-xl); */
+  overflow: visible;
+  /* Allow circles to feel like they go under */
 }
 
 /* History Section */
@@ -328,11 +331,11 @@ body {
   position: relative;
   width: 100%;
   height: 100%;
-  min-height: 400px;
   display: flex;
   align-items: center;
   justify-content: center;
   overflow: hidden;
+  /* Clip ONLY at the viewport edges */
   /* Radar background - optional subtleness */
   background: radial-gradient(circle at center, rgba(59, 130, 246, 0.03) 0%, transparent 70%);
 }
@@ -349,32 +352,33 @@ body {
   pointer-events: none;
 }
 
-/* Sizes for concentric circles */
+/* Responsive Sizes using vmin (min of viewport width/height) to always fit screen nicely */
 .radar-circle:nth-child(1) {
-  width: 150px;
-  height: 150px;
+  width: 25vmin;
+  height: 25vmin;
 }
 
 .radar-circle:nth-child(2) {
-  width: 300px;
-  height: 300px;
+  width: 50vmin;
+  height: 50vmin;
 }
 
 .radar-circle:nth-child(3) {
-  width: 450px;
-  height: 450px;
+  width: 75vmin;
+  height: 75vmin;
 }
 
+/* The last circle goes slightly off-screen or touches edges */
 .radar-circle:nth-child(4) {
-  width: 600px;
-  height: 600px;
+  width: 100vmin;
+  height: 100vmin;
   opacity: 0.5;
 }
 
 .radar-beam {
   position: absolute;
-  width: 50%;
-  /* Half the container width to rotate around center */
+  width: 50vmax;
+  /* Enough to cover corners */
   height: 2px;
   /* Or a gradient sector */
   top: 50%;
@@ -392,8 +396,9 @@ body {
   position: absolute;
   top: 50%;
   left: 50%;
-  width: 600px;
-  height: 600px;
+  width: 100vmax;
+  /* Ensure it covers everything regardless of rotation */
+  height: 100vmax;
   transform: translate(-50%, -50%);
   background: conic-gradient(from 0deg,
       transparent 0deg,
