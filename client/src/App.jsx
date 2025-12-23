@@ -17,6 +17,9 @@ function App() {
   // We store ID of selected device
   const [selectedDevice, setSelectedDevice] = useState(null);
 
+  // Guide State
+  const [showGuide, setShowGuide] = useState(true);
+
   // Persistence
   useEffect(() => {
     localStorage.setItem('lan-share-name', displayName);
@@ -27,6 +30,14 @@ function App() {
     document.documentElement.setAttribute('data-theme', theme);
     localStorage.setItem('lan-share-theme', theme);
   }, [theme]);
+
+  // Fade out guide text
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setShowGuide(false);
+    }, 4000);
+    return () => clearTimeout(timer);
+  }, []);
 
   const toggleTheme = () => {
     setTheme(prev => prev === 'light' ? 'dark' : 'light');
@@ -132,21 +143,46 @@ function App() {
 
       <div className="main-layout">
 
-        {/* Helper Context Section (Optional, explain what to do) */}
-        {!selectedDevice && (
-          <div style={{ textAlign: 'center', marginBottom: '-1rem', zIndex: 5, pointerEvents: 'none' }}>
-            <h2 style={{ fontSize: '1.5rem', fontWeight: '800', marginBottom: '0.5rem' }}>Look for devices nearby</h2>
-            <p style={{ color: 'var(--text-secondary)' }}>Devices on your local network will pop up on the radar.</p>
-          </div>
-        )}
-
         {/* Radar Section - Hero */}
         <div className="radar-section">
+
+          {/* Overlay Guide Text */}
+          <div style={{
+            position: 'absolute',
+            top: '1%',
+            left: '50%',
+            transform: 'translateX(-50%)',
+            zIndex: 10,
+            textAlign: 'center',
+            width: '100%',
+            pointerEvents: 'none'
+          }}>
+            <h2 style={{
+              fontSize: '1.5rem',
+              fontWeight: '800',
+              marginBottom: '0.25rem',
+              opacity: showGuide ? 1 : 0,
+              transition: 'opacity 1s ease',
+              textShadow: '0 2px 10px var(--glass-border)'
+            }}>
+              Look for devices nearby
+            </h2>
+            <p style={{
+              color: 'var(--text-secondary)',
+              opacity: showGuide ? 1 : 0,
+              transition: 'opacity 1s ease',
+              margin: 0
+            }}>
+              Devices on your local network will pop up on the radar.
+            </p>
+          </div>
+
           <DeviceList
             devices={peers}
             onToogle={handleDeviceToggle}
             selectedDevice={selectedDevice}
           />
+
 
           {selectedDevice && (
             <div style={{

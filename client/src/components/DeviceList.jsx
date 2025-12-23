@@ -73,9 +73,9 @@ export const DeviceList = ({ devices, onToogle, selectedDevice }) => {
                                     </svg>
                                 ) : (
                                     <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                         <rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect>
-                                         <line x1="8" y1="21" x2="16" y2="21"></line>
-                                         <line x1="12" y1="17" x2="12" y2="21"></line>
+                                        <rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect>
+                                        <line x1="8" y1="21" x2="16" y2="21"></line>
+                                        <line x1="12" y1="17" x2="12" y2="21"></line>
                                     </svg>
                                 )}
                             </div>
@@ -86,11 +86,11 @@ export const DeviceList = ({ devices, onToogle, selectedDevice }) => {
                     );
                 })}
             </AnimatePresence>
-            
+
             {devices.length === 0 && (
                 <div style={{
-                    position: 'absolute', 
-                    bottom: '20px', 
+                    position: 'absolute',
+                    bottom: '20px',
                     color: 'var(--text-tertiary)',
                     fontSize: '0.85rem',
                     textAlign: 'center',
