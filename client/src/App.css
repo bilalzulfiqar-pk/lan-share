@@ -308,6 +308,16 @@ body {
   justify-content: space-between;
 }
 
+.hover-btn {
+  color: var(--text-tertiary);
+  transition: color 0.25s ease, text-shadow 0.25s ease;
+}
+
+.hover-btn:hover {
+  color: var(--text-primary);
+  text-shadow: 0 1px 6px rgba(0, 0, 0, 0.2);
+}
+
 .section-title {
   font-size: 1.1rem;
   font-weight: 700;
@@ -332,7 +342,7 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  overflow: hidden;
+  overflow: visible;
   /* Radar background - contained within the square */
   background: radial-gradient(circle at center, rgba(59, 130, 246, 0.03) 0%, transparent 70%);
   border-radius: 50%;
@@ -357,23 +367,23 @@ body {
 
 /* Sizes relative to the square container */
 .radar-circle:nth-child(1) {
-  width: 25%;
-  height: 25%;
+  width: 28%;
+  height: 28%;
 }
 
 .radar-circle:nth-child(2) {
-  width: 50%;
-  height: 50%;
+  width: 56%;
+  height: 56%;
 }
 
 .radar-circle:nth-child(3) {
-  width: 75%;
-  height: 75%;
+  width: 84%;
+  height: 84%;
 }
 
 .radar-circle:nth-child(4) {
-  width: 100%;
-  height: 100%;
+  width: 112%;
+  height: 112%;
   opacity: 1;
   /* border-style: dashed; */
 }
@@ -400,9 +410,9 @@ body {
   position: absolute;
   top: 50%;
   left: 50%;
-  width: 100%;
+  width: 140%;
   /* Cover the square */
-  height: 100%;
+  height: 140%;
   transform: translate(-50%, -50%);
   background: conic-gradient(from 0deg,
       transparent 0deg,
@@ -693,4 +703,146 @@ body {
 
 ::-webkit-scrollbar-thumb:hover {
   background: var(--text-tertiary);
+}
+
+/* =========================================
+   Mobile Responsiveness
+   ========================================= */
+
+@media (max-width: 768px) {
+
+  /* Container */
+  .app-container {
+    padding: 0.5rem;
+  }
+
+  /* Header */
+  .app-header {
+    flex-direction: column;
+    gap: 1rem;
+    padding: 1rem;
+    align-items: stretch;
+  }
+
+  .logo-section {
+    text-align: center;
+  }
+
+  .status-section {
+    justify-content: space-between;
+    width: 100%;
+    gap: 0.5rem;
+  }
+
+  .server-indicator span {
+    display: none;
+    /* Hide text on small screens, keep dot */
+  }
+
+  .user-badge {
+    flex-grow: 1;
+    align-items: flex-end;
+  }
+
+  .user-name-input {
+    width: 100px !important;
+    /* Force smaller width */
+    font-size: 0.9rem !important;
+  }
+
+  /* Radar Section */
+  .radar-section {
+    height: 50vh;
+    /* Smaller height on mobile */
+    min-height: 350px;
+    overflow: visible;
+    /* Prevent beam from causing horizontal scroll */
+  }
+
+  .radar-container {
+    width: 100%;
+    max-width: 350px;
+    /* Limit max size on mobile */
+  }
+
+  /* History Section */
+  .history-section {
+    padding: 1rem;
+  }
+
+  .file-item {
+    grid-template-columns: auto 1fr;
+    grid-template-rows: auto auto;
+    /* Icon | Details */
+    /* Actions (span 2) */
+    gap: 0.5rem 1rem;
+    align-items: center;
+    padding: 1rem;
+  }
+
+  .file-icon {
+    width: 40px;
+    height: 40px;
+    font-size: 1.2rem;
+    grid-row: 1;
+    grid-column: 1;
+  }
+
+  .file-details {
+    grid-row: 1;
+    grid-column: 2;
+  }
+
+  .file-actions {
+    position: static;
+    width: 100%;
+    grid-row: 2;
+    grid-column: 1 / -1;
+    justify-content: flex-end;
+    margin-top: 0.5rem;
+    padding-top: 0.5rem;
+    border-top: 1px solid var(--glass-border);
+  }
+
+  .file-meta {
+    flex-wrap: wrap;
+    gap: 0.25rem;
+    font-size: 0.75rem;
+  }
+
+  .file-name {
+    font-size: 0.95rem;
+    max-width: 100%;
+    /* Allow full width */
+  }
+}
+
+@media (max-width: 480px) {
+  /* Extra Small Screens */
+
+  /* Adjust Radar Overlay Text */
+  .radar-section h2 {
+    font-size: 1.2rem !important;
+  }
+
+  .radar-section p {
+    font-size: 0.85rem !important;
+    max-width: 80%;
+    margin: 0 auto !important;
+  }
+
+  /* Further reduce Radar Size */
+  .radar-section {
+    min-height: 300px;
+    height: 45vh;
+  }
+
+  .radar-container {
+    max-width: 300px;
+  }
+
+  /* Hide User ID on very small screens if needed */
+  .user-id {
+    display: none;
+  }
 }

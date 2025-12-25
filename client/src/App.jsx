@@ -94,7 +94,7 @@ function App() {
             <span>{isConnected ? 'Online' : 'Offline'}</span>
           </div>
 
-          <div className="user-badge" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <div className="user-badge" style={{ display: 'flex', alignItems: 'right', gap: '8px' }}>
             {/* Name Input with Edit Icon */}
             <div className="name-edit-wrapper" style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
               <input
@@ -187,7 +187,7 @@ function App() {
           {selectedDevice && (
             <div style={{
               position: 'absolute',
-              bottom: '2rem',
+              bottom: '0rem',
               left: '50%',
               transform: 'translateX(-50%)',
               zIndex: 20,
@@ -218,7 +218,8 @@ function App() {
               </label>
               <button
                 onClick={() => setSelectedDevice(null)}
-                style={{ background: 'transparent', border: 'none', color: 'var(--text-tertiary)', fontSize: '0.8rem', cursor: 'pointer', textDecoration: 'underline' }}
+                className='hover-btn'
+                style={{ background: 'transparent', border: 'none', fontSize: '0.8rem', cursor: 'pointer' }}
               >
                 Cancel Selection
               </button>
