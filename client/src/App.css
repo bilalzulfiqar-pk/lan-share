@@ -333,6 +333,7 @@ body {
   height: 60vh;
   min-height: 450px;
   position: relative;
+  padding: 0.8rem 0;
   /* No background or borders as requested */
 }
 
@@ -871,7 +872,7 @@ body {
     justify-content: center;
     overflow: visible;
     /* keep visible */
-    padding: 1.1rem 0 0.6rem;
+    padding: 1.3rem 0 0.6rem;
     /* Add padding */
   }
 
@@ -975,6 +976,7 @@ body {
     height: auto;
     overflow-y: visible;
     overflow-x: clip;
+    padding: 3rem 0 0;
   }
 
   .radar-container {
