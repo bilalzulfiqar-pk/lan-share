@@ -120,30 +120,36 @@ body {
 
 /* Utilities */
 .btn {
-  border: none;
-  cursor: pointer;
   padding: 0.75rem 1.5rem;
-  border-radius: var(--radius-md);
+  border-radius: 12px;
+  border: 1px solid transparent;
+  cursor: pointer;
   font-weight: 600;
-  font-size: 0.95rem;
-  transition: all 0.2s ease;
+  transition: all 0.2s cubic-bezier(0.2, 0, 0, 1);
   display: inline-flex;
   align-items: center;
   gap: 0.5rem;
+  font-size: 0.95rem;
+}
+
+.btn:active {
+  transform: scale(0.98);
 }
 
 .btn-primary {
-  background: linear-gradient(135deg, var(--primary), var(--accent));
+  background: var(--primary);
   color: white;
-  box-shadow: 0 4px 12px var(--primary-glow);
+  box-shadow: 0 4px 6px -1px rgba(59, 130, 246, 0.2), 0 2px 4px -1px rgba(59, 130, 246, 0.1);
   width: 100%;
   display: flex;
   justify-content: center;
   align-items: center;
+  border: 1px solid rgba(255, 255, 255, 0.1);
 }
 
 .btn-primary:hover {
   filter: brightness(1.1);
+  box-shadow: 0 10px 15px -3px rgba(59, 130, 246, 0.3);
   transform: translateY(-1px);
 }
 
@@ -201,16 +207,53 @@ body {
   top: 1rem;
 }
 
+.logo-section {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+}
+
+.logo-wrapper {
+  background: var(--primary);
+  color: white;
+  width: 44px;
+  height: 44px;
+  border-radius: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 8px 16px -4px var(--primary-glow);
+}
+
+.title-group {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
 .logo-section h1 {
   margin: 0;
-  font-size: 1.5rem;
-  background: linear-gradient(to right, #60a5fa, #c084fc);
-  background-clip: text;
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  color: transparent;
+  font-size: 1.4rem;
+  color: #1e3a8a;
+  /* Deep Slate Blue for professional look */
   font-weight: 800;
-  letter-spacing: -0.02em;
+  letter-spacing: -0.04em;
+  line-height: 1;
+}
+
+[data-theme='dark'] .logo-section h1 {
+  color: #f1f5f9;
+}
+
+.mini-heading {
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: var(--primary);
+  opacity: 0.8;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  margin-top: 3px;
 }
 
 .status-section {
@@ -713,7 +756,8 @@ body {
 
 /* Scrollbar */
 ::-webkit-scrollbar {
-  width: 8px;
+  width: 10px;
+  /* Medium width + space for border */
 }
 
 ::-webkit-scrollbar-track {
@@ -721,13 +765,53 @@ body {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #cbd5e1;
-  /* Slate 300 */
-  border-radius: 4px;
+  background: rgba(148, 163, 184, 0.4);
+  /* Soft slate for light */
+  border-radius: 100px;
+  border: 3px solid transparent;
+  /* Creates spacing from edge */
+  background-clip: padding-box;
+  transition: background 0.2s ease;
+}
+
+[data-theme='dark'] ::-webkit-scrollbar-thumb {
+  background: #232e3f;
+  border: 3px solid transparent;
+  background-clip: padding-box;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: var(--text-tertiary);
+  background: #94a3b8;
+  /* Slate-400 for light hover */
+  border: 3px solid transparent;
+  background-clip: padding-box;
+}
+
+[data-theme='dark'] ::-webkit-scrollbar-thumb:hover {
+  background: #3b5068;
+  /* Brighter blue-slate for dark hover */
+  border: 3px solid transparent;
+  background-clip: padding-box;
+}
+
+/* New Popup Class */
+.file-selection-popup {
+  position: absolute;
+  bottom: 0rem;
+  left: 50%;
+  /* Transform handled by motion */
+  z-index: 20;
+  background: var(--bg-surface);
+  padding: 1.5rem 2rem;
+  border-radius: 24px;
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+  border: 1px solid var(--glass-border);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+  min-width: 320px;
+  backdrop-filter: blur(12px);
 }
 
 /* =========================================
@@ -858,6 +942,22 @@ body {
 @media (max-width: 480px) {
   /* Extra Small Screens */
 
+  .app-container {
+    padding: 0rem;
+  }
+
+  .app-header {
+    margin: 0 0.5rem;
+  }
+
+  .history-section {
+    margin: 0 0.5rem;
+  }
+
+  .logo-wrapper {
+    display: none;
+  }
+
   /* Adjust Radar Overlay Text */
   .radar-section h2 {
     font-size: 1.2rem !important;
@@ -873,6 +973,8 @@ body {
   .radar-section {
     min-height: 300px;
     height: auto;
+    overflow-y: visible;
+    overflow-x: clip;
   }
 
   .radar-container {
