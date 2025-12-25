@@ -752,17 +752,30 @@ body {
 
   /* Radar Section */
   .radar-section {
-    height: 50vh;
-    /* Smaller height on mobile */
+    height: auto;
+    /* Let content drive height */
     min-height: 350px;
+    width: 100%;
+    /* Use flex to center the container */
+    display: flex;
+    align-items: center;
+    justify-content: center;
     overflow: visible;
-    /* Prevent beam from causing horizontal scroll */
+    /* keep visible */
+    padding: 1.1rem 0 0.6rem;
+    /* Add padding */
   }
 
   .radar-container {
     width: 100%;
     max-width: 350px;
-    /* Limit max size on mobile */
+    /* Limit max size */
+    aspect-ratio: 1 / 1;
+    /* Force square */
+    height: auto;
+    /* Allow height to be determined by width + aspect-ratio */
+    flex-shrink: 0;
+    /* Prevent squishing */
   }
 
   /* History Section */
@@ -834,7 +847,7 @@ body {
   /* Further reduce Radar Size */
   .radar-section {
     min-height: 300px;
-    height: 45vh;
+    height: auto;
   }
 
   .radar-container {
