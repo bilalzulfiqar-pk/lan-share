@@ -280,18 +280,13 @@ body {
 }
 
 /* Sections */
+/* Sections */
 .radar-section {
-  /* Hero section for Radar */
-  width: 100vw;
-  /* Full viewport width */
-  margin-left: calc(-50vw + 50%);
-  /* Breakout of container centering */
-  margin-right: calc(-50vw + 50%);
+  width: 100%;
   height: 60vh;
   min-height: 450px;
   position: relative;
-  overflow: visible;
-  /* Allow circles to feel like they go under */
+  /* No background or borders as requested */
 }
 
 /* History Section */
@@ -304,7 +299,6 @@ body {
   display: flex;
   flex-direction: column;
   max-height: 400px;
-  /* Limit height and scroll */
 }
 
 .section-header {
@@ -322,83 +316,93 @@ body {
   align-items: center;
   gap: 0.5rem;
   color: var(--text-secondary);
-  /* Subtler title */
 }
 
-/* Device List */
 /* Radar View */
 .radar-container {
   position: relative;
-  width: 100%;
+  /* Make the radar area a perfect square based on the smaller dimension */
   height: 100%;
+  aspect-ratio: 1/1;
+  max-width: 100%;
+  /* Prevent overflow on narrow screens */
+  margin: 0 auto;
+  /* Center horizontal */
+
   display: flex;
   align-items: center;
   justify-content: center;
   overflow: hidden;
-  /* Clip ONLY at the viewport edges */
-  /* Radar background - optional subtleness */
+  /* Radar background - contained within the square */
   background: radial-gradient(circle at center, rgba(59, 130, 246, 0.03) 0%, transparent 70%);
+  border-radius: 50%;
+  /* Optional: clip the whole container to circle? Or keep square? Keeping square allows corners for beam */
 }
+
+/* On mobile where width < height, aspect-ratio 1/1 ensures it stays square */
 
 .radar-circle {
   position: absolute;
   border-radius: 50%;
   border: 1px solid var(--radar-grid);
-  /* Use themed var */
   box-shadow: 0 0 15px rgba(59, 130, 246, 0.02);
   top: 50%;
   left: 50%;
   transform: translate(-50%, -50%);
+  /* Start at center */
+  aspect-ratio: 1/1;
+  /* Ensure circles are circles */
   pointer-events: none;
 }
 
-/* Responsive Sizes using vmin (min of viewport width/height) to always fit screen nicely */
+/* Sizes relative to the square container */
 .radar-circle:nth-child(1) {
-  width: 25vmin;
-  height: 25vmin;
+  width: 25%;
+  height: 25%;
 }
 
 .radar-circle:nth-child(2) {
-  width: 50vmin;
-  height: 50vmin;
+  width: 50%;
+  height: 50%;
 }
 
 .radar-circle:nth-child(3) {
-  width: 75vmin;
-  height: 75vmin;
+  width: 75%;
+  height: 75%;
 }
 
-/* The last circle goes slightly off-screen or touches edges */
 .radar-circle:nth-child(4) {
-  width: 100vmin;
-  height: 100vmin;
-  opacity: 0.5;
+  width: 100%;
+  height: 100%;
+  opacity: 1;
+  /* border-style: dashed; */
 }
 
+/* Beam */
 .radar-beam {
+  /* Linear beam */
   position: absolute;
-  width: 50vmax;
-  /* Enough to cover corners */
+  width: 50%;
+  /* Half width of container (radius) */
   height: 2px;
-  /* Or a gradient sector */
   top: 50%;
   left: 50%;
   background: linear-gradient(90deg, rgba(59, 130, 246, 0) 0%, var(--primary) 100%);
   transform-origin: 0% 50%;
-  /* Pivot at the center of the viewport (which is left end of this line) */
+  /* Pivot at left side (center of container) */
   animation: radar-scan 4s linear infinite;
   pointer-events: none;
   z-index: 0;
 }
 
-/* Alternative: Conic gradient for a "sector" beam */
+/* Sector beam */
 .radar-beam-sector {
   position: absolute;
   top: 50%;
   left: 50%;
-  width: 100vmax;
-  /* Ensure it covers everything regardless of rotation */
-  height: 100vmax;
+  width: 100%;
+  /* Cover the square */
+  height: 100%;
   transform: translate(-50%, -50%);
   background: conic-gradient(from 0deg,
       transparent 0deg,
@@ -431,6 +435,20 @@ body {
   }
 }
 
+@keyframes pulse-center {
+
+  0%,
+  100% {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+  }
+
+  50% {
+    opacity: 0.95;
+    transform: translate(-50%, -50%) scale(0.95);
+  }
+}
+
 /* Center Self Marker */
 .radar-center {
   position: absolute;
@@ -443,7 +461,7 @@ body {
   top: 50%;
   left: 50%;
   transform: translate(-50%, -50%);
-  animation: pulse 2s infinite;
+  animation: pulse-center 2s infinite;
 }
 
 /* Device Blips */
