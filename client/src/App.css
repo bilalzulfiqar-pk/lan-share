@@ -136,6 +136,10 @@ body {
   background: linear-gradient(135deg, var(--primary), var(--accent));
   color: white;
   box-shadow: 0 4px 12px var(--primary-glow);
+  width: 100%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
 }
 
 .btn-primary:hover {
@@ -553,24 +557,42 @@ body {
 .file-item {
   display: grid;
   grid-template-columns: auto 1fr auto;
-  gap: 1rem;
-  padding: 1rem;
+  gap: 1.25rem;
+  padding: 1.25rem;
   background: var(--bg-surface);
   border: 1px solid var(--glass-border);
-  border-radius: var(--radius-md);
+  border-radius: 16px;
+  /* Rounded premium feel */
   align-items: center;
   animation: fadeIn 0.3s ease;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+  /* Subtle depth */
+  transition: transform 0.2s cubic-bezier(0.2, 0, 0, 1), box-shadow 0.2s, border-color 0.2s;
+}
+
+.file-item:hover {
+  /* transform: translateY(-2px); */
+  box-shadow: 0 12px 24px -8px rgba(0, 0, 0, 0.15);
+  border-color: var(--primary);
 }
 
 .file-icon {
-  width: 48px;
-  height: 48px;
-  border-radius: var(--radius-sm);
-  background: var(--bg-surface-active);
+  width: 52px;
+  height: 52px;
+  border-radius: 14px;
+  background: rgba(59, 130, 246, 0.08);
+  /* Very subtle primary tint */
   display: flex;
   align-items: center;
   justify-content: center;
   font-size: 1.5rem;
+  color: var(--primary);
+  border: 1px solid rgba(59, 130, 246, 0.1);
+}
+
+.file-icon svg {
+  width: 28px;
+  height: 28px;
 }
 
 .file-details {
@@ -578,12 +600,14 @@ body {
 }
 
 .file-name {
-  font-weight: 600;
-  margin-bottom: 0.25rem;
+  font-weight: 700;
+  margin-bottom: 0.35rem;
+  font-size: 1rem;
   display: block;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  color: var(--text-primary);
 }
 
 .file-meta {
@@ -592,10 +616,11 @@ body {
   display: flex;
   gap: 0.5rem;
   align-items: center;
+  font-weight: 500;
 }
 
 .file-meta span {
-  opacity: 0.8;
+  opacity: 0.9;
 }
 
 .transfer-status {
@@ -666,7 +691,7 @@ body {
   background: rgba(59, 130, 246, 0.1);
   padding: 2px 6px;
   border-radius: 4px;
-  margin-left: 8px;
+  /* margin-left: 8px; */
 }
 
 /* Empty State */
@@ -794,8 +819,8 @@ body {
   }
 
   .file-icon {
-    width: 40px;
-    height: 40px;
+    width: 50px;
+    height: 50px;
     font-size: 1.2rem;
     grid-row: 1;
     grid-column: 1;
