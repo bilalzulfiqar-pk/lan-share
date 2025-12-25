@@ -159,7 +159,7 @@ function App() {
         <div className="radar-section">
 
           {/* Overlay Guide Text */}
-          <div style={{
+          <div className='guide-text' style={{
             position: 'absolute',
             top: '1%',
             left: '50%',

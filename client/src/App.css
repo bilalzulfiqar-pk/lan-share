@@ -970,6 +970,10 @@ body {
     margin: 0 auto !important;
   }
 
+  .guide-text {
+    padding: 1.5rem;
+  }
+
   /* Further reduce Radar Size */
   .radar-section {
     min-height: 300px;
