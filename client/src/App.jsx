@@ -12,8 +12,42 @@ function App() {
   // Theme State
   const [theme, setTheme] = useState(() => localStorage.getItem('lan-share-theme') || 'light');
 
-  const { socket, peers, isConnected, myId } = useSignaling(displayName);
+  const { socket, peers, isConnected, isReconnecting, connectionStartTime, myId } = useSignaling(displayName);
   const { history, sendFilesOffer, requestFile, cancelTransfer, error } = useWebRTC(socket, myId);
+
+  // Cold Start detection logic
+  const [serverStatusMessage, setServerStatusMessage] = useState(null);
+
+  useEffect(() => {
+    let timer;
+    if (!isConnected) {
+      // Check every second how long we've been waiting
+      timer = setInterval(() => {
+        const elapsed = Date.now() - connectionStartTime;
+
+        if (elapsed > 3000 && elapsed < 25000) {
+          setServerStatusMessage({
+            title: "Server is starting up…",
+            description: "This app uses a free-tier server, which may sleep when inactive. Startup usually takes up to 20 seconds.",
+            type: 'warning'
+          });
+        } else if (elapsed >= 25000) {
+          setServerStatusMessage({
+            title: "Connection Issue",
+            description: "The server may be offline or unavailable. Please try again later.",
+            type: 'error'
+          });
+        } else {
+          setServerStatusMessage(null);
+        }
+      }, 1000);
+    } else {
+      // Connected! Clear message
+      setServerStatusMessage(null);
+    }
+
+    return () => clearInterval(timer);
+  }, [isConnected, connectionStartTime, isReconnecting]);
 
   // We store ID of selected device
   const [selectedDevice, setSelectedDevice] = useState(null);
@@ -153,6 +187,44 @@ function App() {
         </div>
       </header>
 
+      <AnimatePresence>
+        {/* Server Cold Start / Status Message (Fixed Popup) */}
+        {serverStatusMessage && !isConnected && (
+          <motion.div
+            className={`server-status-popup ${serverStatusMessage.type}`}
+            initial={{ opacity: 0, y: -20, x: "-50%" }}
+            animate={{ opacity: 1, y: 0, x: "-50%" }}
+            exit={{ opacity: 0, y: -20, x: "-50%" }}
+            transition={{ duration: 0.4, type: "spring", stiffness: 500, damping: 30 }}
+          >
+            <div className="server-status-icon">
+              {serverStatusMessage.type === 'warning' ? (
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ animation: 'spin 3s linear infinite' }}>
+                  <path d="M12 2v4"></path>
+                  <path d="m16.2 7.8 2.9-2.9"></path>
+                  <path d="M18 12h4"></path>
+                  <path d="m16.2 16.2 2.9 2.9"></path>
+                  <path d="M12 18v4"></path>
+                  <path d="m4.9 19.1 2.9-2.9"></path>
+                  <path d="M2 12h4"></path>
+                  <path d="m4.9 4.9 2.9 2.9"></path>
+                </svg>
+              ) : (
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <circle cx="12" cy="12" r="10"></circle>
+                  <line x1="12" y1="8" x2="12" y2="12"></line>
+                  <line x1="12" y1="16" x2="12.01" y2="16"></line>
+                </svg>
+              )}
+            </div>
+            <div className="server-status-content">
+              <h3>{serverStatusMessage.title}</h3>
+              <p>{serverStatusMessage.description}</p>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* Global Error Banner */}
       {error && (
         <div style={{
@@ -173,6 +245,7 @@ function App() {
 
         {/* Radar Section - Hero */}
         <div className="radar-section">
+
 
           {/* Overlay Guide Text */}
           <div className='guide-text' style={{

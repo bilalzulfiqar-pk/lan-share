@@ -7,7 +7,9 @@ export function useSignaling(displayName) {
     const [socket, setSocket] = useState(null);
     const [peers, setPeers] = useState([]);
     const [isConnected, setIsConnected] = useState(false);
+    const [isReconnecting, setIsReconnecting] = useState(false); // Track reconnection attempts
     const [myId, setMyId] = useState(null);
+    const connectionStartTime = useRef(Date.now());
 
     useEffect(() => {
         // Connect to server on the same hostname but port 3001
@@ -28,6 +30,7 @@ export function useSignaling(displayName) {
         newSocket.on('connect', () => {
             console.log('Connected to signaling server', newSocket.id);
             setIsConnected(true);
+            setIsReconnecting(false);
             setMyId(newSocket.id);
             // Join with initial name
             newSocket.emit('join', displayName);
@@ -36,6 +39,8 @@ export function useSignaling(displayName) {
         newSocket.on('disconnect', () => {
             console.log('Disconnected from signaling server');
             setIsConnected(false);
+            setIsReconnecting(true); // Mark as trying to reconnect
+            connectionStartTime.current = Date.now(); // Reset timer on disconnect to track reconnection time
             setPeers([]);
         });
 
@@ -58,5 +63,5 @@ export function useSignaling(displayName) {
         }
     }, [displayName, socket, isConnected]);
 
-    return { socket, peers, isConnected, myId };
+    return { socket, peers, isConnected, isReconnecting, connectionStartTime: connectionStartTime.current, myId };
 }

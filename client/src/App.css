@@ -796,6 +796,73 @@ body {
 }
 
 /* New Popup Class */
+.server-status-popup {
+  position: fixed;
+  top: 120px;
+  left: 50%;
+  /* Transform handled by Framer Motion (x: "-50%") */
+  z-index: 40;
+
+  background: var(--bg-surface);
+  border: 1px solid var(--glass-border);
+  padding: 1.25rem;
+  border-radius: var(--radius-md);
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
+  display: flex;
+  align-items: flex-start;
+  gap: 1rem;
+  max-width: 90%;
+  width: 420px;
+  backdrop-filter: blur(8px);
+}
+
+@media (max-width: 768px) {
+  .server-status-popup {
+    top: 180px;
+    /* Taller header on mobile */
+    width: 95%;
+    padding: 1rem;
+  }
+}
+
+.server-status-popup.warning {
+  border-left: 4px solid var(--warning);
+}
+
+.server-status-popup.error {
+  border-left: 4px solid var(--danger);
+}
+
+.server-status-icon {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding-top: 2px;
+}
+
+.server-status-popup.warning .server-status-icon {
+  color: var(--warning);
+}
+
+.server-status-popup.error .server-status-icon {
+  color: var(--danger);
+}
+
+.server-status-content h3 {
+  margin: 0 0 0.5rem 0;
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.server-status-content p {
+  margin: 0;
+  font-size: 0.9rem;
+  color: var(--text-secondary);
+  line-height: 1.5;
+}
+
 .file-selection-popup {
   position: absolute;
   bottom: -0.5rem;
