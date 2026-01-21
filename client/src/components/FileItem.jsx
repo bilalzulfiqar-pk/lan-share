@@ -8,6 +8,7 @@ export function FileItem({ item, onRequest, onCancel, getPeerName }) {
         switch (status) {
             case 'completed': return 'success';
             case 'error': return 'error';
+            case 'failed': return 'error'; // Map failed to error style
             case 'cancelled':
             case 'deleted': return 'cancelled';
             case 'waiting': return 'waiting';
@@ -85,6 +86,8 @@ export function FileItem({ item, onRequest, onCancel, getPeerName }) {
             return isSender ? 'Waiting for Accept...' : 'Available for Download';
         }
         if (status === 'waiting') return 'Requesting...';
+        if (status === 'error') return 'Transfer Failed';
+        if (status === 'failed') return 'Transfer Failed';
         return status;
     };
 

@@ -153,6 +153,22 @@ function App() {
         </div>
       </header>
 
+      {/* Global Error Banner */}
+      {error && (
+        <div style={{
+          backgroundColor: 'var(--danger)',
+          color: 'white',
+          padding: '0.75rem',
+          borderRadius: 'var(--radius-md)',
+          margin: '0 auto 1rem auto',
+          maxWidth: '800px',
+          textAlign: 'center',
+          boxShadow: 'var(--shadow-lg)'
+        }}>
+          ⚠️ {error}
+        </div>
+      )}
+
       <div className="main-layout">
 
         {/* Radar Section - Hero */}
@@ -200,9 +216,9 @@ function App() {
             {selectedDevice && (
               <motion.div
                 className="file-selection-popup"
-                initial={{ opacity: 0, y: 20, x: "-50%" }}
+                initial={{ opacity: 0, y: 10, x: "-50%" }}
                 animate={{ opacity: 1, y: 0, x: "-50%" }}
-                exit={{ opacity: 0, y: 20, x: "-50%" }}
+                exit={{ opacity: 0, y: 10, x: "-50%" }}
                 transition={{ type: "spring", stiffness: 300, damping: 30 }}
               >
                 <p style={{ margin: 0, fontSize: '0.95rem', color: 'var(--text-secondary)' }}>

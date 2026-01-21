@@ -4,12 +4,15 @@ import { v4 as uuidv4 } from 'uuid'; // We might need a uuid generator, but for 
 const CHUNK_SIZE = 16384; // 16KB
 
 // Message Types
+// Message Types
 const MSG_FILES_OFFER = 'FILES_OFFER';
 const MSG_FILE_REQUEST = 'FILE_REQUEST';
 const MSG_FILE_CANCEL = 'FILE_CANCEL'; // Deleted by sender
 const MSG_FILE_START = 'FILE_START'; // Metadata before binary
 const MSG_CHUNK = 'CHUNK';
 const MSG_FILE_COMPLETE = 'FILE_COMPLETE';
+const MSG_HANDSHAKE_SYN = 'HANDSHAKE_SYN';
+const MSG_HANDSHAKE_ACK = 'HANDSHAKE_ACK';
 
 export function useWebRTC(socket, myId) {
     const [history, setHistory] = useState([]); // Array of { id, fileName, fileSize, fileType, direction: 'in'|'out', status: 'idle'|'waiting'|'downloading'|'completed'|'cancelled'|'error', progress: 0, peerId }
@@ -56,7 +59,8 @@ export function useWebRTC(socket, myId) {
     // Setup Peer Connection
     const setupPC = useCallback((targetId) => {
         const pc = new RTCPeerConnection({
-            iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
+            // iceServers: [{ urls: 'stun:stun.l.google.com:19302' }], // Public STUN server
+            iceServers: [] // LAN ONLY: No STUN servers
         });
         pcRef.current = pc;
         remoteDescriptionSet.current = false;
@@ -113,7 +117,28 @@ export function useWebRTC(socket, myId) {
 
         // 1. Store files in memory/ref IMMEDIATELY
         const newItems = [];
+        const MAX_SIZE = 150 * 1024 * 1024; // 150MB
+
         Array.from(files).forEach(file => {
+            if (file.size > MAX_SIZE) {
+                console.warn(`File ${file.name} is too large (${(file.size / 1024 / 1024).toFixed(2)}MB). Limit is 150MB.`);
+                // Ideally notify user, for now skip or error. 
+                // We'll add an error item to history to inform user? 
+                // Or just Alert? Alert is annoying. Let's add an error item.
+                const id = Math.random().toString(36).substr(2, 9);
+                newItems.push({
+                    id,
+                    fileName: file.name,
+                    fileSize: file.size,
+                    fileType: file.type,
+                    direction: 'out',
+                    status: 'error',
+                    progress: 0,
+                    peerId: targetId
+                });
+                return;
+            }
+
             const id = Math.random().toString(36).substr(2, 9);
             availableFilesRef.current.set(id, file);
             newItems.push({
@@ -245,9 +270,13 @@ export function useWebRTC(socket, myId) {
 
     const setupChannelListeners = (channel) => {
         channel.onopen = () => {
-            console.log("Channel Open Event Fired");
-            setConnectionStatus('CONNECTED');
-            setChannelReady(true);
+            console.log("Channel Open Event Fired. Initiating Handshake...");
+            // Do NOT set ready immediately. Send SYN.
+            // setConnectionStatus('CONNECTED'); 
+            // setChannelReady(true);
+
+            // Send SYN
+            channel.send(JSON.stringify({ type: MSG_HANDSHAKE_SYN }));
         };
 
         channel.onmessage = async (event) => {
@@ -300,6 +329,23 @@ export function useWebRTC(socket, myId) {
                     const unique = newIncoming.filter(i => !existingIds.has(i.id));
                     return [...prev, ...unique];
                 });
+                break;
+
+            case MSG_HANDSHAKE_SYN:
+                console.log("Received Handshake SYN. Sending ACK.");
+                sendData({ type: MSG_HANDSHAKE_ACK });
+                // We can consider channel ready?
+                // Ideally wait for ACK if we were the opener, but for symmetry:
+                // If I receive SYN, I send ACK. I am ready?
+                // Yes, connection is bidirectional.
+                setConnectionStatus('CONNECTED');
+                setChannelReady(true);
+                break;
+
+            case MSG_HANDSHAKE_ACK:
+                console.log("Received Handshake ACK. Channel Fully Ready.");
+                setConnectionStatus('CONNECTED');
+                setChannelReady(true);
                 break;
 
             case MSG_FILE_REQUEST:
@@ -439,11 +485,14 @@ export function useWebRTC(socket, myId) {
             // AND use `setTimeout` to clear buffers.
 
             // Better: Clear buffers in `setTimeout`?
+            // Better: Clear buffers in `setTimeout`?
             setTimeout(() => {
                 console.log("Cleaning up buffers");
-                file.buffers = null;
-                incomingFileRef.current = null;
-            }, 1000); // 1s delay to be safe?
+                if (incomingFileRef.current && incomingFileRef.current.id === file.id) {
+                    incomingFileRef.current.buffers = null; // Help GC
+                    incomingFileRef.current = null;
+                }
+            }, 500); // 500ms delay
 
         }
     };
@@ -542,10 +591,11 @@ export function useWebRTC(socket, myId) {
             console.log("Handling offer from", sender);
 
             const config = {
-                iceServers: [
-                    { urls: 'stun:stun.l.google.com:19302' },
-                    { urls: 'stun:stun1.l.google.com:19302' }
-                ]
+                // iceServers: [
+                //     { urls: 'stun:stun.l.google.com:19302' },
+                //     { urls: 'stun:stun1.l.google.com:19302' }
+                // ] // Public STUN servers
+                iceServers: [] // LAN ONLY
             };
             const pc = new RTCPeerConnection(config);
             pcRef.current = pc;

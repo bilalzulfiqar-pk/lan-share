@@ -798,7 +798,7 @@ body {
 /* New Popup Class */
 .file-selection-popup {
   position: absolute;
-  bottom: 0rem;
+  bottom: -0.5rem;
   left: 50%;
   /* Transform handled by motion */
   z-index: 20;
