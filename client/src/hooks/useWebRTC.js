@@ -133,6 +133,7 @@ export function useWebRTC(socket, myId) {
                     fileType: file.type,
                     direction: 'out',
                     status: 'error',
+                    error: 'File too large (>150MB)',
                     progress: 0,
                     peerId: targetId
                 });

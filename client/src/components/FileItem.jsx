@@ -86,8 +86,8 @@ export function FileItem({ item, onRequest, onCancel, getPeerName }) {
             return isSender ? 'Waiting for Accept...' : 'Available for Download';
         }
         if (status === 'waiting') return 'Requesting...';
-        if (status === 'error') return 'Transfer Failed';
-        if (status === 'failed') return 'Transfer Failed';
+        if (status === 'error') return item.error || 'Transfer Failed';
+        if (status === 'failed') return item.error || 'Transfer Failed';
         return status;
     };
 
