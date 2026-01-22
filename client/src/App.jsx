@@ -25,13 +25,13 @@ function App() {
       timer = setInterval(() => {
         const elapsed = Date.now() - connectionStartTime;
 
-        if (elapsed > 3000 && elapsed < 25000) {
+        if (elapsed > 3000 && elapsed < 60000) {
           setServerStatusMessage({
             title: "Server is starting up…",
-            description: "This app uses a free-tier server, which may sleep when inactive. Startup usually takes up to 20 seconds.",
+            description: "This app uses a free-tier server, which may sleep when inactive. Startup usually takes up to a minute.",
             type: 'warning'
           });
-        } else if (elapsed >= 25000) {
+        } else if (elapsed >= 60000) {
           setServerStatusMessage({
             title: "Connection Issue",
             description: "The server may be offline or unavailable. Please try again later.",
