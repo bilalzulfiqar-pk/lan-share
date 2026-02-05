@@ -98,7 +98,7 @@ function App() {
   const getPeerName = (peerId) => {
     if (!peerId) return 'Unknown';
     if (peerId === myId) return 'Me';
-    const peer = peers.find(p => p.id === peerId); // Fix: peers is Array
+    const peer = peers.find(p => p.id === peerId); // peers is Array
     return peer?.name || peerId.slice(0, 8) + '...';
   };
 
@@ -188,7 +188,7 @@ function App() {
       </header>
 
       <AnimatePresence>
-        {/* Server Cold Start / Status Message (Fixed Popup) */}
+        {/* Server Cold Start / Status Message */}
         {serverStatusMessage && !isConnected && (
           <motion.div
             className={`server-status-popup ${serverStatusMessage.type}`}
