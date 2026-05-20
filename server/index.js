@@ -100,30 +100,59 @@ function getClientIp(socket) {
     return address.replace(/^::ffff:/, '');
 }
 
+function splitFingerprints(networkFingerprints = []) {
+    return {
+        lan: networkFingerprints.filter((fingerprint) => fingerprint.startsWith('lan:')),
+        wan: networkFingerprints.filter((fingerprint) => fingerprint.startsWith('wan:'))
+    };
+}
+
+function hasOverlap(leftValues, rightValues) {
+    return leftValues.some((value) => rightValues.includes(value));
+}
+
 function areUsersVisible(leftUser, rightUser) {
     if (!leftUser || !rightUser) {
         return false;
     }
 
-    if (!leftUser.publicIp || !rightUser.publicIp) {
-        return false;
-    }
-
-    if (leftUser.publicIp !== rightUser.publicIp) {
-        return false;
-    }
-
-    // Browsers do not always expose LAN IP information consistently,
-    // especially on mobile. If both devices expose one or more LAN
-    // fingerprints, allow visibility when any subnet matches.
     const leftFingerprints = leftUser.networkFingerprints || [];
     const rightFingerprints = rightUser.networkFingerprints || [];
+    const leftFingerprintGroups = splitFingerprints(leftFingerprints);
+    const rightFingerprintGroups = splitFingerprints(rightFingerprints);
+    const sharesWanFingerprint = hasOverlap(leftFingerprintGroups.wan, rightFingerprintGroups.wan);
+    const sharesLanFingerprint = hasOverlap(leftFingerprintGroups.lan, rightFingerprintGroups.lan);
+    const sharesHttpPublicIp =
+        Boolean(leftUser.publicIp) &&
+        Boolean(rightUser.publicIp) &&
+        leftUser.publicIp === rightUser.publicIp;
 
-    if (leftFingerprints.length > 0 && rightFingerprints.length > 0) {
-        return leftFingerprints.some((fingerprint) => rightFingerprints.includes(fingerprint));
+    // Strongest signal: both browsers independently discovered the same
+    // public network identity through ICE/STUN.
+    if (sharesWanFingerprint) {
+        if (leftFingerprintGroups.lan.length > 0 && rightFingerprintGroups.lan.length > 0) {
+            return sharesLanFingerprint;
+        }
+
+        return true;
     }
 
-    return true;
+    // Second-best signal: browsers exposed matching LAN subnets and the
+    // backend also saw the same public IP.
+    if (sharesLanFingerprint && sharesHttpPublicIp) {
+        return true;
+    }
+
+    // Final fallback for browsers that expose no usable ICE fingerprint data.
+    if (leftFingerprints.length === 0 && rightFingerprints.length === 0) {
+        return sharesHttpPublicIp;
+    }
+
+    if ((leftFingerprints.length === 0 || rightFingerprints.length === 0) && sharesHttpPublicIp) {
+        return true;
+    }
+
+    return false;
 }
 
 function getVisibleUsersFor(user) {
@@ -145,17 +174,11 @@ function emitDebugState(user) {
     });
 }
 
-function emitUsersUpdateForPublicIp(publicIp) {
-    if (!publicIp) {
-        return;
-    }
-
-    Object.values(users)
-        .filter((user) => user.publicIp === publicIp)
-        .forEach((user) => {
-            io.to(user.id).emit('users-update', getVisibleUsersFor(user));
-            emitDebugState(user);
-        });
+function emitUsersUpdateForAllUsers() {
+    Object.values(users).forEach((user) => {
+        io.to(user.id).emit('users-update', getVisibleUsersFor(user));
+        emitDebugState(user);
+    });
 }
 
 function removeUser(socketId) {
@@ -197,22 +220,10 @@ io.on('connection', (socket) => {
 
     // User joins with a display name
     socket.on('join', (payload) => {
-        const previousUser = users[socket.id];
         const { name, networkFingerprints, deviceId } = normalizeJoinPayload(payload);
         const publicIp = getClientIp(socket);
-        const affectedPublicIps = new Set([publicIp]);
 
-        if (previousUser?.publicIp) {
-            affectedPublicIps.add(previousUser.publicIp);
-        }
-
-        const duplicateUsers = removeDuplicateDeviceEntries(deviceId, socket.id);
-        duplicateUsers.forEach((duplicateUser) => {
-            if (duplicateUser.publicIp) {
-                affectedPublicIps.add(duplicateUser.publicIp);
-            }
-        });
-
+        removeDuplicateDeviceEntries(deviceId, socket.id);
         users[socket.id] = {
             id: socket.id,
             name,
@@ -221,9 +232,7 @@ io.on('connection', (socket) => {
             networkFingerprints
         };
 
-        affectedPublicIps.forEach((affectedPublicIp) => {
-            emitUsersUpdateForPublicIp(affectedPublicIp);
-        });
+        emitUsersUpdateForAllUsers();
     });
 
     // Handle Signaling
@@ -244,11 +253,8 @@ io.on('connection', (socket) => {
 
     socket.on('disconnect', () => {
         console.log('User disconnected:', socket.id);
-        const previousUser = removeUser(socket.id);
-
-        if (previousUser?.publicIp) {
-            emitUsersUpdateForPublicIp(previousUser.publicIp);
-        }
+        removeUser(socket.id);
+        emitUsersUpdateForAllUsers();
     });
 });
 

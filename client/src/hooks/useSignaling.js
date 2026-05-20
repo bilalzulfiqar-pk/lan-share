@@ -3,6 +3,14 @@ import { io } from 'socket.io-client';
 
 const SIGNALING_SERVER_PORT = 3001;
 const DEVICE_ID_STORAGE_KEY = 'lan-share-device-id';
+const DISCOVERY_ICE_SERVERS = [
+    {
+        urls: [
+            'stun:stun.l.google.com:19302',
+            'stun:stun1.l.google.com:19302'
+        ]
+    }
+];
 
 function createDeviceId() {
     if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
@@ -48,13 +56,77 @@ function extractPrivateIpv4(candidateValue) {
     return isPrivateRange ? ip : null;
 }
 
-function getSubnetFingerprint(ipAddress) {
+function extractIpv4(candidateValue) {
+    if (typeof candidateValue !== 'string') {
+        return null;
+    }
+
+    const match = candidateValue.match(/\b(\d{1,3}(?:\.\d{1,3}){3})\b/);
+    if (!match) {
+        return null;
+    }
+
+    const ip = match[1];
+    const parts = ip.split('.').map(Number);
+    if (parts.length !== 4 || parts.some((part) => Number.isNaN(part) || part < 0 || part > 255)) {
+        return null;
+    }
+
+    return ip;
+}
+
+function getLanFingerprint(ipAddress) {
     const parts = ipAddress.split('.');
     if (parts.length !== 4) {
         return null;
     }
 
-    return `ipv4:${parts[0]}.${parts[1]}.${parts[2]}`;
+    return `lan:ipv4:${parts[0]}.${parts[1]}.${parts[2]}`;
+}
+
+function getWanFingerprint(ipAddress) {
+    return ipAddress ? `wan:ipv4:${ipAddress}` : null;
+}
+
+function parseCandidateType(candidateValue) {
+    if (typeof candidateValue !== 'string') {
+        return null;
+    }
+
+    const match = candidateValue.match(/\btyp\s+([a-z0-9]+)/i);
+    return match ? match[1].toLowerCase() : null;
+}
+
+function collectFingerprintsFromCandidate(candidate) {
+    if (!candidate) {
+        return [];
+    }
+
+    const candidateValue = candidate.candidate || '';
+    const candidateType = candidate.type || parseCandidateType(candidateValue);
+    const fingerprints = [];
+
+    const candidateAddress = extractIpv4(candidate.address) || extractIpv4(candidateValue);
+    const privateAddress =
+        extractPrivateIpv4(candidate.address) ||
+        extractPrivateIpv4(candidate.relatedAddress) ||
+        extractPrivateIpv4(candidateValue);
+
+    if (privateAddress && (candidateType === 'host' || !candidateType)) {
+        const lanFingerprint = getLanFingerprint(privateAddress);
+        if (lanFingerprint) {
+            fingerprints.push(lanFingerprint);
+        }
+    }
+
+    if (candidateType === 'srflx' || candidateType === 'prflx') {
+        const wanFingerprint = getWanFingerprint(candidateAddress);
+        if (wanFingerprint) {
+            fingerprints.push(wanFingerprint);
+        }
+    }
+
+    return fingerprints;
 }
 
 async function detectLocalNetworkFingerprints() {
@@ -62,12 +134,12 @@ async function detectLocalNetworkFingerprints() {
         return [];
     }
 
-    const pc = new RTCPeerConnection({ iceServers: [] });
+    const pc = new RTCPeerConnection({ iceServers: DISCOVERY_ICE_SERVERS });
     const fingerprints = new Set();
 
     return new Promise((resolve) => {
         let settled = false;
-        const timeout = window.setTimeout(finish, 1500);
+        const timeout = window.setTimeout(finish, 3000);
 
         function finish() {
             if (settled) {
@@ -87,14 +159,9 @@ async function detectLocalNetworkFingerprints() {
                 return;
             }
 
-            const ipAddress =
-                extractPrivateIpv4(event.candidate.address) ||
-                extractPrivateIpv4(event.candidate.candidate);
-            const fingerprint = ipAddress ? getSubnetFingerprint(ipAddress) : null;
-
-            if (fingerprint) {
+            collectFingerprintsFromCandidate(event.candidate).forEach((fingerprint) => {
                 fingerprints.add(fingerprint);
-            }
+            });
         };
 
         pc.onicegatheringstatechange = () => {

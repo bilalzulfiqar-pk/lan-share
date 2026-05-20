@@ -247,9 +247,9 @@ function App() {
                   <div className="debug-value">{debugInfo.serverUrl || 'Unavailable'}</div>
                   <div className="debug-label">Server Public IP</div>
                   <div className="debug-value">{debugInfo.serverDebug.publicIp || 'Unavailable'}</div>
-                  <div className="debug-label">Local Fingerprints</div>
+                  <div className="debug-label">Detected Fingerprints</div>
                   <div className="debug-value">{debugInfo.localNetworkFingerprints.length > 0 ? debugInfo.localNetworkFingerprints.join(', ') : 'None detected'}</div>
-                  <div className="debug-label">Server Fingerprints</div>
+                  <div className="debug-label">Server Stored Fingerprints</div>
                   <div className="debug-value">{debugInfo.serverDebug.networkFingerprints.length > 0 ? debugInfo.serverDebug.networkFingerprints.join(', ') : 'None reported'}</div>
                 </div>
               </div>
