@@ -3,6 +3,94 @@ import { io } from 'socket.io-client';
 
 const SIGNALING_SERVER_PORT = 3001;
 
+function extractPrivateIpv4(candidateValue) {
+    if (typeof candidateValue !== 'string') {
+        return null;
+    }
+
+    const match = candidateValue.match(/\b(\d{1,3}(?:\.\d{1,3}){3})\b/);
+    if (!match) {
+        return null;
+    }
+
+    const ip = match[1];
+    const parts = ip.split('.').map(Number);
+    if (parts.length !== 4 || parts.some((part) => Number.isNaN(part) || part < 0 || part > 255)) {
+        return null;
+    }
+
+    const [first, second] = parts;
+    const isPrivateRange =
+        first === 10 ||
+        (first === 172 && second >= 16 && second <= 31) ||
+        (first === 192 && second === 168);
+
+    return isPrivateRange ? ip : null;
+}
+
+function getSubnetFingerprint(ipAddress) {
+    const parts = ipAddress.split('.');
+    if (parts.length !== 4) {
+        return null;
+    }
+
+    return `ipv4:${parts[0]}.${parts[1]}.${parts[2]}`;
+}
+
+async function detectLocalNetworkFingerprint() {
+    if (typeof RTCPeerConnection === 'undefined') {
+        return null;
+    }
+
+    const pc = new RTCPeerConnection({ iceServers: [] });
+    const fingerprints = new Set();
+
+    return new Promise((resolve) => {
+        let settled = false;
+        const timeout = window.setTimeout(finish, 1500);
+
+        function finish() {
+            if (settled) {
+                return;
+            }
+
+            settled = true;
+            window.clearTimeout(timeout);
+            pc.close();
+
+            const fingerprint = Array.from(fingerprints).sort()[0] || null;
+            resolve(fingerprint);
+        }
+
+        pc.onicecandidate = (event) => {
+            if (!event.candidate) {
+                finish();
+                return;
+            }
+
+            const ipAddress =
+                extractPrivateIpv4(event.candidate.address) ||
+                extractPrivateIpv4(event.candidate.candidate);
+            const fingerprint = ipAddress ? getSubnetFingerprint(ipAddress) : null;
+
+            if (fingerprint) {
+                fingerprints.add(fingerprint);
+            }
+        };
+
+        pc.onicegatheringstatechange = () => {
+            if (pc.iceGatheringState === 'complete') {
+                finish();
+            }
+        };
+
+        pc.createDataChannel('network-probe');
+        pc.createOffer()
+            .then((offer) => pc.setLocalDescription(offer))
+            .catch(() => finish());
+    });
+}
+
 export function useSignaling(displayName) {
     const [socket, setSocket] = useState(null);
     const [peers, setPeers] = useState([]);
@@ -10,6 +98,21 @@ export function useSignaling(displayName) {
     const [isReconnecting, setIsReconnecting] = useState(false); // Track reconnection attempts
     const [myId, setMyId] = useState(null);
     const [connectionStartTime, setConnectionStartTime] = useState(() => Date.now());
+    const [networkFingerprint, setNetworkFingerprint] = useState(null);
+
+    useEffect(() => {
+        let cancelled = false;
+
+        detectLocalNetworkFingerprint().then((fingerprint) => {
+            if (!cancelled) {
+                setNetworkFingerprint(fingerprint);
+            }
+        });
+
+        return () => {
+            cancelled = true;
+        };
+    }, []);
 
     useEffect(() => {
         // Connect to server on the same hostname but port 3001
@@ -58,9 +161,12 @@ export function useSignaling(displayName) {
     // Handle name updates if socket is connected
     useEffect(() => {
         if (socket && isConnected) {
-            socket.emit('join', displayName);
+            socket.emit('join', {
+                name: displayName,
+                networkFingerprint
+            });
         }
-    }, [displayName, socket, isConnected]);
+    }, [displayName, socket, isConnected, networkFingerprint]);
 
     return { socket, peers, isConnected, isReconnecting, connectionStartTime, myId };
 }

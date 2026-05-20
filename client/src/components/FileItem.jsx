@@ -1,6 +1,6 @@
 import React from 'react';
 
-export function FileItem({ item, onRequest, onCancel, getPeerName }) {
+export function FileItem({ item, onRequest, onSave, onCancel, getPeerName }) {
     const isSender = item.direction === 'out';
     const peerName = getPeerName ? getPeerName(item.peerId) : 'Unknown';
 
@@ -80,6 +80,9 @@ export function FileItem({ item, onRequest, onCancel, getPeerName }) {
             return isSender ? 'Waiting for Accept...' : 'Available for Download';
         }
         if (status === 'waiting') return 'Requesting...';
+        if (status === 'completed' && item.saved) return 'Saved Locally';
+        if (status === 'completed' && !isSender) return 'Ready to Save';
+        if (status === 'completed') return 'Sent';
         if (status === 'error') return item.error || 'Transfer Failed';
         if (status === 'failed') return item.error || 'Transfer Failed';
         return status;
@@ -128,11 +131,10 @@ export function FileItem({ item, onRequest, onCancel, getPeerName }) {
                 )}
 
                 {!isSender && item.status === 'completed' && item.downloadUrl && (
-                    <a
-                        href={item.downloadUrl}
-                        download={item.fileName}
+                    <button
                         className="btn btn-sm btn-primary"
                         style={{ textDecoration: 'none', display: 'flex', alignItems: 'center' }}
+                        onClick={() => onSave(item.id)}
                     >
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: '4px' }}>
                             <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path>
@@ -140,7 +142,7 @@ export function FileItem({ item, onRequest, onCancel, getPeerName }) {
                             <polyline points="7 3 7 8 15 8"></polyline>
                         </svg>
                         Save
-                    </a>
+                    </button>
                 )}
 
                 {/* Cancel Action */}

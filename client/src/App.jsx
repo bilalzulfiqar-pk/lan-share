@@ -14,7 +14,7 @@ function App() {
   const [theme, setTheme] = useState(() => localStorage.getItem('lan-share-theme') || 'light');
 
   const { socket, peers, isConnected, isReconnecting, connectionStartTime, myId } = useSignaling(displayName);
-  const { history, sendFilesOffer, requestFile, cancelTransfer, error } = useWebRTC(socket, myId);
+  const { history, sendFilesOffer, requestFile, saveReceivedFile, cancelTransfer, error } = useWebRTC(socket, myId);
 
   const [disconnectElapsed, setDisconnectElapsed] = useState(0);
 
@@ -337,6 +337,7 @@ function App() {
           <HistoryPanel
             history={history}
             onRequest={requestFile}
+            onSave={saveReceivedFile}
             onCancel={cancelTransfer}
             getPeerName={getPeerName}
           />

@@ -24,9 +24,27 @@ export function useWebRTC(socket, myId) {
     const iceCandidateQueue = useRef([]);
     const remoteDescriptionSet = useRef(false);
     const activePeerIdRef = useRef(null);
+    const historyRef = useRef([]);
+    const downloadUrlsRef = useRef(new Map());
+
+    useEffect(() => {
+        historyRef.current = history;
+    }, [history]);
 
     const updateHistoryItem = useCallback((id, updates) => {
         setHistory(prev => prev.map(item => item.id === id ? { ...item, ...updates } : item));
+    }, []);
+
+    const revokeDownloadUrl = useCallback((fileId) => {
+        const url = downloadUrlsRef.current.get(fileId);
+        if (!url) {
+            return;
+        }
+
+        downloadUrlsRef.current.delete(fileId);
+        window.setTimeout(() => {
+            URL.revokeObjectURL(url);
+        }, 1000);
     }, []);
 
     const removeOutgoingFile = useCallback((fileId) => {
@@ -194,6 +212,7 @@ export function useWebRTC(socket, myId) {
             try {
                 const finalBlob = new Blob(file.buffers, { type });
                 url = URL.createObjectURL(finalBlob);
+                downloadUrlsRef.current.set(file.id, url);
             } catch (blobError) {
                 console.error('Blob creation failed', blobError);
                 return prev.map(i => i.id === file.id ? { ...i, status: 'error' } : i);
@@ -214,6 +233,28 @@ export function useWebRTC(socket, myId) {
             }
         }, 500);
     }, [updateHistoryItem]);
+
+    const saveReceivedFile = useCallback((fileId) => {
+        const item = historyRef.current.find((entry) => entry.id === fileId);
+        const url = item?.downloadUrl || downloadUrlsRef.current.get(fileId);
+
+        if (!item || !url) {
+            return;
+        }
+
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = item.fileName;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+
+        updateHistoryItem(fileId, {
+            saved: true,
+            downloadUrl: null
+        });
+        revokeDownloadUrl(fileId);
+    }, [revokeDownloadUrl, updateHistoryItem]);
 
     const startUpload = useCallback(async (fileId) => {
         const entry = availableFilesRef.current.get(fileId);
@@ -473,12 +514,24 @@ export function useWebRTC(socket, myId) {
         cancelledTransfersRef.current.add(fileId);
         updateHistoryItem(fileId, { status: 'cancelled' });
         removeOutgoingFile(fileId);
+        revokeDownloadUrl(fileId);
         sendData({ type: MSG_FILE_CANCEL, fileId });
 
         if (incomingFileRef.current && incomingFileRef.current.id === fileId) {
             incomingFileRef.current = null;
         }
-    }, [removeOutgoingFile, sendData, updateHistoryItem]);
+    }, [removeOutgoingFile, revokeDownloadUrl, sendData, updateHistoryItem]);
+
+    useEffect(() => {
+        const activeDownloadUrls = downloadUrlsRef.current;
+
+        return () => {
+            activeDownloadUrls.forEach((url) => {
+                URL.revokeObjectURL(url);
+            });
+            activeDownloadUrls.clear();
+        };
+    }, []);
 
     useEffect(() => {
         if (channelReady && dataChannelRef.current?.readyState === 'open') {
@@ -560,6 +613,7 @@ export function useWebRTC(socket, myId) {
         connectionStatus,
         sendFilesOffer,
         requestFile,
+        saveReceivedFile,
         cancelTransfer,
         error
     };

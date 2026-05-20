@@ -1,7 +1,7 @@
 import React from 'react';
 import { FileItem } from './FileItem';
 
-export function HistoryPanel({ history, onRequest, onCancel, getPeerName }) {
+export function HistoryPanel({ history, onRequest, onSave, onCancel, getPeerName }) {
     if (history.length === 0) {
         return (
             <div className="empty-state">
@@ -23,6 +23,7 @@ export function HistoryPanel({ history, onRequest, onCancel, getPeerName }) {
                     key={item.id}
                     item={item}
                     onRequest={onRequest}
+                    onSave={onSave}
                     onCancel={onCancel}
                     getPeerName={getPeerName}
                 />
