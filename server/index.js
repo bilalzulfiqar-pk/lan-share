@@ -132,6 +132,19 @@ function getVisibleUsersFor(user) {
         .map(({ id, name }) => ({ id, name }));
 }
 
+function emitDebugState(user) {
+    if (!user) {
+        return;
+    }
+
+    io.to(user.id).emit('debug-state', {
+        publicIp: user.publicIp,
+        networkFingerprints: user.networkFingerprints || [],
+        deviceId: user.deviceId,
+        visiblePeers: getVisibleUsersFor(user).filter((candidate) => candidate.id !== user.id)
+    });
+}
+
 function emitUsersUpdateForPublicIp(publicIp) {
     if (!publicIp) {
         return;
@@ -141,6 +154,7 @@ function emitUsersUpdateForPublicIp(publicIp) {
         .filter((user) => user.publicIp === publicIp)
         .forEach((user) => {
             io.to(user.id).emit('users-update', getVisibleUsersFor(user));
+            emitDebugState(user);
         });
 }
 

@@ -119,6 +119,14 @@ export function useSignaling(displayName) {
     const [connectionStartTime, setConnectionStartTime] = useState(() => Date.now());
     const [networkFingerprints, setNetworkFingerprints] = useState([]);
     const [deviceId] = useState(() => getOrCreateDeviceId());
+    const [serverUrl, setServerUrl] = useState('');
+    const [transportName, setTransportName] = useState('pending');
+    const [serverDebug, setServerDebug] = useState({
+        publicIp: null,
+        networkFingerprints: [],
+        deviceId: null,
+        visiblePeers: []
+    });
 
     useEffect(() => {
         let cancelled = false;
@@ -147,6 +155,8 @@ export function useSignaling(displayName) {
         const url = envUrl || localUrl;
 
         console.log("Connecting to signaling server:", url);
+        // eslint-disable-next-line react-hooks/set-state-in-effect
+        setServerUrl(url);
 
         const newSocket = io(url);
 
@@ -155,6 +165,11 @@ export function useSignaling(displayName) {
             setIsConnected(true);
             setIsReconnecting(false);
             setMyId(newSocket.id);
+            setTransportName(newSocket.io.engine.transport.name);
+
+            newSocket.io.engine.on('upgrade', (transport) => {
+                setTransportName(transport.name);
+            });
         });
 
         newSocket.on('disconnect', () => {
@@ -163,6 +178,7 @@ export function useSignaling(displayName) {
             setIsReconnecting(true); // Mark as trying to reconnect
             setConnectionStartTime(Date.now()); // Reset timer on disconnect to track reconnection time
             setPeers([]);
+            setTransportName('disconnected');
         });
 
         newSocket.on('users-update', (users) => {
@@ -170,10 +186,19 @@ export function useSignaling(displayName) {
             setPeers(users.filter(u => u.id !== newSocket.id));
         });
 
-        // eslint-disable-next-line react-hooks/set-state-in-effect
+        newSocket.on('debug-state', (payload) => {
+            setServerDebug({
+                publicIp: payload?.publicIp || null,
+                networkFingerprints: Array.isArray(payload?.networkFingerprints) ? payload.networkFingerprints : [],
+                deviceId: payload?.deviceId || null,
+                visiblePeers: Array.isArray(payload?.visiblePeers) ? payload.visiblePeers : []
+            });
+        });
+
         setSocket(newSocket);
 
         return () => {
+            newSocket.off('debug-state');
             newSocket.disconnect();
         };
     }, []); // Only run once on mount (connection logic)
@@ -189,5 +214,20 @@ export function useSignaling(displayName) {
         }
     }, [deviceId, displayName, socket, isConnected, networkFingerprints]);
 
-    return { socket, peers, isConnected, isReconnecting, connectionStartTime, myId };
+    return {
+        socket,
+        peers,
+        isConnected,
+        isReconnecting,
+        connectionStartTime,
+        myId,
+        debugInfo: {
+            deviceId,
+            serverUrl,
+            transportName,
+            localNetworkFingerprints: networkFingerprints,
+            serverDebug,
+            userAgent: navigator.userAgent
+        }
+    };
 }

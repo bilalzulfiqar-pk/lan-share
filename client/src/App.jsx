@@ -13,8 +13,8 @@ function App() {
   // Theme State
   const [theme, setTheme] = useState(() => localStorage.getItem('lan-share-theme') || 'light');
 
-  const { socket, peers, isConnected, isReconnecting, connectionStartTime, myId } = useSignaling(displayName);
-  const { history, sendFilesOffer, requestFile, saveReceivedFile, cancelTransfer, error } = useWebRTC(socket, myId);
+  const { socket, peers, isConnected, isReconnecting, connectionStartTime, myId, debugInfo } = useSignaling(displayName);
+  const { history, connectionStatus, channelReady, sendFilesOffer, requestFile, saveReceivedFile, cancelTransfer, error } = useWebRTC(socket, myId);
 
   const [disconnectElapsed, setDisconnectElapsed] = useState(0);
 
@@ -54,6 +54,7 @@ function App() {
 
   // Guide State
   const [showGuide, setShowGuide] = useState(true);
+  const [showDebugSidebar, setShowDebugSidebar] = useState(false);
 
   // Persistence
   useEffect(() => {
@@ -84,6 +85,10 @@ function App() {
 
   const handleDeviceToggle = (id) => {
     setSelectedDevice(prev => prev === id ? null : id);
+  };
+
+  const toggleDebugSidebar = () => {
+    setShowDebugSidebar(prev => !prev);
   };
 
   const onFileSelected = (e) => {
@@ -133,6 +138,19 @@ function App() {
             ) : (
               <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="4" /><path d="M12 2v2" /><path d="M12 20v2" /><path d="m4.93 4.93 1.41 1.41" /><path d="m17.66 17.66 1.41 1.41" /><path d="M2 12h2" /><path d="M20 12h2" /><path d="m6.34 17.66-1.41 1.41" /><path d="m19.07 4.93-1.41 1.41" /></svg>
             )}
+          </button>
+
+          <button
+            className="btn-icon"
+            onClick={toggleDebugSidebar}
+            title={showDebugSidebar ? 'Hide debug details' : 'Show debug details'}
+            style={{ width: '40px', height: '40px', background: 'var(--bg-surface)', border: '1px solid var(--glass-border)' }}
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="12" cy="12" r="10"></circle>
+              <path d="M12 16v-4"></path>
+              <path d="M12 8h.01"></path>
+            </svg>
           </button>
 
           <div className="server-indicator">
@@ -186,6 +204,96 @@ function App() {
           </div>
         </div>
       </header>
+
+      <AnimatePresence>
+        {showDebugSidebar && (
+          <>
+            <MotionDiv
+              className="debug-sidebar-backdrop"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setShowDebugSidebar(false)}
+            />
+            <MotionDiv
+              className="debug-sidebar"
+              initial={{ opacity: 0, x: 320 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: 320 }}
+              transition={{ type: 'spring', stiffness: 260, damping: 28 }}
+            >
+              <div className="debug-sidebar-header">
+                <div>
+                  <h3>Debug Details</h3>
+                  <p>Temporary diagnostics for discovery and WebRTC.</p>
+                </div>
+                <button
+                  className="btn-icon"
+                  onClick={() => setShowDebugSidebar(false)}
+                  title="Close debug panel"
+                  style={{ width: '36px', height: '36px', background: 'var(--bg-surface-hover)', border: '1px solid var(--glass-border)' }}
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M18 6 6 18"></path>
+                    <path d="m6 6 12 12"></path>
+                  </svg>
+                </button>
+              </div>
+
+              <div className="debug-sidebar-section">
+                <h4>Network</h4>
+                <div className="debug-grid">
+                  <div className="debug-label">Server URL</div>
+                  <div className="debug-value">{debugInfo.serverUrl || 'Unavailable'}</div>
+                  <div className="debug-label">Server Public IP</div>
+                  <div className="debug-value">{debugInfo.serverDebug.publicIp || 'Unavailable'}</div>
+                  <div className="debug-label">Local Fingerprints</div>
+                  <div className="debug-value">{debugInfo.localNetworkFingerprints.length > 0 ? debugInfo.localNetworkFingerprints.join(', ') : 'None detected'}</div>
+                  <div className="debug-label">Server Fingerprints</div>
+                  <div className="debug-value">{debugInfo.serverDebug.networkFingerprints.length > 0 ? debugInfo.serverDebug.networkFingerprints.join(', ') : 'None reported'}</div>
+                </div>
+              </div>
+
+              <div className="debug-sidebar-section">
+                <h4>Session</h4>
+                <div className="debug-grid">
+                  <div className="debug-label">Socket ID</div>
+                  <div className="debug-value">{myId || 'Pending'}</div>
+                  <div className="debug-label">Device ID</div>
+                  <div className="debug-value">{debugInfo.deviceId || 'Unavailable'}</div>
+                  <div className="debug-label">Transport</div>
+                  <div className="debug-value">{debugInfo.transportName}</div>
+                  <div className="debug-label">WebRTC</div>
+                  <div className="debug-value">{connectionStatus} / {channelReady ? 'ready' : 'not-ready'}</div>
+                  <div className="debug-label">Selected Device</div>
+                  <div className="debug-value">{selectedDevice ? getPeerName(selectedDevice) : 'None selected'}</div>
+                </div>
+              </div>
+
+              <div className="debug-sidebar-section">
+                <h4>Visible Peers</h4>
+                {debugInfo.serverDebug.visiblePeers.length === 0 ? (
+                  <p className="debug-empty">No peers visible from the server perspective.</p>
+                ) : (
+                  <div className="debug-list">
+                    {debugInfo.serverDebug.visiblePeers.map((peer) => (
+                      <div key={peer.id} className="debug-list-item">
+                        <strong>{peer.name || 'Unnamed Device'}</strong>
+                        <span>{peer.id}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <div className="debug-sidebar-section">
+                <h4>Browser</h4>
+                <p className="debug-user-agent">{debugInfo.userAgent}</p>
+              </div>
+            </MotionDiv>
+          </>
+        )}
+      </AnimatePresence>
 
       <AnimatePresence>
         {/* Server Cold Start / Status Message */}

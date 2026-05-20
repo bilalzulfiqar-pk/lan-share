@@ -648,6 +648,7 @@ export function useWebRTC(socket, myId) {
     return {
         history,
         connectionStatus,
+        channelReady,
         sendFilesOffer,
         requestFile,
         saveReceivedFile,
