@@ -8,6 +8,17 @@ const MSG_FILE_CANCEL = 'FILE_CANCEL';
 const MSG_FILE_START = 'FILE_START';
 const MSG_HANDSHAKE_SYN = 'HANDSHAKE_SYN';
 const MSG_HANDSHAKE_ACK = 'HANDSHAKE_ACK';
+const RTC_CONFIG = {
+    iceServers: [
+        {
+            urls: [
+                'stun:stun.l.google.com:19302',
+                'stun:stun1.l.google.com:19302'
+            ]
+        }
+    ],
+    iceCandidatePoolSize: 4
+};
 
 export function useWebRTC(socket, myId) {
     const [history, setHistory] = useState([]);
@@ -136,9 +147,7 @@ export function useWebRTC(socket, myId) {
     }, []);
 
     const setupPC = useCallback((targetId) => {
-        const pc = new RTCPeerConnection({
-            iceServers: [] // LAN ONLY: No STUN servers
-        });
+        const pc = new RTCPeerConnection(RTC_CONFIG);
 
         pcRef.current = pc;
         remoteDescriptionSet.current = false;
@@ -555,7 +564,35 @@ export function useWebRTC(socket, myId) {
             activePeerIdRef.current = sender;
             console.log('Handling offer from', sender);
 
-            const pc = setupPC(sender);
+            const pc = new RTCPeerConnection(RTC_CONFIG);
+            pcRef.current = pc;
+            remoteDescriptionSet.current = false;
+            iceCandidateQueue.current = [];
+
+            pc.onicecandidate = (event) => {
+                if (event.candidate && socket) {
+                    socket.emit('ice-candidate', { target: sender, candidate: event.candidate, sender: myId });
+                }
+            };
+
+            pc.onconnectionstatechange = () => {
+                console.log('Connection State:', pc.connectionState);
+
+                if (pc.connectionState === 'connected') {
+                    setConnectionStatus('CONNECTED');
+                    return;
+                }
+
+                if (pc.connectionState === 'disconnected' || pc.connectionState === 'failed') {
+                    expireOutgoingFilesForPeer(
+                        activePeerIdRef.current,
+                        'Connection lost before the transfer could finish.'
+                    );
+                    resetConnection();
+                    setError('Connection lost');
+                }
+            };
+
             pc.ondatachannel = (event) => {
                 dataChannelRef.current = event.channel;
                 setupChannelListeners(event.channel);

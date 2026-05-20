@@ -14,7 +14,7 @@ const io = new Server(server, {
     }
 });
 
-// Store connected users: socketId -> { id, name, deviceId, publicIp, networkFingerprint }
+// Store connected users: socketId -> { id, name, deviceId, publicIp, networkFingerprints }
 const users = {};
 
 function sanitizeName(name) {
@@ -35,6 +35,18 @@ function sanitizeNetworkFingerprint(networkFingerprint) {
     return /^[a-z0-9:.-]+$/.test(normalized) ? normalized : null;
 }
 
+function sanitizeNetworkFingerprints(value) {
+    if (!Array.isArray(value)) {
+        return [];
+    }
+
+    return Array.from(new Set(
+        value
+            .map(sanitizeNetworkFingerprint)
+            .filter(Boolean)
+    )).slice(0, 12);
+}
+
 function sanitizeDeviceId(deviceId) {
     if (typeof deviceId !== 'string') {
         return null;
@@ -49,14 +61,23 @@ function normalizeJoinPayload(payload) {
         return {
             name: sanitizeName(payload),
             networkFingerprint: null,
+            networkFingerprints: [],
             deviceId: null
         };
     }
 
     if (payload && typeof payload === 'object') {
+        const networkFingerprints = sanitizeNetworkFingerprints(payload.networkFingerprints);
+        const legacyFingerprint = sanitizeNetworkFingerprint(payload.networkFingerprint);
+
+        if (legacyFingerprint && !networkFingerprints.includes(legacyFingerprint)) {
+            networkFingerprints.push(legacyFingerprint);
+        }
+
         return {
             name: sanitizeName(payload.name),
-            networkFingerprint: sanitizeNetworkFingerprint(payload.networkFingerprint),
+            networkFingerprint: networkFingerprints[0] || null,
+            networkFingerprints,
             deviceId: sanitizeDeviceId(payload.deviceId)
         };
     }
@@ -64,6 +85,7 @@ function normalizeJoinPayload(payload) {
     return {
         name: 'Unknown Device',
         networkFingerprint: null,
+        networkFingerprints: [],
         deviceId: null
     };
 }
@@ -92,10 +114,13 @@ function areUsersVisible(leftUser, rightUser) {
     }
 
     // Browsers do not always expose LAN IP information consistently,
-    // especially on mobile. If both devices expose a fingerprint,
-    // require a match. Otherwise fall back to the shared public IP.
-    if (leftUser.networkFingerprint && rightUser.networkFingerprint) {
-        return leftUser.networkFingerprint === rightUser.networkFingerprint;
+    // especially on mobile. If both devices expose one or more LAN
+    // fingerprints, allow visibility when any subnet matches.
+    const leftFingerprints = leftUser.networkFingerprints || [];
+    const rightFingerprints = rightUser.networkFingerprints || [];
+
+    if (leftFingerprints.length > 0 && rightFingerprints.length > 0) {
+        return leftFingerprints.some((fingerprint) => rightFingerprints.includes(fingerprint));
     }
 
     return true;
@@ -159,7 +184,7 @@ io.on('connection', (socket) => {
     // User joins with a display name
     socket.on('join', (payload) => {
         const previousUser = users[socket.id];
-        const { name, networkFingerprint, deviceId } = normalizeJoinPayload(payload);
+        const { name, networkFingerprints, deviceId } = normalizeJoinPayload(payload);
         const publicIp = getClientIp(socket);
         const affectedPublicIps = new Set([publicIp]);
 
@@ -179,7 +204,7 @@ io.on('connection', (socket) => {
             name,
             deviceId,
             publicIp,
-            networkFingerprint
+            networkFingerprints
         };
 
         affectedPublicIps.forEach((affectedPublicIp) => {

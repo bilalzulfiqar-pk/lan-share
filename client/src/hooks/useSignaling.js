@@ -57,9 +57,9 @@ function getSubnetFingerprint(ipAddress) {
     return `ipv4:${parts[0]}.${parts[1]}.${parts[2]}`;
 }
 
-async function detectLocalNetworkFingerprint() {
+async function detectLocalNetworkFingerprints() {
     if (typeof RTCPeerConnection === 'undefined') {
-        return null;
+        return [];
     }
 
     const pc = new RTCPeerConnection({ iceServers: [] });
@@ -78,8 +78,7 @@ async function detectLocalNetworkFingerprint() {
             window.clearTimeout(timeout);
             pc.close();
 
-            const fingerprint = Array.from(fingerprints).sort()[0] || null;
-            resolve(fingerprint);
+            resolve(Array.from(fingerprints).sort());
         }
 
         pc.onicecandidate = (event) => {
@@ -118,15 +117,15 @@ export function useSignaling(displayName) {
     const [isReconnecting, setIsReconnecting] = useState(false); // Track reconnection attempts
     const [myId, setMyId] = useState(null);
     const [connectionStartTime, setConnectionStartTime] = useState(() => Date.now());
-    const [networkFingerprint, setNetworkFingerprint] = useState(null);
+    const [networkFingerprints, setNetworkFingerprints] = useState([]);
     const [deviceId] = useState(() => getOrCreateDeviceId());
 
     useEffect(() => {
         let cancelled = false;
 
-        detectLocalNetworkFingerprint().then((fingerprint) => {
+        detectLocalNetworkFingerprints().then((fingerprints) => {
             if (!cancelled) {
-                setNetworkFingerprint(fingerprint);
+                setNetworkFingerprints(fingerprints);
             }
         });
 
@@ -184,11 +183,11 @@ export function useSignaling(displayName) {
         if (socket && isConnected) {
             socket.emit('join', {
                 name: displayName,
-                networkFingerprint,
+                networkFingerprints,
                 deviceId
             });
         }
-    }, [deviceId, displayName, socket, isConnected, networkFingerprint]);
+    }, [deviceId, displayName, socket, isConnected, networkFingerprints]);
 
     return { socket, peers, isConnected, isReconnecting, connectionStartTime, myId };
 }
