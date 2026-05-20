@@ -2,6 +2,26 @@ import { useEffect, useState } from 'react';
 import { io } from 'socket.io-client';
 
 const SIGNALING_SERVER_PORT = 3001;
+const DEVICE_ID_STORAGE_KEY = 'lan-share-device-id';
+
+function createDeviceId() {
+    if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+        return crypto.randomUUID();
+    }
+
+    return `device-${Math.random().toString(36).slice(2, 12)}`;
+}
+
+function getOrCreateDeviceId() {
+    const existingDeviceId = localStorage.getItem(DEVICE_ID_STORAGE_KEY);
+    if (existingDeviceId) {
+        return existingDeviceId;
+    }
+
+    const newDeviceId = createDeviceId();
+    localStorage.setItem(DEVICE_ID_STORAGE_KEY, newDeviceId);
+    return newDeviceId;
+}
 
 function extractPrivateIpv4(candidateValue) {
     if (typeof candidateValue !== 'string') {
@@ -99,6 +119,7 @@ export function useSignaling(displayName) {
     const [myId, setMyId] = useState(null);
     const [connectionStartTime, setConnectionStartTime] = useState(() => Date.now());
     const [networkFingerprint, setNetworkFingerprint] = useState(null);
+    const [deviceId] = useState(() => getOrCreateDeviceId());
 
     useEffect(() => {
         let cancelled = false;
@@ -163,10 +184,11 @@ export function useSignaling(displayName) {
         if (socket && isConnected) {
             socket.emit('join', {
                 name: displayName,
-                networkFingerprint
+                networkFingerprint,
+                deviceId
             });
         }
-    }, [displayName, socket, isConnected, networkFingerprint]);
+    }, [deviceId, displayName, socket, isConnected, networkFingerprint]);
 
     return { socket, peers, isConnected, isReconnecting, connectionStartTime, myId };
 }

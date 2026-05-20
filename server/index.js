@@ -14,7 +14,7 @@ const io = new Server(server, {
     }
 });
 
-// Store connected users: socketId -> { id, name, publicIp, networkFingerprint, groupKey }
+// Store connected users: socketId -> { id, name, deviceId, publicIp, networkFingerprint }
 const users = {};
 
 function sanitizeName(name) {
@@ -35,24 +35,36 @@ function sanitizeNetworkFingerprint(networkFingerprint) {
     return /^[a-z0-9:.-]+$/.test(normalized) ? normalized : null;
 }
 
+function sanitizeDeviceId(deviceId) {
+    if (typeof deviceId !== 'string') {
+        return null;
+    }
+
+    const normalized = deviceId.trim().toLowerCase().slice(0, 128);
+    return /^[a-z0-9-]+$/.test(normalized) ? normalized : null;
+}
+
 function normalizeJoinPayload(payload) {
     if (typeof payload === 'string') {
         return {
             name: sanitizeName(payload),
-            networkFingerprint: null
+            networkFingerprint: null,
+            deviceId: null
         };
     }
 
     if (payload && typeof payload === 'object') {
         return {
             name: sanitizeName(payload.name),
-            networkFingerprint: sanitizeNetworkFingerprint(payload.networkFingerprint)
+            networkFingerprint: sanitizeNetworkFingerprint(payload.networkFingerprint),
+            deviceId: sanitizeDeviceId(payload.deviceId)
         };
     }
 
     return {
         name: 'Unknown Device',
-        networkFingerprint: null
+        networkFingerprint: null,
+        deviceId: null
     };
 }
 
@@ -66,37 +78,79 @@ function getClientIp(socket) {
     return address.replace(/^::ffff:/, '');
 }
 
-function getGroupKey(publicIp, networkFingerprint) {
-    if (publicIp && networkFingerprint) {
-        return `${publicIp}|${networkFingerprint}`;
+function areUsersVisible(leftUser, rightUser) {
+    if (!leftUser || !rightUser) {
+        return false;
     }
 
-    if (publicIp) {
-        return publicIp;
+    if (!leftUser.publicIp || !rightUser.publicIp) {
+        return false;
     }
 
-    if (networkFingerprint) {
-        return networkFingerprint;
+    if (leftUser.publicIp !== rightUser.publicIp) {
+        return false;
     }
 
-    return null;
+    // Browsers do not always expose LAN IP information consistently,
+    // especially on mobile. If both devices expose a fingerprint,
+    // require a match. Otherwise fall back to the shared public IP.
+    if (leftUser.networkFingerprint && rightUser.networkFingerprint) {
+        return leftUser.networkFingerprint === rightUser.networkFingerprint;
+    }
+
+    return true;
 }
 
-function getUsersInGroup(groupKey) {
-    return Object.values(users).filter((user) => user.groupKey === groupKey);
+function getVisibleUsersFor(user) {
+    return Object.values(users)
+        .filter((candidate) => areUsersVisible(user, candidate))
+        .map(({ id, name }) => ({ id, name }));
 }
 
-function emitUsersUpdateForGroup(groupKey) {
-    if (!groupKey) {
+function emitUsersUpdateForPublicIp(publicIp) {
+    if (!publicIp) {
         return;
     }
 
-    const groupUsers = getUsersInGroup(groupKey);
-    const visibleUsers = groupUsers.map(({ id, name }) => ({ id, name }));
+    Object.values(users)
+        .filter((user) => user.publicIp === publicIp)
+        .forEach((user) => {
+            io.to(user.id).emit('users-update', getVisibleUsersFor(user));
+        });
+}
 
-    groupUsers.forEach((user) => {
-        io.to(user.id).emit('users-update', visibleUsers);
+function removeUser(socketId) {
+    const existingUser = users[socketId];
+    if (!existingUser) {
+        return null;
+    }
+
+    delete users[socketId];
+    return existingUser;
+}
+
+function disconnectSocketIfPresent(socketId) {
+    const existingSocket = io.sockets.sockets.get(socketId);
+    if (existingSocket) {
+        existingSocket.disconnect(true);
+    }
+}
+
+function removeDuplicateDeviceEntries(deviceId, currentSocketId) {
+    if (!deviceId) {
+        return [];
+    }
+
+    const duplicates = Object.values(users).filter((user) => (
+        user.deviceId === deviceId && user.id !== currentSocketId
+    ));
+
+    duplicates.forEach((duplicateUser) => {
+        removeUser(duplicateUser.id);
+        disconnectSocketIfPresent(duplicateUser.id);
     });
+
+    return duplicates;
 }
 
 io.on('connection', (socket) => {
@@ -104,24 +158,33 @@ io.on('connection', (socket) => {
 
     // User joins with a display name
     socket.on('join', (payload) => {
-        const previousGroupKey = users[socket.id]?.groupKey;
-        const { name, networkFingerprint } = normalizeJoinPayload(payload);
+        const previousUser = users[socket.id];
+        const { name, networkFingerprint, deviceId } = normalizeJoinPayload(payload);
         const publicIp = getClientIp(socket);
-        const groupKey = getGroupKey(publicIp, networkFingerprint);
+        const affectedPublicIps = new Set([publicIp]);
+
+        if (previousUser?.publicIp) {
+            affectedPublicIps.add(previousUser.publicIp);
+        }
+
+        const duplicateUsers = removeDuplicateDeviceEntries(deviceId, socket.id);
+        duplicateUsers.forEach((duplicateUser) => {
+            if (duplicateUser.publicIp) {
+                affectedPublicIps.add(duplicateUser.publicIp);
+            }
+        });
 
         users[socket.id] = {
             id: socket.id,
             name,
+            deviceId,
             publicIp,
-            networkFingerprint,
-            groupKey
+            networkFingerprint
         };
 
-        if (previousGroupKey && previousGroupKey !== groupKey) {
-            emitUsersUpdateForGroup(previousGroupKey);
-        }
-
-        emitUsersUpdateForGroup(groupKey);
+        affectedPublicIps.forEach((affectedPublicIp) => {
+            emitUsersUpdateForPublicIp(affectedPublicIp);
+        });
     });
 
     // Handle Signaling
@@ -142,11 +205,10 @@ io.on('connection', (socket) => {
 
     socket.on('disconnect', () => {
         console.log('User disconnected:', socket.id);
-        const previousGroupKey = users[socket.id]?.groupKey;
-        delete users[socket.id];
+        const previousUser = removeUser(socket.id);
 
-        if (previousGroupKey) {
-            emitUsersUpdateForGroup(previousGroupKey);
+        if (previousUser?.publicIp) {
+            emitUsersUpdateForPublicIp(previousUser.publicIp);
         }
     });
 });
