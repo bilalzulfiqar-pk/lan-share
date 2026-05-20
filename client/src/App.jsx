@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import './App.css';
 import { useSignaling } from './hooks/useSignaling';
@@ -8,6 +8,7 @@ import { HistoryPanel } from './components/HistoryPanel';
 
 function App() {
   const [displayName, setDisplayName] = useState(() => localStorage.getItem('lan-share-name') || 'Device ' + Math.floor(Math.random() * 1000));
+  const MotionDiv = motion.div;
 
   // Theme State
   const [theme, setTheme] = useState(() => localStorage.getItem('lan-share-theme') || 'light');
@@ -15,39 +16,38 @@ function App() {
   const { socket, peers, isConnected, isReconnecting, connectionStartTime, myId } = useSignaling(displayName);
   const { history, sendFilesOffer, requestFile, cancelTransfer, error } = useWebRTC(socket, myId);
 
-  // Cold Start detection logic
-  const [serverStatusMessage, setServerStatusMessage] = useState(null);
+  const [disconnectElapsed, setDisconnectElapsed] = useState(0);
 
   useEffect(() => {
     let timer;
-    if (!isConnected) {
-      // Check every second how long we've been waiting
-      timer = setInterval(() => {
-        const elapsed = Date.now() - connectionStartTime;
+    if (!isConnected && connectionStartTime > 0) {
+      const updateElapsed = () => {
+        setDisconnectElapsed(Date.now() - connectionStartTime);
+      };
 
-        if (elapsed > 3000 && elapsed < 60000) {
-          setServerStatusMessage({
-            title: "Server is starting up…",
-            description: "This app uses a free-tier server, which may sleep when inactive. Startup usually takes up to a minute.",
-            type: 'warning'
-          });
-        } else if (elapsed >= 60000) {
-          setServerStatusMessage({
-            title: "Connection Issue",
-            description: "The server may be offline or unavailable. Please try again later.",
-            type: 'error'
-          });
-        } else {
-          setServerStatusMessage(null);
-        }
+      updateElapsed();
+      timer = setInterval(() => {
+        updateElapsed();
       }, 1000);
-    } else {
-      // Connected! Clear message
-      setServerStatusMessage(null);
     }
 
     return () => clearInterval(timer);
   }, [isConnected, connectionStartTime, isReconnecting]);
+
+  let serverStatusMessage = null;
+  if (!isConnected && disconnectElapsed > 3000 && disconnectElapsed < 60000) {
+    serverStatusMessage = {
+      title: "Server is starting up…",
+      description: "This app uses a free-tier server, which may sleep when inactive. Startup usually takes up to a minute.",
+      type: 'warning'
+    };
+  } else if (!isConnected && disconnectElapsed >= 60000) {
+    serverStatusMessage = {
+      title: "Connection Issue",
+      description: "The server may be offline or unavailable. Please try again later.",
+      type: 'error'
+    };
+  }
 
   // We store ID of selected device
   const [selectedDevice, setSelectedDevice] = useState(null);
@@ -190,7 +190,7 @@ function App() {
       <AnimatePresence>
         {/* Server Cold Start / Status Message */}
         {serverStatusMessage && !isConnected && (
-          <motion.div
+          <MotionDiv
             className={`server-status-popup ${serverStatusMessage.type}`}
             initial={{ opacity: 0, y: -20, x: "-50%" }}
             animate={{ opacity: 1, y: 0, x: "-50%" }}
@@ -221,7 +221,7 @@ function App() {
               <h3>{serverStatusMessage.title}</h3>
               <p>{serverStatusMessage.description}</p>
             </div>
-          </motion.div>
+          </MotionDiv>
         )}
       </AnimatePresence>
 
@@ -287,7 +287,7 @@ function App() {
 
           <AnimatePresence>
             {selectedDevice && (
-              <motion.div
+              <MotionDiv
                 className="file-selection-popup"
                 initial={{ opacity: 0, y: 10, x: "-50%" }}
                 animate={{ opacity: 1, y: 0, x: "-50%" }}
@@ -315,7 +315,7 @@ function App() {
                 >
                   Cancel Selection
                 </button>
-              </motion.div>
+              </MotionDiv>
             )}
           </AnimatePresence>
         </div>

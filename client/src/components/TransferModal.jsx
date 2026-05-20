@@ -1,6 +1,6 @@
 import React, { useEffect } from 'react';
 
-export function TransferModal({ status, progress, fileMeta, isSender, error, onCancel, receivedBlob, onReset }) {
+export function TransferModal({ status, progress, fileMeta, isSender, error, receivedBlob, onReset }) {
 
     // Auto download on completion if receiver
     useEffect(() => {

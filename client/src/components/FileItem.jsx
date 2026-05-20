@@ -75,12 +75,6 @@ export function FileItem({ item, onRequest, onCancel, getPeerName }) {
         );
     };
 
-    const getStatusIcon = (status) => {
-        if (status === 'completed') return '✅';
-        if (status === 'error') return '⚠️';
-        return null;
-    };
-
     const getStatusText = (status, isSender) => {
         if (status === 'idle') {
             return isSender ? 'Waiting for Accept...' : 'Available for Download';

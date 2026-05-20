@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState } from 'react';
 import { io } from 'socket.io-client';
 
 const SIGNALING_SERVER_PORT = 3001;
@@ -9,7 +9,7 @@ export function useSignaling(displayName) {
     const [isConnected, setIsConnected] = useState(false);
     const [isReconnecting, setIsReconnecting] = useState(false); // Track reconnection attempts
     const [myId, setMyId] = useState(null);
-    const connectionStartTime = useRef(Date.now());
+    const [connectionStartTime, setConnectionStartTime] = useState(() => Date.now());
 
     useEffect(() => {
         // Connect to server on the same hostname but port 3001
@@ -32,15 +32,13 @@ export function useSignaling(displayName) {
             setIsConnected(true);
             setIsReconnecting(false);
             setMyId(newSocket.id);
-            // Join with initial name
-            newSocket.emit('join', displayName);
         });
 
         newSocket.on('disconnect', () => {
             console.log('Disconnected from signaling server');
             setIsConnected(false);
             setIsReconnecting(true); // Mark as trying to reconnect
-            connectionStartTime.current = Date.now(); // Reset timer on disconnect to track reconnection time
+            setConnectionStartTime(Date.now()); // Reset timer on disconnect to track reconnection time
             setPeers([]);
         });
 
@@ -49,6 +47,7 @@ export function useSignaling(displayName) {
             setPeers(users.filter(u => u.id !== newSocket.id));
         });
 
+        // eslint-disable-next-line react-hooks/set-state-in-effect
         setSocket(newSocket);
 
         return () => {
@@ -63,5 +62,5 @@ export function useSignaling(displayName) {
         }
     }, [displayName, socket, isConnected]);
 
-    return { socket, peers, isConnected, isReconnecting, connectionStartTime: connectionStartTime.current, myId };
+    return { socket, peers, isConnected, isReconnecting, connectionStartTime, myId };
 }

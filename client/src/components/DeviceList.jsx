@@ -13,6 +13,8 @@ const seededRandom = (seed) => {
 };
 
 export const DeviceList = ({ devices, onToogle, selectedDevice }) => {
+    const MotionDiv = motion.div;
+
     // Generate positions for devices
     const devicePositions = useMemo(() => {
         return devices.map(device => {
@@ -58,7 +60,7 @@ export const DeviceList = ({ devices, onToogle, selectedDevice }) => {
                     const y = Math.sin(device.angle * Math.PI / 180) * device.radius;
 
                     return (
-                        <motion.div
+                        <MotionDiv
                             key={device.id}
                             className={`radar-blip ${selectedDevice === device.id ? 'selected' : ''}`}
                             style={{
@@ -87,7 +89,7 @@ export const DeviceList = ({ devices, onToogle, selectedDevice }) => {
                             <div className="radar-blip-label">
                                 {device.name || 'Unknown'}
                             </div>
-                        </motion.div>
+                        </MotionDiv>
                     );
                 })}
             </AnimatePresence>
