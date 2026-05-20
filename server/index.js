@@ -120,6 +120,12 @@ function areUsersVisible(leftUser, rightUser) {
     const rightFingerprints = rightUser.networkFingerprints || [];
     const leftFingerprintGroups = splitFingerprints(leftFingerprints);
     const rightFingerprintGroups = splitFingerprints(rightFingerprints);
+    const leftHasLan = leftFingerprintGroups.lan.length > 0;
+    const rightHasLan = rightFingerprintGroups.lan.length > 0;
+    const leftHasWan = leftFingerprintGroups.wan.length > 0;
+    const rightHasWan = rightFingerprintGroups.wan.length > 0;
+    const bothHaveLan = leftHasLan && rightHasLan;
+    const bothHaveWan = leftHasWan && rightHasWan;
     const sharesWanFingerprint = hasOverlap(leftFingerprintGroups.wan, rightFingerprintGroups.wan);
     const sharesLanFingerprint = hasOverlap(leftFingerprintGroups.lan, rightFingerprintGroups.lan);
     const sharesHttpPublicIp =
@@ -127,31 +133,30 @@ function areUsersVisible(leftUser, rightUser) {
         Boolean(rightUser.publicIp) &&
         leftUser.publicIp === rightUser.publicIp;
 
-    // Strongest signal: both browsers independently discovered the same
+    // Strongest signal: both browsers exposed the same LAN subnet.
+    if (bothHaveLan && sharesLanFingerprint) {
+        return true;
+    }
+
+    // Next strongest signal: both browsers independently discovered the same
     // public network identity through ICE/STUN.
-    if (sharesWanFingerprint) {
-        if (leftFingerprintGroups.lan.length > 0 && rightFingerprintGroups.lan.length > 0) {
-            return sharesLanFingerprint;
-        }
-
+    if (bothHaveWan && sharesWanFingerprint) {
         return true;
     }
 
-    // Second-best signal: browsers exposed matching LAN subnets and the
-    // backend also saw the same public IP.
-    if (sharesLanFingerprint && sharesHttpPublicIp) {
+    if (!sharesHttpPublicIp) {
+        return false;
+    }
+
+    // If one browser only exposed LAN and the other only exposed WAN, or one
+    // side exposed nothing at all, keep the same-public-IP fallback instead of
+    // hiding a device that was valid moments earlier.
+    if (!bothHaveLan || !bothHaveWan) {
         return true;
     }
 
-    // Final fallback for browsers that expose no usable ICE fingerprint data.
-    if (leftFingerprints.length === 0 && rightFingerprints.length === 0) {
-        return sharesHttpPublicIp;
-    }
-
-    if ((leftFingerprints.length === 0 || rightFingerprints.length === 0) && sharesHttpPublicIp) {
-        return true;
-    }
-
+    // Both devices exposed comparable fingerprint types but none matched, so
+    // they are likely not on the same local network segment.
     return false;
 }
 
