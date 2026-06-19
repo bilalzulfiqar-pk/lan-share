@@ -187,6 +187,7 @@ function App() {
                 value={displayName}
                 onChange={handleNameChange}
                 maxLength={20}
+                size={1}
                 placeholder="Your name"
                 aria-label="Your display name"
               />
@@ -225,7 +226,6 @@ function App() {
             >
               <div className="debug-sidebar-header">
                 <div className="debug-sidebar-header-meta">
-                  <span className="debug-pill">Dev</span>
                   <h3>Debug details</h3>
                   <p>Temporary diagnostics for discovery and WebRTC.</p>
                 </div>
