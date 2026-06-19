@@ -241,6 +241,15 @@ button {
   }
 }
 
+@keyframes radar-spin {
+  from {
+    transform: translate(-50%, -50%) rotate(0deg);
+  }
+  to {
+    transform: translate(-50%, -50%) rotate(360deg);
+  }
+}
+
 @keyframes pulseCenter {
   0%,
   100% {
@@ -1031,8 +1040,9 @@ button {
     var(--radar-ambient) 320deg,
     var(--radar-beam) 360deg
   );
-  border-radius: 50%;
-  animation: radarSpin 5s linear infinite;
+  clip-path: circle(50% at 50% 50%);
+  -webkit-clip-path: circle(50% at 50% 50%);
+  animation: radar-spin 4s linear infinite;
   pointer-events: none;
   z-index: var(--z-base);
 }
