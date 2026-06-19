@@ -95,7 +95,7 @@ function App() {
 
   const themePickerRef = useRef(null);
   const themeButtonRef = useRef(null);
-  const [menuPos, setMenuPos] = useState({ top: 0, right: 0 });
+  const [menuStyle, setMenuStyle] = useState({ top: 0, right: 0 });
 
   useEffect(() => {
     localStorage.setItem('lan-share-name', displayName);
@@ -111,7 +111,22 @@ function App() {
     const updatePos = () => {
       if (!themeButtonRef.current) return;
       const rect = themeButtonRef.current.getBoundingClientRect();
-      setMenuPos({ top: rect.bottom + 8, right: window.innerWidth - rect.right });
+      const menuMaxWidth = 320;
+      const menuMaxHeight = Math.min(window.innerHeight * 0.7, 420);
+      const gap = 8;
+      const spaceRight = window.innerWidth - rect.right;
+      const spaceBelow = window.innerHeight - rect.bottom;
+      const fitsLeftward = rect.right >= menuMaxWidth + gap;
+      const openUp = spaceBelow < menuMaxHeight + gap && rect.top > spaceBelow;
+      const style = { top: openUp ? rect.top - gap : rect.bottom + gap };
+      if (fitsLeftward) {
+        style.right = spaceRight;
+        style.transformOrigin = openUp ? 'bottom right' : 'top right';
+      } else {
+        style.left = rect.left;
+        style.transformOrigin = openUp ? 'bottom left' : 'top left';
+      }
+      setMenuStyle(style);
     };
     updatePos();
     const onDown = (e) => {
@@ -280,7 +295,7 @@ function App() {
         {showThemeMenu && (
           <motion.div
             className="theme-menu"
-            style={{ top: menuPos.top, right: menuPos.right }}
+            style={menuStyle}
             role="menu"
             initial={{ opacity: 0, scale: 0.95, y: -6 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
@@ -289,7 +304,6 @@ function App() {
           >
             <div className="theme-menu-header">
               <span>Theme</span>
-              <span className="theme-menu-count">{THEMES.length}</span>
             </div>
             <div className="theme-menu-list">
               {THEMES.map((t) => {

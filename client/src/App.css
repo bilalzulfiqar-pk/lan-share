@@ -89,8 +89,7 @@
   --shadow-sm:
     0 1px 2px rgba(15, 23, 42, 0.04), 0 1px 3px rgba(15, 23, 42, 0.04);
   --shadow-md:
-    0 2px 6px -1px rgba(15, 23, 42, 0.06),
-    0 1px 3px -1px rgba(15, 23, 42, 0.04);
+    0 2px 6px -1px rgba(15, 23, 42, 0.06), 0 1px 3px -1px rgba(15, 23, 42, 0.04);
   --shadow-lg:
     0 12px 28px -12px rgba(15, 23, 42, 0.18),
     0 4px 8px -4px rgba(15, 23, 42, 0.05);
@@ -131,14 +130,11 @@
   --glass-strong: rgba(19, 28, 46, 0.88);
   --glass-border: rgba(255, 255, 255, 0.08);
   --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.3);
-  --shadow-sm:
-    0 1px 2px rgba(0, 0, 0, 0.35), 0 1px 3px rgba(0, 0, 0, 0.25);
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.35), 0 1px 3px rgba(0, 0, 0, 0.25);
   --shadow-md:
-    0 6px 16px -2px rgba(0, 0, 0, 0.45),
-    0 2px 6px -2px rgba(0, 0, 0, 0.3);
+    0 6px 16px -2px rgba(0, 0, 0, 0.45), 0 2px 6px -2px rgba(0, 0, 0, 0.3);
   --shadow-lg:
-    0 20px 40px -16px rgba(0, 0, 0, 0.55),
-    0 6px 12px -4px rgba(0, 0, 0, 0.3);
+    0 20px 40px -16px rgba(0, 0, 0, 0.55), 0 6px 12px -4px rgba(0, 0, 0, 0.3);
   --shadow-accent: 0 10px 28px -12px var(--primary-glow);
   --focus-ring: 0 0 0 3px var(--primary-soft);
 }
@@ -179,11 +175,9 @@
   --glass-strong: rgba(255, 255, 255, 0.92);
   --glass-border: rgba(5, 46, 31, 0.06);
   --shadow-xs: 0 1px 2px rgba(5, 46, 31, 0.04);
-  --shadow-sm:
-    0 1px 2px rgba(5, 46, 31, 0.04), 0 1px 3px rgba(5, 46, 31, 0.04);
+  --shadow-sm: 0 1px 2px rgba(5, 46, 31, 0.04), 0 1px 3px rgba(5, 46, 31, 0.04);
   --shadow-md:
-    0 2px 6px -1px rgba(5, 46, 31, 0.06),
-    0 1px 3px -1px rgba(5, 46, 31, 0.04);
+    0 2px 6px -1px rgba(5, 46, 31, 0.06), 0 1px 3px -1px rgba(5, 46, 31, 0.04);
   --shadow-lg:
     0 12px 28px -12px rgba(5, 46, 31, 0.18),
     0 4px 8px -4px rgba(5, 46, 31, 0.05);
@@ -224,14 +218,11 @@
   --glass-strong: rgba(12, 26, 19, 0.88);
   --glass-border: rgba(255, 255, 255, 0.08);
   --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.3);
-  --shadow-sm:
-    0 1px 2px rgba(0, 0, 0, 0.35), 0 1px 3px rgba(0, 0, 0, 0.25);
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.35), 0 1px 3px rgba(0, 0, 0, 0.25);
   --shadow-md:
-    0 6px 16px -2px rgba(0, 0, 0, 0.45),
-    0 2px 6px -2px rgba(0, 0, 0, 0.3);
+    0 6px 16px -2px rgba(0, 0, 0, 0.45), 0 2px 6px -2px rgba(0, 0, 0, 0.3);
   --shadow-lg:
-    0 20px 40px -16px rgba(0, 0, 0, 0.55),
-    0 6px 12px -4px rgba(0, 0, 0, 0.3);
+    0 20px 40px -16px rgba(0, 0, 0, 0.55), 0 6px 12px -4px rgba(0, 0, 0, 0.3);
   --shadow-accent: 0 10px 28px -12px var(--primary-glow);
   --focus-ring: 0 0 0 3px var(--primary-soft);
 }
@@ -275,8 +266,7 @@
   --shadow-sm:
     0 1px 2px rgba(42, 10, 20, 0.04), 0 1px 3px rgba(42, 10, 20, 0.04);
   --shadow-md:
-    0 2px 6px -1px rgba(42, 10, 20, 0.06),
-    0 1px 3px -1px rgba(42, 10, 20, 0.04);
+    0 2px 6px -1px rgba(42, 10, 20, 0.06), 0 1px 3px -1px rgba(42, 10, 20, 0.04);
   --shadow-lg:
     0 12px 28px -12px rgba(42, 10, 20, 0.18),
     0 4px 8px -4px rgba(42, 10, 20, 0.05);
@@ -317,14 +307,11 @@
   --glass-strong: rgba(32, 12, 22, 0.88);
   --glass-border: rgba(255, 255, 255, 0.08);
   --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.3);
-  --shadow-sm:
-    0 1px 2px rgba(0, 0, 0, 0.35), 0 1px 3px rgba(0, 0, 0, 0.25);
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.35), 0 1px 3px rgba(0, 0, 0, 0.25);
   --shadow-md:
-    0 6px 16px -2px rgba(0, 0, 0, 0.45),
-    0 2px 6px -2px rgba(0, 0, 0, 0.3);
+    0 6px 16px -2px rgba(0, 0, 0, 0.45), 0 2px 6px -2px rgba(0, 0, 0, 0.3);
   --shadow-lg:
-    0 20px 40px -16px rgba(0, 0, 0, 0.55),
-    0 6px 12px -4px rgba(0, 0, 0, 0.3);
+    0 20px 40px -16px rgba(0, 0, 0, 0.55), 0 6px 12px -4px rgba(0, 0, 0, 0.3);
   --shadow-accent: 0 10px 28px -12px var(--primary-glow);
   --focus-ring: 0 0 0 3px var(--primary-soft);
 }
@@ -410,15 +397,12 @@
   --glass-strong: rgba(17, 8, 31, 0.92);
   --glass-border: rgba(232, 121, 249, 0.2);
   --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.3);
-  --shadow-sm:
-    0 1px 2px rgba(0, 0, 0, 0.35), 0 1px 3px rgba(0, 0, 0, 0.25);
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.35), 0 1px 3px rgba(0, 0, 0, 0.25);
   --shadow-md:
-    0 6px 16px -2px rgba(0, 0, 0, 0.45),
-    0 2px 6px -2px rgba(0, 0, 0, 0.3),
+    0 6px 16px -2px rgba(0, 0, 0, 0.45), 0 2px 6px -2px rgba(0, 0, 0, 0.3),
     0 0 12px -4px rgba(232, 121, 249, 0.15);
   --shadow-lg:
-    0 20px 40px -16px rgba(0, 0, 0, 0.55),
-    0 6px 12px -4px rgba(0, 0, 0, 0.3),
+    0 20px 40px -16px rgba(0, 0, 0, 0.55), 0 6px 12px -4px rgba(0, 0, 0, 0.3),
     0 0 32px -8px rgba(232, 121, 249, 0.25);
   --shadow-accent: 0 10px 28px -12px var(--primary-glow);
   --focus-ring: 0 0 0 3px var(--primary-soft);
@@ -857,16 +841,6 @@ button {
   flex-shrink: 0;
 }
 
-.theme-menu-count {
-  font-size: 0.65rem;
-  font-weight: 500;
-  letter-spacing: 0.05em;
-  text-transform: none;
-  color: var(--text-tertiary);
-  font-family: var(--font-mono);
-  font-variant-numeric: tabular-nums;
-}
-
 .theme-menu-list {
   display: flex;
   flex-direction: column;
@@ -938,15 +912,11 @@ button {
 }
 
 .theme-menu-swatch::after {
-  content: '';
+  content: "";
   position: absolute;
   inset: 0;
   border-radius: 50%;
-  background: linear-gradient(
-    135deg,
-    transparent 50%,
-    rgba(0, 0, 0, 0.12) 50%
-  );
+  background: linear-gradient(135deg, transparent 50%, rgba(0, 0, 0, 0.12) 50%);
 }
 
 .theme-menu-info {
@@ -1442,7 +1412,7 @@ button {
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 1rem 0 1.5rem;
+  padding: 1.5rem 0 1.5rem;
 }
 
 .guide-text {
@@ -2192,7 +2162,7 @@ button {
 
   .radar-section {
     min-height: 340px;
-    padding: 0.5rem 0 1.5rem;
+    padding: 1.5rem 0 0.5rem;
   }
 
   .radar-container {
