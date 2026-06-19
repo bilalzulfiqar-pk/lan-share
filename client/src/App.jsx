@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 // eslint-disable-next-line no-unused-vars
 import { AnimatePresence, motion } from 'framer-motion';
 import './App.css';
@@ -7,12 +7,50 @@ import { useWebRTC } from './hooks/useWebRTC';
 import { DeviceList } from './components/DeviceList';
 import { HistoryPanel } from './components/HistoryPanel';
 
+const THEMES = [
+  {
+    id: 'ocean',
+    name: 'Ocean',
+    light: { primary: '#2454d6', accent: '#3b82f6' },
+    dark:  { primary: '#60a5fa', accent: '#3b82f6' },
+  },
+  {
+    id: 'forest',
+    name: 'Forest',
+    light: { primary: '#059669', accent: '#10b981' },
+    dark:  { primary: '#34d399', accent: '#10b981' },
+  },
+  {
+    id: 'rose',
+    name: 'Rose',
+    light: { primary: '#e11d48', accent: '#f43f5e' },
+    dark:  { primary: '#fb7185', accent: '#f43f5e' },
+  },
+  {
+    id: 'neon',
+    name: 'Neon',
+    light: { primary: '#c026d3', accent: '#e879f9' },
+    dark:  { primary: '#e879f9', accent: '#e879f9' },
+  },
+];
+
+const DEFAULT_THEME = 'ocean-light';
+const STORAGE_KEY = 'lan-share-theme';
+
 function App() {
   const [displayName, setDisplayName] = useState(
     () => localStorage.getItem('lan-share-name') || 'Device ' + Math.floor(Math.random() * 1000)
   );
 
-  const [theme, setTheme] = useState(() => localStorage.getItem('lan-share-theme') || 'light');
+  const [theme, setTheme] = useState(
+    () => {
+      const saved = localStorage.getItem(STORAGE_KEY);
+      // Migrate old 'light' / 'dark' values
+      if (saved === 'light' || saved === 'dark') return DEFAULT_THEME;
+      return saved || DEFAULT_THEME;
+    }
+  );
+  const [showThemeMenu, setShowThemeMenu] = useState(false);
 
   const { socket, peers, isConnected, isReconnecting, connectionStartTime, myId, debugInfo } = useSignaling(displayName);
   const { history, connectionStatus, channelReady, sendFilesOffer, requestFile, saveReceivedFile, cancelTransfer, error } = useWebRTC(socket, myId);
@@ -55,14 +93,34 @@ function App() {
   const [showDebugSidebar, setShowDebugSidebar] = useState(false);
   const [copied, setCopied] = useState(false);
 
+  const themePickerRef = useRef(null);
+
   useEffect(() => {
     localStorage.setItem('lan-share-name', displayName);
   }, [displayName]);
 
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme);
-    localStorage.setItem('lan-share-theme', theme);
+    localStorage.setItem(STORAGE_KEY, theme);
   }, [theme]);
+
+  useEffect(() => {
+    if (!showThemeMenu) return;
+    const onDown = (e) => {
+      if (themePickerRef.current && !themePickerRef.current.contains(e.target)) {
+        setShowThemeMenu(false);
+      }
+    };
+    const onKey = (e) => {
+      if (e.key === 'Escape') setShowThemeMenu(false);
+    };
+    document.addEventListener('mousedown', onDown);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('mousedown', onDown);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [showThemeMenu]);
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -71,8 +129,12 @@ function App() {
     return () => clearTimeout(timer);
   }, []);
 
-  const toggleTheme = () => {
-    setTheme((prev) => (prev === 'light' ? 'dark' : 'light'));
+  const currentTheme = THEMES.find((t) => t.id === theme.split('-')[0]) || THEMES[0];
+  const currentMode = theme.endsWith('-dark') ? 'dark' : 'light';
+  const currentSwatch = currentTheme[currentMode];
+
+  const handleThemeChange = (themeId, mode) => {
+    setTheme(`${themeId}-${mode}`);
   };
 
   const handleNameChange = (e) => {
@@ -132,30 +194,85 @@ function App() {
 
         <div className="status-section">
           <div className="icon-button-group" role="group" aria-label="App controls">
-            <button
-              className="btn-icon"
-              onClick={toggleTheme}
-              title={`Switch to ${theme === 'light' ? 'dark' : 'light'} mode`}
-              aria-label={`Switch to ${theme === 'light' ? 'dark' : 'light'} mode`}
-            >
-              {theme === 'light' ? (
+            <div className="theme-picker" ref={themePickerRef}>
+              <button
+                className="btn-icon"
+                onClick={() => setShowThemeMenu((prev) => !prev)}
+                title={`Theme: ${currentTheme.name} (${currentMode})`}
+                aria-label="Change theme"
+                aria-haspopup="menu"
+                aria-expanded={showThemeMenu}
+              >
                 <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                  <path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z" />
+                  <circle cx="13.5" cy="6.5" r="1.5" />
+                  <circle cx="17.5" cy="10.5" r="1.5" />
+                  <circle cx="8.5" cy="7.5" r="1.5" />
+                  <circle cx="6.5" cy="12.5" r="1.5" />
+                  <path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.926 0 1.648-.746 1.648-1.688 0-.437-.18-.835-.437-1.125-.29-.289-.438-.652-.438-1.125a1.64 1.64 0 0 1 1.668-1.668h1.996c3.051 0 5.555-2.503 5.555-5.554C21.965 6.012 17.461 2 12 2z" />
                 </svg>
-              ) : (
-                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                  <circle cx="12" cy="12" r="4" />
-                  <path d="M12 2v2" />
-                  <path d="M12 20v2" />
-                  <path d="m4.93 4.93 1.41 1.41" />
-                  <path d="m17.66 17.66 1.41 1.41" />
-                  <path d="M2 12h2" />
-                  <path d="M20 12h2" />
-                  <path d="m6.34 17.66-1.41 1.41" />
-                  <path d="m19.07 4.93-1.41 1.41" />
-                </svg>
-              )}
-            </button>
+                <span className="theme-swatch-dot" style={{ background: currentSwatch.primary }} aria-hidden="true" />
+              </button>
+
+              <AnimatePresence>
+                {showThemeMenu && (
+                  <motion.div
+                    className="theme-menu"
+                    role="menu"
+                    initial={{ opacity: 0, scale: 0.95, y: -6 }}
+                    animate={{ opacity: 1, scale: 1, y: 0 }}
+                    exit={{ opacity: 0, scale: 0.95, y: -6 }}
+                    transition={{ type: 'spring', stiffness: 420, damping: 32 }}
+                  >
+                    <div className="theme-menu-header">
+                      <span>Theme</span>
+                      <span className="theme-menu-count">{THEMES.length}</span>
+                    </div>
+                    <div className="theme-menu-list">
+                      {THEMES.map((t) => {
+                        const tLight = t.light;
+                        const tDark = t.dark;
+                        const isCurrent = t.id === currentTheme.id;
+                        return (
+                          <div key={t.id} className="theme-menu-item" role="group" aria-label={`${t.name} theme`}>
+                            <div
+                              className="theme-menu-swatch"
+                              style={{ background: currentMode === 'light' ? tLight.primary : tDark.primary }}
+                              aria-hidden="true"
+                            />
+                            <div className="theme-menu-info">
+                              <span className="theme-menu-name">{t.name}</span>
+                              <span className="theme-menu-tokens">
+                                {(currentMode === 'light' ? tLight : tDark).primary}
+                              </span>
+                            </div>
+                            <div className="theme-menu-modes" role="group" aria-label="Mode">
+                              <button
+                                type="button"
+                                className={`theme-menu-mode ${isCurrent && currentMode === 'light' ? 'is-active' : ''}`}
+                                onClick={() => handleThemeChange(t.id, 'light')}
+                                aria-pressed={isCurrent && currentMode === 'light'}
+                                aria-label={`${t.name} light`}
+                              >
+                                Light
+                              </button>
+                              <button
+                                type="button"
+                                className={`theme-menu-mode ${isCurrent && currentMode === 'dark' ? 'is-active' : ''}`}
+                                onClick={() => handleThemeChange(t.id, 'dark')}
+                                aria-pressed={isCurrent && currentMode === 'dark'}
+                                aria-label={`${t.name} dark`}
+                              >
+                                Dark
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
 
             <button
               className="btn-icon"
