@@ -543,6 +543,7 @@ button {
 .user-badge {
   display: inline-flex;
   align-items: center;
+  justify-content: flex-end;
   gap: 0.5rem;
   padding: 0.3rem 0.3rem 0.3rem 0.95rem;
   background: var(--bg-surface);
@@ -596,6 +597,8 @@ button {
   font-family: inherit;
   letter-spacing: -0.01em;
   field-sizing: content;
+  direction: rtl;
+  unicode-bidi: plaintext;
 }
 
 .user-name-input::placeholder {
