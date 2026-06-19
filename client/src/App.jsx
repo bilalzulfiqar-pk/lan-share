@@ -94,6 +94,8 @@ function App() {
   const [copied, setCopied] = useState(false);
 
   const themePickerRef = useRef(null);
+  const themeButtonRef = useRef(null);
+  const [menuPos, setMenuPos] = useState({ top: 0, right: 0 });
 
   useEffect(() => {
     localStorage.setItem('lan-share-name', displayName);
@@ -106,6 +108,12 @@ function App() {
 
   useEffect(() => {
     if (!showThemeMenu) return;
+    const updatePos = () => {
+      if (!themeButtonRef.current) return;
+      const rect = themeButtonRef.current.getBoundingClientRect();
+      setMenuPos({ top: rect.bottom + 8, right: window.innerWidth - rect.right });
+    };
+    updatePos();
     const onDown = (e) => {
       if (themePickerRef.current && !themePickerRef.current.contains(e.target)) {
         setShowThemeMenu(false);
@@ -114,9 +122,14 @@ function App() {
     const onKey = (e) => {
       if (e.key === 'Escape') setShowThemeMenu(false);
     };
+    const onScroll = () => setShowThemeMenu(false);
+    window.addEventListener('scroll', onScroll, true);
+    window.addEventListener('resize', updatePos);
     document.addEventListener('mousedown', onDown);
     document.addEventListener('keydown', onKey);
     return () => {
+      window.removeEventListener('scroll', onScroll, true);
+      window.removeEventListener('resize', updatePos);
       document.removeEventListener('mousedown', onDown);
       document.removeEventListener('keydown', onKey);
     };
@@ -197,6 +210,7 @@ function App() {
             <div className="theme-picker" ref={themePickerRef}>
               <button
                 className="btn-icon"
+                ref={themeButtonRef}
                 onClick={() => setShowThemeMenu((prev) => !prev)}
                 title={`Theme: ${currentTheme.name} (${currentMode})`}
                 aria-label="Change theme"
@@ -212,66 +226,6 @@ function App() {
                 </svg>
                 <span className="theme-swatch-dot" style={{ background: currentSwatch.primary }} aria-hidden="true" />
               </button>
-
-              <AnimatePresence>
-                {showThemeMenu && (
-                  <motion.div
-                    className="theme-menu"
-                    role="menu"
-                    initial={{ opacity: 0, scale: 0.95, y: -6 }}
-                    animate={{ opacity: 1, scale: 1, y: 0 }}
-                    exit={{ opacity: 0, scale: 0.95, y: -6 }}
-                    transition={{ type: 'spring', stiffness: 420, damping: 32 }}
-                  >
-                    <div className="theme-menu-header">
-                      <span>Theme</span>
-                      <span className="theme-menu-count">{THEMES.length}</span>
-                    </div>
-                    <div className="theme-menu-list">
-                      {THEMES.map((t) => {
-                        const tLight = t.light;
-                        const tDark = t.dark;
-                        const isCurrent = t.id === currentTheme.id;
-                        return (
-                          <div key={t.id} className="theme-menu-item" role="group" aria-label={`${t.name} theme`}>
-                            <div
-                              className="theme-menu-swatch"
-                              style={{ background: currentMode === 'light' ? tLight.primary : tDark.primary }}
-                              aria-hidden="true"
-                            />
-                            <div className="theme-menu-info">
-                              <span className="theme-menu-name">{t.name}</span>
-                              <span className="theme-menu-tokens">
-                                {(currentMode === 'light' ? tLight : tDark).primary}
-                              </span>
-                            </div>
-                            <div className="theme-menu-modes" role="group" aria-label="Mode">
-                              <button
-                                type="button"
-                                className={`theme-menu-mode ${isCurrent && currentMode === 'light' ? 'is-active' : ''}`}
-                                onClick={() => handleThemeChange(t.id, 'light')}
-                                aria-pressed={isCurrent && currentMode === 'light'}
-                                aria-label={`${t.name} light`}
-                              >
-                                Light
-                              </button>
-                              <button
-                                type="button"
-                                className={`theme-menu-mode ${isCurrent && currentMode === 'dark' ? 'is-active' : ''}`}
-                                onClick={() => handleThemeChange(t.id, 'dark')}
-                                aria-pressed={isCurrent && currentMode === 'dark'}
-                                aria-label={`${t.name} dark`}
-                              >
-                                Dark
-                              </button>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </motion.div>
-                )}
-              </AnimatePresence>
             </div>
 
             <button
@@ -321,6 +275,67 @@ function App() {
           </div>
         </div>
       </header>
+
+      <AnimatePresence>
+        {showThemeMenu && (
+          <motion.div
+            className="theme-menu"
+            style={{ top: menuPos.top, right: menuPos.right }}
+            role="menu"
+            initial={{ opacity: 0, scale: 0.95, y: -6 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.95, y: -6 }}
+            transition={{ type: 'spring', stiffness: 420, damping: 32 }}
+          >
+            <div className="theme-menu-header">
+              <span>Theme</span>
+              <span className="theme-menu-count">{THEMES.length}</span>
+            </div>
+            <div className="theme-menu-list">
+              {THEMES.map((t) => {
+                const tLight = t.light;
+                const tDark = t.dark;
+                const isCurrent = t.id === currentTheme.id;
+                return (
+                  <div key={t.id} className="theme-menu-item" role="group" aria-label={`${t.name} theme`}>
+                    <div
+                      className="theme-menu-swatch"
+                      style={{ background: currentMode === 'light' ? tLight.primary : tDark.primary }}
+                      aria-hidden="true"
+                    />
+                    <div className="theme-menu-info">
+                      <span className="theme-menu-name">{t.name}</span>
+                      <span className="theme-menu-tokens">
+                        {(currentMode === 'light' ? tLight : tDark).primary}
+                      </span>
+                    </div>
+                    <div className="theme-menu-modes" role="group" aria-label="Mode">
+                      <button
+                        type="button"
+                        className={`theme-menu-mode ${isCurrent && currentMode === 'light' ? 'is-active' : ''}`}
+                        onClick={() => handleThemeChange(t.id, 'light')}
+                        aria-pressed={isCurrent && currentMode === 'light'}
+                        aria-label={`${t.name} light`}
+                      >
+                        Light
+                      </button>
+                      <button
+                        type="button"
+                        className={`theme-menu-mode ${isCurrent && currentMode === 'dark' ? 'is-active' : ''}`}
+                        onClick={() => handleThemeChange(t.id, 'dark')}
+                        aria-pressed={isCurrent && currentMode === 'dark'}
+                        aria-label={`${t.name} dark`}
+                      >
+                        Dark
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       <AnimatePresence>
         {showDebugSidebar && (

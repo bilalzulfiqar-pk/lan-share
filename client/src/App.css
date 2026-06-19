@@ -826,24 +826,22 @@ button {
 }
 
 .theme-menu {
-  position: absolute;
-  top: calc(100% + 0.5rem);
-  right: 0;
-  z-index: var(--z-popup);
+  position: fixed;
   min-width: 260px;
   max-width: 320px;
   max-height: min(70vh, 420px);
   padding: 0.4rem;
   background: var(--glass-strong);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
   border: var(--border-hairline);
-  border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-lg);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-sm);
   transform-origin: top right;
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  z-index: var(--z-server-popup);
 }
 
 .theme-menu-header {
