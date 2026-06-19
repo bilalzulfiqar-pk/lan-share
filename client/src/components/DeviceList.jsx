@@ -26,6 +26,22 @@ const PhoneIcon = () => (
   </svg>
 );
 
+const RadarCenter = () => (
+  <span className="radar-center" role="img" aria-label="Your device" title="You are here">
+    <svg className="radar-center-rings" viewBox="0 0 48 48" aria-hidden="true">
+      <circle className="radar-center-ring" cx="24" cy="24" r="7">
+        <animate attributeName="r" from="7" to="19.5" dur="2.4s" repeatCount="indefinite" />
+        <animate attributeName="opacity" from="0.5" to="0" dur="2.4s" repeatCount="indefinite" />
+      </circle>
+      <circle className="radar-center-ring" cx="24" cy="24" r="7" opacity="0">
+        <animate attributeName="r" from="7" to="19.5" dur="2.4s" begin="1.2s" repeatCount="indefinite" />
+        <animate attributeName="opacity" from="0.5" to="0" dur="2.4s" begin="1.2s" repeatCount="indefinite" />
+      </circle>
+    </svg>
+    <span className="radar-center-dot" aria-hidden="true" />
+  </span>
+);
+
 const detectDeviceShape = (device) => {
   const ua = (device?.userAgent || '').toLowerCase();
   if (/android|iphone|ipad|ipod|mobile/.test(ua)) return 'phone';
@@ -50,7 +66,7 @@ export const DeviceList = ({ devices, onToogle, selectedDevice }) => {
       <div className="radar-circle" aria-hidden="true" />
 
       <div className="radar-beam-sector" aria-hidden="true" />
-      <div className="radar-center" title="You are here" aria-label="Your device" />
+      <RadarCenter />
 
       <AnimatePresence>
         {devicePositions.map((device) => {
