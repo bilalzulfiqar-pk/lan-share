@@ -1,111 +1,93 @@
 import React, { useMemo } from 'react';
+// eslint-disable-next-line no-unused-vars
 import { motion, AnimatePresence } from 'framer-motion';
-import '../App.css';
 
-// Deterministic pseudo-random number generator based on string seed
 const seededRandom = (seed) => {
-    let hash = 0;
-    for (let i = 0; i < seed.length; i++) {
-        hash = seed.charCodeAt(i) + ((hash << 5) - hash);
-    }
-    const x = Math.sin(hash) * 10000;
-    return x - Math.floor(x);
+  let hash = 0;
+  for (let i = 0; i < seed.length; i++) {
+    hash = seed.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  const x = Math.sin(hash) * 10000;
+  return x - Math.floor(x);
+};
+
+const MonitorIcon = () => (
+  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <rect x="2" y="3" width="20" height="14" rx="2" />
+    <line x1="8" y1="21" x2="16" y2="21" />
+    <line x1="12" y1="17" x2="12" y2="21" />
+  </svg>
+);
+
+const PhoneIcon = () => (
+  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <rect x="5" y="2" width="14" height="20" rx="3" />
+    <line x1="12" y1="18" x2="12" y2="18" />
+  </svg>
+);
+
+const detectDeviceShape = (device) => {
+  const ua = (device?.userAgent || '').toLowerCase();
+  if (/android|iphone|ipad|ipod|mobile/.test(ua)) return 'phone';
+  return 'monitor';
 };
 
 export const DeviceList = ({ devices, onToogle, selectedDevice }) => {
-    const MotionDiv = motion.div;
+  const devicePositions = useMemo(() => {
+    return devices.map((device) => {
+      const seed = device.id;
+      const angle = seededRandom(seed + 'angle') * 360;
+      const radius = 12 + seededRandom(seed + 'dist') * 32;
+      return { ...device, angle, radius };
+    });
+  }, [devices]);
 
-    // Generate positions for devices
-    const devicePositions = useMemo(() => {
-        return devices.map(device => {
-            const seed = device.id;
-            // Angle between 0 and 360
-            const angle = seededRandom(seed + 'angle') * 360;
+  return (
+    <div className="radar-container">
+      <div className="radar-circle" aria-hidden="true" />
+      <div className="radar-circle" aria-hidden="true" />
+      <div className="radar-circle" aria-hidden="true" />
+      <div className="radar-circle" aria-hidden="true" />
 
-            // Radius as percentage of container (0 to 50%)
-            // We want them distributed in the outer circles mostly
-            // Circles are 25vmin, 50vmin, 75vmin, 100vmin. 
-            // Max radius is 50vmin (half of 100vmin diameter).
-            // Let's place them between 10% and 45% radius.
-            const radius = 10 + seededRandom(seed + 'dist') * 35; // 10% to 45%
+      <div className="radar-beam-sector" aria-hidden="true" />
+      <div className="radar-center" title="You are here" aria-label="Your device" />
 
-            return {
-                ...device,
-                angle,
-                radius
-            };
-        });
-    }, [devices]);
+      <AnimatePresence>
+        {devicePositions.map((device) => {
+          const x = Math.cos((device.angle * Math.PI) / 180) * device.radius;
+          const y = Math.sin((device.angle * Math.PI) / 180) * device.radius;
+          const shape = detectDeviceShape(device);
 
-    return (
-        <div className="radar-container">
-            {/* Concentric Circles */}
-            <div className="radar-circle"></div>
-            <div className="radar-circle"></div>
-            <div className="radar-circle"></div>
-            <div className="radar-circle"></div>
+          return (
+            <motion.button
+              key={device.id}
+              type="button"
+              className={`radar-blip ${selectedDevice === device.id ? 'selected' : ''}`}
+              style={{ top: `${50 + y}%`, left: `${50 + x}%` }}
+              onClick={() => onToogle(device.id)}
+              initial={{ scale: 0, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0, opacity: 0 }}
+              transition={{ type: 'spring', stiffness: 220, damping: 18 }}
+              aria-label={`Select ${device.name || 'device'}`}
+              aria-pressed={selectedDevice === device.id}
+            >
+              <div className="radar-blip-icon">
+                {shape === 'phone' ? <PhoneIcon /> : <MonitorIcon />}
+                <span className="radar-blip-ring" aria-hidden="true" />
+              </div>
+              <span className="radar-blip-label">{device.name || 'Unknown'}</span>
+            </motion.button>
+          );
+        })}
+      </AnimatePresence>
 
-            {/* Scanning Beam */}
-            <div className="radar-beam-sector"></div>
-
-            {/* Center (Self) */}
-            <div className="radar-center" title="You are here"></div>
-
-            {/* Devices */}
-            <AnimatePresence>
-                {devicePositions.map((device) => {
-                    // Convert polar to cartesian (percentages)
-                    // x, y are offsets from center in %. 
-                    const x = Math.cos(device.angle * Math.PI / 180) * device.radius;
-                    const y = Math.sin(device.angle * Math.PI / 180) * device.radius;
-
-                    return (
-                        <MotionDiv
-                            key={device.id}
-                            className={`radar-blip ${selectedDevice === device.id ? 'selected' : ''}`}
-                            style={{
-                                top: `${50 + y}%`,
-                                left: `${50 + x}%`,
-                            }}
-                            onClick={() => onToogle(device.id)}
-                            initial={{ scale: 0, opacity: 0 }}
-                            animate={{ scale: 1, opacity: 1 }}
-                            exit={{ scale: 0, opacity: 0 }}
-                            transition={{ type: 'spring', stiffness: 200, damping: 15 }}
-                        >
-                            <div className="radar-blip-icon">
-                                {selectedDevice === device.id ? (
-                                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                        <polyline points="20 6 9 17 4 12"></polyline>
-                                    </svg>
-                                ) : (
-                                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                        <rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect>
-                                        <line x1="8" y1="21" x2="16" y2="21"></line>
-                                        <line x1="12" y1="17" x2="12" y2="21"></line>
-                                    </svg>
-                                )}
-                            </div>
-                            <div className="radar-blip-label">
-                                {device.name || 'Unknown'}
-                            </div>
-                        </MotionDiv>
-                    );
-                })}
-            </AnimatePresence>
-
-            {devices.length === 0 && (
-                <div style={{
-                    position: 'absolute',
-                    bottom: '20px',
-                    color: 'var(--text-tertiary)',
-                    fontSize: '0.85rem',
-                    textAlign: 'center',
-                    animation: 'pulse 2s infinite'
-                }}>
-                    Scanning Local Network...
-                </div>
-            )}
+      {devices.length === 0 && (
+        <div className="radar-status" role="status" aria-live="polite">
+          <span className="radar-status-dot" aria-hidden="true" />
+          Scanning local network…
         </div>
-    );
+      )}
+    </div>
+  );
 };
