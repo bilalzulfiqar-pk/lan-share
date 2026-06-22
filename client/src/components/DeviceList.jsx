@@ -30,12 +30,12 @@ const RadarCenter = () => (
   <span className="radar-center" role="img" aria-label="Your device" title="You are here">
     <svg className="radar-center-rings" viewBox="0 0 48 48" aria-hidden="true">
       <circle className="radar-center-ring" cx="24" cy="24" r="7">
-        <animate attributeName="r" from="7" to="19.5" dur="2.4s" repeatCount="indefinite" />
-        <animate attributeName="opacity" from="0.5" to="0" dur="2.4s" repeatCount="indefinite" />
+        <animate attributeName="r" from="7" to="20" dur="3.8s" calcMode="spline" keyTimes="0;1" keySplines="0 0 0.2 1" repeatCount="indefinite" />
+        <animate attributeName="opacity" from="0.5" to="0" dur="3.8s" calcMode="spline" keyTimes="0;1" keySplines="0 0 0.2 1" repeatCount="indefinite" />
       </circle>
       <circle className="radar-center-ring" cx="24" cy="24" r="7" opacity="0">
-        <animate attributeName="r" from="7" to="19.5" dur="2.4s" begin="1.2s" repeatCount="indefinite" />
-        <animate attributeName="opacity" from="0.5" to="0" dur="2.4s" begin="1.2s" repeatCount="indefinite" />
+        <animate attributeName="r" from="7" to="20" dur="3.8s" begin="1.9s" calcMode="spline" keyTimes="0;1" keySplines="0 0 0.2 1" repeatCount="indefinite" />
+        <animate attributeName="opacity" from="0.5" to="0" dur="3.8s" begin="1.9s" calcMode="spline" keyTimes="0;1" keySplines="0 0 0.2 1" repeatCount="indefinite" />
       </circle>
     </svg>
     <span className="radar-center-dot" aria-hidden="true" />
