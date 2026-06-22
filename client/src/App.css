@@ -33,7 +33,8 @@
     ui-monospace, SFMono-Regular, "JetBrains Mono", Menlo, Consolas, monospace;
 
   /* Motion */
-  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-out: cubic-bezier(0.4, 0, 0.2, 1);
+  --ease-out-sharp: cubic-bezier(0.16, 1, 0.3, 1);
   --ease-soft: cubic-bezier(0.32, 0.72, 0, 1);
   --dur-fast: 140ms;
   --dur-base: 220ms;
@@ -610,10 +611,10 @@ button {
     0 6px 20px -6px transparent,
     0 0 0 0 transparent;
   transition:
-    background-color 400ms var(--ease-out),
-    border-color 400ms var(--ease-out),
-    color 400ms var(--ease-out),
-    box-shadow 400ms var(--ease-out);
+    background-color 350ms var(--ease-out),
+    border-color 350ms var(--ease-out),
+    color 350ms var(--ease-out),
+    box-shadow 350ms var(--ease-out);
 }
 
 .btn-primary.btn-auto {
@@ -634,7 +635,7 @@ button {
 }
 
 .btn-primary > svg {
-  transition: transform 500ms var(--ease-out);
+  transition: transform 350ms var(--ease-out);
 }
 
 .btn-primary:active {
@@ -698,6 +699,11 @@ button {
   color: var(--primary);
   background: color-mix(in srgb, var(--primary-soft) 60%, transparent);
   border-color: color-mix(in srgb, var(--primary) 18%, transparent);
+  transition:
+    background-color 250ms var(--ease-out),
+    border-color 250ms var(--ease-out),
+    color 250ms var(--ease-out),
+    box-shadow 250ms var(--ease-out);
 }
 
 .btn-sm:hover {
@@ -720,7 +726,6 @@ button {
   background: var(--primary-soft-hover);
   border-color: color-mix(in srgb, var(--primary) 45%, transparent);
   color: var(--primary-hover);
-  transition-duration: 100ms;
 }
 
 .btn-danger {
@@ -1661,7 +1666,7 @@ button {
   cursor: pointer;
   z-index: var(--z-radar-blip);
   transition:
-    transform var(--dur-base) var(--ease-out),
+    transform var(--dur-base) var(--ease-out-sharp),
     z-index 0s var(--dur-base);
   background: transparent;
   border: none;
@@ -1689,10 +1694,10 @@ button {
   color: var(--text-secondary);
   box-shadow: var(--shadow-sm);
   transition:
-    background-color var(--dur-base) var(--ease-out),
-    color var(--dur-base) var(--ease-out),
-    border-color var(--dur-base) var(--ease-out),
-    box-shadow var(--dur-base) var(--ease-out);
+    background-color var(--dur-base) var(--ease-out-sharp),
+    color var(--dur-base) var(--ease-out-sharp),
+    border-color var(--dur-base) var(--ease-out-sharp),
+    box-shadow var(--dur-base) var(--ease-out-sharp);
 }
 
 .radar-blip:hover .radar-blip-icon,
@@ -1725,7 +1730,7 @@ button {
 
 .radar-blip.selected .radar-blip-ring {
   opacity: 1;
-  animation: blipRing 1.6s var(--ease-out) infinite;
+  animation: blipRing 1.6s var(--ease-out-sharp) infinite;
 }
 
 .radar-blip-label {
@@ -1743,7 +1748,7 @@ button {
   white-space: nowrap;
   letter-spacing: -0.005em;
   opacity: 0.85;
-  transition: opacity var(--dur-base) var(--ease-out);
+  transition: opacity var(--dur-base) var(--ease-out-sharp);
 }
 
 .radar-blip:hover .radar-blip-label,
