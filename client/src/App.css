@@ -825,7 +825,7 @@ button {
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  z-index: var(--z-server-popup);
+  z-index: var(--z-sidebar-backdrop);
 }
 
 .theme-menu-header {
@@ -1335,21 +1335,15 @@ button {
 
 .server-status-popup.warning .server-status-icon {
   color: var(--warning);
-  background: var(--warning-soft);
 }
 
 .server-status-popup.error .server-status-icon {
   color: var(--danger);
-  background: var(--danger-soft);
 }
 
-.server-status-spinner {
-  width: 16px;
-  height: 16px;
-  border: 2px solid var(--primary-tint);
-  border-top-color: var(--primary);
-  border-radius: 50%;
-  animation: spin 0.8s linear infinite;
+.server-status-loader {
+  animation: spin 3s linear infinite;
+  transform-origin: center;
 }
 
 .server-status-content {
