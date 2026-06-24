@@ -423,6 +423,7 @@ html,
 body {
   margin: 0;
   padding: 0;
+  overflow-x: hidden;
 }
 
 body {
@@ -592,7 +593,9 @@ button {
 
 .btn:focus-visible {
   outline: none;
-  box-shadow: 0 0 0 2px var(--bg-app), 0 0 0 4px color-mix(in srgb, var(--primary) 35%, transparent);
+  box-shadow:
+    0 0 0 2px var(--bg-app),
+    0 0 0 4px color-mix(in srgb, var(--primary) 35%, transparent);
 }
 
 .btn:disabled {
@@ -622,8 +625,16 @@ button {
 }
 
 .btn-primary:hover {
-  background-color: color-mix(in srgb, var(--primary-hover) 50%, var(--primary) 50%);
-  border-color: color-mix(in srgb, var(--primary-hover) 50%, var(--primary) 50%);
+  background-color: color-mix(
+    in srgb,
+    var(--primary-hover) 50%,
+    var(--primary) 50%
+  );
+  border-color: color-mix(
+    in srgb,
+    var(--primary-hover) 50%,
+    var(--primary) 50%
+  );
   box-shadow:
     0 1px 2px rgba(0, 0, 0, 0.08),
     0 6px 20px -6px var(--primary-glow),
@@ -763,6 +774,7 @@ button {
   flex-direction: column;
   min-height: 100vh;
   gap: 1.5rem;
+  overflow-x: hidden;
 }
 
 /* =========================================================
@@ -1475,12 +1487,12 @@ button {
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 1.5rem 0 1.5rem;
+  padding: 2.5rem 0 1.5rem;
 }
 
 .guide-text {
   position: absolute;
-  top: 1%;
+  top: 12%;
   left: 50%;
   transform: translateX(-50%);
   z-index: var(--z-base);
@@ -2219,7 +2231,7 @@ button {
 
   .radar-section {
     min-height: 340px;
-    padding: 1.5rem 0 0.5rem;
+    padding: 1.7rem 0 0.5rem;
   }
 
   .radar-container {
@@ -2290,7 +2302,7 @@ button {
 
   .user-badge {
     width: fit-content;
-    min-width: 145px;
+    min-width: 125px;
     max-width: 200px;
     padding: 0.2rem 0.2rem 0.2rem 0.65rem;
   }
