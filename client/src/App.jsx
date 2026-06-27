@@ -37,6 +37,27 @@ const THEMES = [
 const DEFAULT_THEME = 'ocean-light';
 const STORAGE_KEY = 'lan-share-theme';
 
+function updateFavicon(themeKey) {
+  const [themeId, mode] = themeKey.split('-');
+  const theme = THEMES.find((t) => t.id === themeId);
+  if (!theme) return;
+  const color = theme[mode]?.primary || theme.light.primary;
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="${color}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.55a11 11 0 0 1 14.08 0"/><path d="M1.42 9a16 16 0 0 1 21.16 0"/><path d="M8.59 16.11a6 6 0 0 1 6.82 0"/></svg>`;
+  const blob = new Blob([svg], { type: 'image/svg+xml' });
+  const url = URL.createObjectURL(blob);
+  let link = document.querySelector("link[rel='icon']");
+  if (!link) {
+    link = document.createElement('link');
+    link.rel = 'icon';
+    link.type = 'image/svg+xml';
+    document.head.appendChild(link);
+  }
+  if (link.href && link.href.startsWith('blob:')) {
+    URL.revokeObjectURL(link.href);
+  }
+  link.href = url;
+}
+
 function App() {
   const [displayName, setDisplayName] = useState(
     () => localStorage.getItem('lan-share-name') || 'Device ' + Math.floor(Math.random() * 1000)
@@ -104,6 +125,7 @@ function App() {
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme);
     localStorage.setItem(STORAGE_KEY, theme);
+    updateFavicon(theme);
   }, [theme]);
 
   useEffect(() => {
