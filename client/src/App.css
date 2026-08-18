@@ -2145,8 +2145,8 @@ button {
    ========================================================= */
 
 ::-webkit-scrollbar {
-  width: 10px;
-  height: 10px;
+  width: 5px;
+  height: 5px;
 }
 
 ::-webkit-scrollbar-track {
@@ -2154,24 +2154,53 @@ button {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: rgba(148, 163, 184, 0.3);
+  background: rgba(148, 163, 184, 0.45);
   border-radius: 100px;
-  border: 3px solid transparent;
-  background-clip: padding-box;
+  border: none;
   transition: background var(--dur-base) var(--ease-out);
 }
 
 [data-theme$="-dark"] ::-webkit-scrollbar-thumb {
-  background: rgba(148, 163, 184, 0.22);
+  /* background-color (not the background shorthand) — the shorthand resets
+     background-clip to border-box, which would paint the thumb at full track
+     width instead of the clipped visible width. */
+  background-color: rgba(148, 163, 184, 0.18);
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(148, 163, 184, 0.55);
-  background-clip: padding-box;
+  background: rgba(148, 163, 184, 0.65);
 }
 
 [data-theme$="-dark"] ::-webkit-scrollbar-thumb:hover {
-  background: rgba(148, 163, 184, 0.45);
+  background-color: rgba(148, 163, 184, 0.32);
+}
+
+/* Firefox only (no ::-webkit-scrollbar support). IMPORTANT: standard
+   scrollbar-width/color must NOT be set globally — in Edge/Chromium they
+   disable the ::-webkit-scrollbar styling below and fall back to the native
+   Windows scrollbar WITH up/down arrow buttons. Scoped to Firefox instead. */
+@-moz-document url-prefix() {
+  html {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(148, 163, 184, 0.45) transparent;
+  }
+
+  html[data-theme$="-dark"] {
+    scrollbar-color: rgba(148, 163, 184, 0.18) transparent;
+  }
+}
+
+/* No up/down arrow buttons anywhere — a clean, modern scrollbar.
+   !important beats any scoped ::-webkit-scrollbar rules below. */
+::-webkit-scrollbar-button {
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
+  background: transparent !important;
+}
+
+::-webkit-scrollbar-corner {
+  background: transparent;
 }
 
 /* =========================================================
@@ -2458,6 +2487,33 @@ button {
   display: flex;
   flex-direction: column;
   gap: 0.6rem;
+}
+
+/* Slim, modern scrollbar for the chat list (no arrow buttons). */
+.chat-messages::-webkit-scrollbar {
+  width: 5px;
+}
+
+.chat-messages::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--text-tertiary) 40%, transparent);
+  border: none;
+  border-radius: 100px;
+}
+
+.chat-messages::-webkit-scrollbar-thumb:hover {
+  background: color-mix(in srgb, var(--text-tertiary) 60%, transparent);
+}
+
+[data-theme$="-dark"] .chat-messages::-webkit-scrollbar-thumb {
+  background-color: color-mix(in srgb, var(--text-tertiary) 20%, transparent);
+}
+
+/* Firefox-only slim scrollbar for the chat list (same reason as above). */
+@-moz-document url-prefix() {
+  .chat-messages {
+    scrollbar-width: thin;
+    scrollbar-color: color-mix(in srgb, var(--text-tertiary) 45%, transparent) transparent;
+  }
 }
 
 .chat-empty {
@@ -2859,4 +2915,36 @@ button {
 .btn-icon.is-active-icon {
   background: var(--primary-soft);
   color: var(--primary);
+}
+
+/* =========================================================
+   Mobile / touch performance
+   =========================================================
+
+   Backdrop-filter blurs the whole page on every composited frame and is the
+   main cause of janky overlay animations on phones. On coarse-pointer (touch)
+   or narrow screens: drop the blur (deepen the tint to compensate), remove
+   the heavy side shadow on full-screen panels, and keep the sliding surfaces
+   on their own compositor layers. Desktop keeps the full glassy look.
+   ========================================================= */
+
+@media (max-width: 880px), (pointer: coarse) {
+  .debug-sidebar-backdrop,
+  .chat-backdrop,
+  .qr-backdrop {
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+    background: rgba(11, 18, 32, 0.66);
+  }
+
+  .debug-sidebar,
+  .chat-panel {
+    box-shadow: none;
+  }
+
+  .chat-panel,
+  .debug-sidebar,
+  .qr-card {
+    will-change: transform, opacity;
+  }
 }
