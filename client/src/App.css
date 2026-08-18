@@ -66,6 +66,7 @@
   --text-on-accent: #ffffff;
   --primary: #2454d6;
     --primary-strong: #2454d6;
+    --primary-lift: #2a65e5;
   --primary-hover: #1d47b8;
   --primary-soft: rgba(36, 84, 214, 0.1);
   --primary-soft-hover: rgba(36, 84, 214, 0.16);
@@ -111,6 +112,7 @@
   --text-on-accent: #ffffff;
   --primary: #60a5fa;
     --primary-strong: #2454d6;
+    --primary-lift: #2a65e5;
   --primary-hover: #3b82f6;
   --primary-soft: rgba(96, 165, 250, 0.14);
   --primary-soft-hover: rgba(96, 165, 250, 0.22);
@@ -157,6 +159,7 @@
   --text-on-accent: #ffffff;
   --primary: #059669;
     --primary-strong: #059669;
+    --primary-lift: #0f9d6c;
   --primary-hover: #047a56;
   --primary-soft: rgba(5, 150, 105, 0.1);
   --primary-soft-hover: rgba(5, 150, 105, 0.16);
@@ -201,6 +204,7 @@
   --text-on-accent: #ffffff;
   --primary: #34d399;
     --primary-strong: #059669;
+    --primary-lift: #0f9d6c;
   --primary-hover: #10b981;
   --primary-soft: rgba(52, 211, 153, 0.14);
   --primary-soft-hover: rgba(52, 211, 153, 0.22);
@@ -247,6 +251,7 @@
   --text-on-accent: #ffffff;
   --primary: #e11d48;
     --primary-strong: #e11d48;
+    --primary-lift: #ea2b52;
   --primary-hover: #be123c;
   --primary-soft: rgba(225, 29, 72, 0.1);
   --primary-soft-hover: rgba(225, 29, 72, 0.16);
@@ -292,6 +297,7 @@
   --text-on-accent: #ffffff;
   --primary: #fb7185;
     --primary-strong: #e11d48;
+    --primary-lift: #ea2b52;
   --primary-hover: #f43f5e;
   --primary-soft: rgba(251, 113, 133, 0.14);
   --primary-soft-hover: rgba(251, 113, 133, 0.22);
@@ -338,6 +344,7 @@
   --text-on-accent: #ffffff;
   --primary: #c026d3;
     --primary-strong: #c026d3;
+    --primary-lift: #d42ee7;
   --primary-hover: #a21caf;
   --primary-soft: rgba(192, 38, 211, 0.1);
   --primary-soft-hover: rgba(192, 38, 211, 0.16);
@@ -384,6 +391,7 @@
   --text-on-accent: #0a0414;
   --primary: #e879f9;
     --primary-strong: #c026d3;
+    --primary-lift: #d42ee7;
   --primary-hover: #d946ef;
   --primary-soft: rgba(232, 121, 249, 0.14);
   --primary-soft-hover: rgba(232, 121, 249, 0.22);
@@ -598,16 +606,8 @@ button {
 }
 
 .btn-primary:hover {
-  background-color: color-mix(
-    in srgb,
-    var(--primary-hover) 50%,
-    var(--primary-strong) 50%
-  );
-  border-color: color-mix(
-    in srgb,
-    var(--primary-hover) 50%,
-    var(--primary-strong) 50%
-  );
+  background-color: var(--primary-lift);
+  border-color: var(--primary-lift);
   box-shadow:
     0 1px 2px rgba(0, 0, 0, 0.08),
     0 6px 20px -6px var(--primary-glow),
@@ -637,7 +637,7 @@ button {
 .btn-primary.no-glow:hover {
   box-shadow:
     0 1px 2px rgba(0, 0, 0, 0.08),
-    0 6px 20px -6px var(--primary-glow);
+    0 6px 16px -6px color-mix(in srgb, var(--text-primary) 17%, transparent);
 }
 
 .btn-secondary {
@@ -2615,15 +2615,15 @@ button {
    hover shifts towards the accent with a soft float (no ring, no icon lift),
    and pressing gives a subtle scale-in for feedback. */
 .chat-send-button:hover:not(:disabled) {
-  background-color: var(--primary-hover);
-  border-color: var(--primary-hover);
+  background-color: var(--primary-lift);
+  border-color: var(--primary-lift);
   box-shadow:
     0 1px 2px rgba(0, 0, 0, 0.08),
-    0 10px 22px -12px var(--primary-glow);
+    0 4px 12px -6px color-mix(in srgb, var(--text-primary) 17%, transparent);
 }
 
 .chat-send-button:active:not(:disabled) {
-  transform: scale(0.97);
+  transform: scale(0.96);
   box-shadow:
     0 1px 2px rgba(0, 0, 0, 0.12) inset,
     0 4px 10px -6px var(--primary-glow);
