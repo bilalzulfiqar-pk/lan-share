@@ -41,25 +41,26 @@ export function QrPopup({ open, url, onClose, reduceMotion }) {
     }
   };
 
+  const openTransition = reduceMotion ? { duration: 0 } : { duration: 0.24, ease: 'easeOut' };
+  const closeTransition = reduceMotion ? { duration: 0 } : { duration: 0.14, ease: 'easeIn' };
+
   return (
     <AnimatePresence>
       {open && (
         <motion.div
           className="qr-backdrop"
           initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          transition={reduceMotion ? { duration: 0 } : { duration: 0.18 }}
+          animate={{ opacity: 1, transition: openTransition }}
+          exit={{ opacity: 0, transition: closeTransition }}
           onClick={onClose}
         >
           <motion.div
             className="qr-card"
             role="dialog"
             aria-label="Share this app over the network"
-            initial={reduceMotion ? false : { opacity: 0, scale: 0.95, y: 8 }}
-            animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={reduceMotion ? { opacity: 0 } : { opacity: 0, scale: 0.95, y: 8 }}
-            transition={reduceMotion ? { duration: 0 } : { type: 'spring', stiffness: 380, damping: 30 }}
+            initial={reduceMotion ? false : { opacity: 0, scale: 0.96 }}
+            animate={{ opacity: 1, scale: 1, transition: openTransition }}
+            exit={reduceMotion ? { opacity: 0 } : { opacity: 0, scale: 0.96, transition: closeTransition }}
             onClick={(event) => event.stopPropagation()}
           >
             <div className="qr-card-header">
@@ -79,7 +80,7 @@ export function QrPopup({ open, url, onClose, reduceMotion }) {
             </div>
 
             <div className="qr-canvas-frame">
-              <canvas ref={canvasRef} aria-label="QR code linking to this app" />
+              <canvas ref={canvasRef} width={220} height={220} aria-label="QR code linking to this app" />
             </div>
 
             <p className="qr-hint">
