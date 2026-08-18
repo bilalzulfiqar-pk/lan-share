@@ -278,6 +278,7 @@ function App() {
   const coarsePointer = useCoarsePointer();
 
   const themePickerRef = useRef(null);
+  const themeMenuRef = useRef(null);
   const themeButtonRef = useRef(null);
   const [menuStyle, setMenuStyle] = useState({ top: 0, right: 0 });
 
@@ -320,7 +321,11 @@ function App() {
     };
     updatePos();
     const onDown = (e) => {
-      if (themePickerRef.current && !themePickerRef.current.contains(e.target)) {
+      if (
+        themePickerRef.current &&
+        !themePickerRef.current.contains(e.target) &&
+        !themeMenuRef.current?.contains(e.target)
+      ) {
         setShowThemeMenu(false);
       }
     };
@@ -353,6 +358,7 @@ function App() {
 
   const handleThemeChange = (themeId, mode) => {
     setTheme(`${themeId}-${mode}`);
+    setShowThemeMenu(false);
   };
 
   const handleNameChange = (e) => {
@@ -565,6 +571,7 @@ function App() {
           <motion.div
             className="theme-menu"
             style={menuStyle}
+            ref={themeMenuRef}
             role="menu"
             initial={{ opacity: 0, scale: 0.95, y: -6 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
