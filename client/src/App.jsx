@@ -112,13 +112,21 @@ function App() {
 
   const handleNotifyToggle = useCallback(async () => {
     if (!notifyEnabled) {
-      // Sound-only mode always works; only re-prompt for the system
-      // notification permission if the browser supports it and the user
-      // hasn't decided yet (blocked/unsupported browsers still get audio).
-      if (areNotificationsSupported() && getNotificationPermission() === 'default') {
-        await requestNotificationPermission();
+      if (!areNotificationsSupported()) {
+        // Sound-only mode for browsers with no Notification API.
+        setNotifyEnabled(true);
+        return;
       }
-      setNotifyEnabled(true);
+
+      let permission = getNotificationPermission();
+      if (permission === 'default') {
+        permission = await requestNotificationPermission();
+      }
+
+      // Only flip the bell on when notifications can actually be delivered.
+      // Dismissing the prompt leaves permission 'default' — the bell stays
+      // off and will ask again next time; a blocked browser stays off too.
+      setNotifyEnabled(permission === 'granted');
       return;
     }
     setNotifyEnabled(false);
@@ -489,7 +497,7 @@ function App() {
             <button
               className={`btn-icon ${notifyEnabled ? 'is-active-icon' : ''}`}
               onClick={handleNotifyToggle}
-              title={notifyEnabled ? 'Notifications on — click to mute' : 'Get notified about files and messages'}
+              title={notifyEnabled ? 'Notifications on - click to mute' : 'Get notified about files and messages'}
               aria-label={notifyEnabled ? 'Disable notifications' : 'Enable notifications'}
               aria-pressed={notifyEnabled}
             >
@@ -535,7 +543,7 @@ function App() {
                 aria-label="Your display name"
               />
               <span className="user-id-chip" title={debugInfo.deviceId || ''}>
-                {debugInfo.deviceId ? debugInfo.deviceId.slice(0, 12) : '—'}
+                {debugInfo.deviceId ? debugInfo.deviceId.slice(0, 12) : '-'}
               </span>
             </div>
             <span className="user-badge-edit" aria-hidden="true">
