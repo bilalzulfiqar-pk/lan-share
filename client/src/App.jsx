@@ -16,6 +16,7 @@ import {
   areNotificationsSupported,
   getNotificationPermission,
 } from './lib/notifications';
+import { useCoarsePointer } from './lib/useCoarsePointer';
 
 const THEMES = [
   {
@@ -274,6 +275,7 @@ function App() {
   const [showQrPopup, setShowQrPopup] = useState(false);
   const [isWindowDragActive, setIsWindowDragActive] = useState(false);
   const reduceMotion = useReducedMotion();
+  const coarsePointer = useCoarsePointer();
 
   const themePickerRef = useRef(null);
   const themeButtonRef = useRef(null);
@@ -633,7 +635,11 @@ function App() {
               initial={{ opacity: 0, x: 360 }}
               animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0, x: 360 }}
-              transition={reduceMotion ? { duration: 0 } : { type: 'spring', stiffness: 280, damping: 30 }}
+              transition={reduceMotion
+                ? { duration: 0 }
+                : coarsePointer
+                  ? { type: 'tween', duration: 0.22, ease: [0.16, 1, 0.3, 1] }
+                  : { type: 'spring', stiffness: 280, damping: 30 }}
               role="dialog"
               aria-label="Debug details"
             >

@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 // eslint-disable-next-line no-unused-vars
 import { AnimatePresence, motion } from 'framer-motion';
 import { copyText } from '../lib/clipboard';
+import { useCoarsePointer } from '../lib/useCoarsePointer';
 
 const URL_SPLIT_PATTERN = /(https?:\/\/[^\s<>"']+)/g;
 const URL_MATCH_PATTERN = /^https?:\/\/[^\s<>"']+$/;
@@ -85,6 +86,7 @@ export function ChatPanel({ open, peerName, connectionLabel, messages, onSend, o
   const [copiedId, setCopiedId] = useState(null);
   const scrollRef = useRef(null);
   const inputRef = useRef(null);
+  const coarsePointer = useCoarsePointer();
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -130,7 +132,11 @@ export function ChatPanel({ open, peerName, connectionLabel, messages, onSend, o
             initial={reduceMotion ? false : { opacity: 0, x: 360 }}
             animate={{ opacity: 1, x: 0 }}
             exit={reduceMotion ? { opacity: 0 } : { opacity: 0, x: 360 }}
-            transition={reduceMotion ? { duration: 0 } : { type: 'spring', stiffness: 280, damping: 30 }}
+            transition={reduceMotion
+              ? { duration: 0 }
+              : coarsePointer
+                ? { type: 'tween', duration: 0.22, ease: [0.16, 1, 0.3, 1] }
+                : { type: 'spring', stiffness: 280, damping: 30 }}
             role="dialog"
             aria-label={`Chat with ${peerName}`}
           >
