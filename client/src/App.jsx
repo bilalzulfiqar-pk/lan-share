@@ -21,26 +21,26 @@ const THEMES = [
   {
     id: 'ocean',
     name: 'Ocean',
-    light: { primary: '#2454d6', accent: '#3b82f6' },
-    dark:  { primary: '#60a5fa', accent: '#3b82f6' },
+    light: { primary: '#2454d6', accent: '#3b82f6', strong: '#2454d6' },
+    dark:  { primary: '#60a5fa', accent: '#3b82f6', strong: '#1d47b8' },
   },
   {
     id: 'forest',
     name: 'Forest',
-    light: { primary: '#059669', accent: '#10b981' },
-    dark:  { primary: '#34d399', accent: '#10b981' },
+    light: { primary: '#059669', accent: '#10b981', strong: '#059669' },
+    dark:  { primary: '#34d399', accent: '#10b981', strong: '#047a56' },
   },
   {
     id: 'rose',
     name: 'Rose',
-    light: { primary: '#e11d48', accent: '#f43f5e' },
-    dark:  { primary: '#fb7185', accent: '#f43f5e' },
+    light: { primary: '#e11d48', accent: '#f43f5e', strong: '#e11d48' },
+    dark:  { primary: '#fb7185', accent: '#f43f5e', strong: '#be123c' },
   },
   {
     id: 'neon',
     name: 'Neon',
-    light: { primary: '#c026d3', accent: '#e879f9' },
-    dark:  { primary: '#e879f9', accent: '#e879f9' },
+    light: { primary: '#c026d3', accent: '#e879f9', strong: '#c026d3' },
+    dark:  { primary: '#e879f9', accent: '#e879f9', strong: '#a21caf' },
   },
 ];
 
@@ -54,7 +54,9 @@ function updateFavicon(themeKey) {
   const [themeId, mode] = themeKey.split('-');
   const theme = THEMES.find((t) => t.id === themeId);
   if (!theme) return;
-  const color = theme[mode]?.primary || theme.light.primary;
+  // Per-mode "strong" brand color (--primary-strong): deep in light, a deeper
+  // shade in dark, so the favicon matches the header tile/buttons in each mode.
+  const color = theme[mode]?.strong || theme.light.primary;
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="${color}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.55a11 11 0 0 1 14.08 0"/><path d="M1.42 9a16 16 0 0 1 21.16 0"/><path d="M8.59 16.11a6 6 0 0 1 6.82 0"/></svg>`;
   const blob = new Blob([svg], { type: 'image/svg+xml' });
   const url = URL.createObjectURL(blob);
