@@ -1,16 +1,32 @@
-# React + Vite
+# LAN Share — client
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+React 19 + Vite SPA. See the [root README](../README.md) for architecture,
+deployment, and the full feature list.
 
-Currently, two official plugins are available:
+## Commands
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+```bash
+npm run dev      # vite --host (LAN-accessible dev server)
+npm run build    # production build to dist/
+npm run preview  # serve the production build locally
+npm run lint     # eslint
+npm test         # vitest (includes live-server integration tests)
+```
 
-## React Compiler
+## Structure
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
-
-## Expanding the ESLint configuration
-
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+```
+src/
+  App.jsx                  # app shell: header, radar, history, popups, panels
+  components/              # DeviceList (radar), FileItem, HistoryPanel, ChatPanel, QrPopup
+  hooks/
+    useSignaling.js        # socket.io connection, discovery, device identity
+    useWebRTC.js           # thin React binding for the transfer engine
+  lib/
+    transferEngine.js      # per-peer connections, streaming transfers, chat
+    protocol.js            # wire protocol constants and negotiation helpers
+    clipboard.js           # clipboard with insecure-origin fallback
+    notifications.js       # browser notification helpers
+    sound.js               # WebAudio notification blip
+    __tests__/             # vitest suites (mock WebRTC + real-server integration)
+```
