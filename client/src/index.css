@@ -1,21 +1,11 @@
-:root {
-  --bg-color: #0f172a;
-  --text-color: #f1f5f9;
-  --primary: #3b82f6;
-  --secondary: #64748b;
-  --accent: #8b5cf6;
-  --surface: #1e293b;
-  --surface-hover: #334155;
-  --border: #334155;
-  --success: #10b981;
-  --danger: #ef4444;
+/* Minimal reset only — all theming lives in App.css design tokens. */
+
+* {
+  box-sizing: border-box;
 }
 
 body {
   margin: 0;
-  font-family: 'Inter', system-ui, -apple-system, sans-serif;
-  background-color: var(--bg-color);
-  color: var(--text-color);
   -webkit-font-smoothing: antialiased;
 }
 
@@ -23,8 +13,4 @@ button {
   cursor: pointer;
   border: none;
   font-family: inherit;
-}
-
-* {
-  box-sizing: border-box;
 }

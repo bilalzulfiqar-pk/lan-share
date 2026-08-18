@@ -2,169 +2,40 @@ const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
 const cors = require('cors');
+const {
+    normalizeJoinPayload,
+    getClientIp,
+    detectDeviceType,
+    getVisibleUsersFor,
+    isValidSessionDescription,
+    isValidIceCandidate,
+    createRateLimiter
+} = require('./lib');
+
+const USERS_UPDATE_DEBOUNCE_MS = 100;
+const MAX_RELAY_STRIKES = 25;
 
 const app = express();
 app.use(cors());
+app.get('/health', (req, res) => {
+    res.json({ ok: true });
+});
 
 const server = http.createServer(app);
 const io = new Server(server, {
     cors: {
         origin: "*", // Allow all origins for local network access
         methods: ["GET", "POST"]
-    }
+    },
+    maxHttpBufferSize: 64 * 1024
 });
 
-// Store connected users: socketId -> { id, name, deviceId, publicIp, networkFingerprints }
+// Store connected users: socketId -> { id, name, deviceId, deviceType, publicIp, networkFingerprints }
 const users = {};
 
-function sanitizeName(name) {
-    if (typeof name !== 'string') {
-        return 'Unknown Device';
-    }
-
-    const normalized = name.trim().slice(0, 32);
-    return normalized || 'Unknown Device';
-}
-
-function sanitizeNetworkFingerprint(networkFingerprint) {
-    if (typeof networkFingerprint !== 'string') {
-        return null;
-    }
-
-    const normalized = networkFingerprint.trim().toLowerCase().slice(0, 64);
-    return /^[a-z0-9:.-]+$/.test(normalized) ? normalized : null;
-}
-
-function sanitizeNetworkFingerprints(value) {
-    if (!Array.isArray(value)) {
-        return [];
-    }
-
-    return Array.from(new Set(
-        value
-            .map(sanitizeNetworkFingerprint)
-            .filter(Boolean)
-    )).slice(0, 12);
-}
-
-function sanitizeDeviceId(deviceId) {
-    if (typeof deviceId !== 'string') {
-        return null;
-    }
-
-    const normalized = deviceId.trim().toLowerCase().slice(0, 128);
-    return /^[a-z0-9-]+$/.test(normalized) ? normalized : null;
-}
-
-function normalizeJoinPayload(payload) {
-    if (typeof payload === 'string') {
-        return {
-            name: sanitizeName(payload),
-            networkFingerprint: null,
-            networkFingerprints: [],
-            deviceId: null
-        };
-    }
-
-    if (payload && typeof payload === 'object') {
-        const networkFingerprints = sanitizeNetworkFingerprints(payload.networkFingerprints);
-        const legacyFingerprint = sanitizeNetworkFingerprint(payload.networkFingerprint);
-
-        if (legacyFingerprint && !networkFingerprints.includes(legacyFingerprint)) {
-            networkFingerprints.push(legacyFingerprint);
-        }
-
-        return {
-            name: sanitizeName(payload.name),
-            networkFingerprint: networkFingerprints[0] || null,
-            networkFingerprints,
-            deviceId: sanitizeDeviceId(payload.deviceId)
-        };
-    }
-
-    return {
-        name: 'Unknown Device',
-        networkFingerprint: null,
-        networkFingerprints: [],
-        deviceId: null
-    };
-}
-
-function getClientIp(socket) {
-    const forwardedFor = socket.handshake.headers['x-forwarded-for'];
-    if (typeof forwardedFor === 'string' && forwardedFor.trim()) {
-        return forwardedFor.split(',')[0].trim();
-    }
-
-    const address = socket.handshake.address || '';
-    return address.replace(/^::ffff:/, '');
-}
-
-function splitFingerprints(networkFingerprints = []) {
-    return {
-        lan: networkFingerprints.filter((fingerprint) => fingerprint.startsWith('lan:')),
-        wan: networkFingerprints.filter((fingerprint) => fingerprint.startsWith('wan:'))
-    };
-}
-
-function hasOverlap(leftValues, rightValues) {
-    return leftValues.some((value) => rightValues.includes(value));
-}
-
-function areUsersVisible(leftUser, rightUser) {
-    if (!leftUser || !rightUser) {
-        return false;
-    }
-
-    const leftFingerprints = leftUser.networkFingerprints || [];
-    const rightFingerprints = rightUser.networkFingerprints || [];
-    const leftFingerprintGroups = splitFingerprints(leftFingerprints);
-    const rightFingerprintGroups = splitFingerprints(rightFingerprints);
-    const leftHasLan = leftFingerprintGroups.lan.length > 0;
-    const rightHasLan = rightFingerprintGroups.lan.length > 0;
-    const leftHasWan = leftFingerprintGroups.wan.length > 0;
-    const rightHasWan = rightFingerprintGroups.wan.length > 0;
-    const bothHaveLan = leftHasLan && rightHasLan;
-    const bothHaveWan = leftHasWan && rightHasWan;
-    const sharesWanFingerprint = hasOverlap(leftFingerprintGroups.wan, rightFingerprintGroups.wan);
-    const sharesLanFingerprint = hasOverlap(leftFingerprintGroups.lan, rightFingerprintGroups.lan);
-    const sharesHttpPublicIp =
-        Boolean(leftUser.publicIp) &&
-        Boolean(rightUser.publicIp) &&
-        leftUser.publicIp === rightUser.publicIp;
-
-    // Strongest signal: both browsers exposed the same LAN subnet.
-    if (bothHaveLan && sharesLanFingerprint) {
-        return true;
-    }
-
-    // Next strongest signal: both browsers independently discovered the same
-    // public network identity through ICE/STUN.
-    if (bothHaveWan && sharesWanFingerprint) {
-        return true;
-    }
-
-    if (!sharesHttpPublicIp) {
-        return false;
-    }
-
-    // If one browser only exposed LAN and the other only exposed WAN, or one
-    // side exposed nothing at all, keep the same-public-IP fallback instead of
-    // hiding a device that was valid moments earlier.
-    if (!bothHaveLan || !bothHaveWan) {
-        return true;
-    }
-
-    // Both devices exposed comparable fingerprint types but none matched, so
-    // they are likely not on the same local network segment.
-    return false;
-}
-
-function getVisibleUsersFor(user) {
-    return Object.values(users)
-        .filter((candidate) => areUsersVisible(user, candidate))
-        .map(({ id, name }) => ({ id, name }));
-}
+const relayLimiter = createRateLimiter({ capacity: 40, refillPerSecond: 20 });
+const joinLimiter = createRateLimiter({ capacity: 10, refillPerSecond: 5 });
+const relayStrikes = new Map();
 
 function emitDebugState(user) {
     if (!user) {
@@ -175,15 +46,29 @@ function emitDebugState(user) {
         publicIp: user.publicIp,
         networkFingerprints: user.networkFingerprints || [],
         deviceId: user.deviceId,
-        visiblePeers: getVisibleUsersFor(user).filter((candidate) => candidate.id !== user.id)
+        visiblePeers: getVisibleUsersFor(users, user)
     });
 }
 
 function emitUsersUpdateForAllUsers() {
     Object.values(users).forEach((user) => {
-        io.to(user.id).emit('users-update', getVisibleUsersFor(user));
+        io.to(user.id).emit('users-update', getVisibleUsersFor(users, user));
         emitDebugState(user);
     });
+}
+
+// Coalesce rapid membership changes (multiple joins, renames) into one
+// broadcast round so traffic stays linear rather than quadratic in bursts.
+let usersUpdateTimer = null;
+function scheduleUsersUpdate() {
+    if (usersUpdateTimer) {
+        return;
+    }
+
+    usersUpdateTimer = setTimeout(() => {
+        usersUpdateTimer = null;
+        emitUsersUpdateForAllUsers();
+    }, USERS_UPDATE_DEBOUNCE_MS);
 }
 
 function removeUser(socketId) {
@@ -220,46 +105,77 @@ function removeDuplicateDeviceEntries(deviceId, currentSocketId) {
     return duplicates;
 }
 
+function registerRelayStrike(socket) {
+    const strikes = (relayStrikes.get(socket.id) || 0) + 1;
+    relayStrikes.set(socket.id, strikes);
+
+    if (strikes >= MAX_RELAY_STRIKES) {
+        socket.disconnect(true);
+    }
+}
+
 io.on('connection', (socket) => {
     console.log('User connected:', socket.id);
 
-    // User joins with a display name
     socket.on('join', (payload) => {
+        if (!joinLimiter.tryConsume(socket.id)) {
+            return;
+        }
+
         const { name, networkFingerprints, deviceId } = normalizeJoinPayload(payload);
-        const publicIp = getClientIp(socket);
+        const publicIp = getClientIp(socket.handshake.headers, socket.handshake.address);
+        const deviceType = detectDeviceType(socket.handshake.headers['user-agent']);
 
         removeDuplicateDeviceEntries(deviceId, socket.id);
         users[socket.id] = {
             id: socket.id,
             name,
             deviceId,
+            deviceType,
             publicIp,
             networkFingerprints
         };
 
-        emitUsersUpdateForAllUsers();
+        scheduleUsersUpdate();
     });
 
-    // Handle Signaling
-    socket.on('offer', (data) => {
-        const { target, offer, sender } = data;
-        io.to(target).emit('offer', { offer, sender });
-    });
+    // Signaling relays. The sender is always taken from the authenticated
+    // socket, never from the (spoofable) payload, and a message is only
+    // relayed to sockets that actually joined.
+    const relay = (eventName, isValidPayload, extractPayload) => {
+        socket.on(eventName, (data) => {
+            if (!users[socket.id]) {
+                return;
+            }
 
-    socket.on('answer', (data) => {
-        const { target, answer, sender } = data;
-        io.to(target).emit('answer', { answer, sender });
-    });
+            if (!relayLimiter.tryConsume(socket.id)) {
+                registerRelayStrike(socket);
+                return;
+            }
 
-    socket.on('ice-candidate', (data) => {
-        const { target, candidate, sender } = data;
-        io.to(target).emit('ice-candidate', { candidate, sender });
-    });
+            const payload = extractPayload(data);
+            const target = typeof data?.target === 'string' ? data.target : null;
+
+            if (!target || !users[target] || !isValidPayload(payload)) {
+                registerRelayStrike(socket);
+                return;
+            }
+
+            io.to(target).emit(eventName, { ...payload, sender: socket.id });
+        });
+    };
+
+    relay('offer', (payload) => isValidSessionDescription(payload.offer, 'offer'), (data) => ({ offer: data?.offer }));
+    relay('answer', (payload) => isValidSessionDescription(payload.answer, 'answer'), (data) => ({ answer: data?.answer }));
+    relay('ice-candidate', (payload) => isValidIceCandidate(payload.candidate), (data) => ({ candidate: data?.candidate }));
 
     socket.on('disconnect', () => {
         console.log('User disconnected:', socket.id);
         removeUser(socket.id);
-        emitUsersUpdateForAllUsers();
+        relayLimiter.reset(socket.id);
+        joinLimiter.reset(socket.id);
+        relayStrikes.delete(socket.id);
+        scheduleUsersUpdate();
     });
 });
 
@@ -267,3 +183,5 @@ const PORT = process.env.PORT || 3001;
 server.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
 });
+
+module.exports = { app, server };

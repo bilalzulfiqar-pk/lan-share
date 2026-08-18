@@ -9,7 +9,7 @@ const CancelIcon = () => (
 
 export function FileItem({ item, onRequest, onSave, onCancel, getPeerName }) {
   const isSender = item.direction === 'out';
-  const peerName = getPeerName ? getPeerName(item.peerId) : 'Unknown';
+  const peerName = item.peerName || (getPeerName ? getPeerName(item.peerId) : 'Unknown');
 
   const statusKey = (() => {
     switch (item.status) {
@@ -47,6 +47,14 @@ export function FileItem({ item, onRequest, onSave, onCancel, getPeerName }) {
     const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
     const i = Math.floor(Math.log(bytes) / Math.log(k));
     return `${parseFloat((bytes / Math.pow(k, i)).toFixed(2))} ${sizes[i]}`;
+  };
+
+  const formatEta = (seconds) => {
+    if (seconds == null || !Number.isFinite(seconds)) return null;
+    if (seconds < 60) return `${Math.max(1, Math.round(seconds))}s`;
+    const minutes = Math.floor(seconds / 60);
+    const rest = Math.round(seconds % 60);
+    return rest > 0 ? `${minutes}m ${rest}s` : `${minutes}m`;
   };
 
   const getIcon = (type) => {
@@ -95,12 +103,40 @@ export function FileItem({ item, onRequest, onSave, onCancel, getPeerName }) {
         </div>
 
         {isActive && (
-          <div className="progress-bar-container" aria-hidden="true">
+          <div
+            className="progress-bar-container"
+            role="progressbar"
+            aria-valuemin={0}
+            aria-valuemax={100}
+            aria-valuenow={item.progress ?? 0}
+            aria-label={`${isSender ? 'Sending' : 'Receiving'} ${item.fileName}`}
+          >
             <div
               className="progress-bar-fill"
               style={{ width: `${item.progress ?? 0}%` }}
             />
           </div>
+        )}
+
+        {isActive && item.speed != null && item.speed > 0 && (
+          <div className="transfer-rate">
+            <span>{formatSize(item.speed)}/s</span>
+            {formatEta(item.eta) && (
+              <>
+                <span className="meta-sep" aria-hidden="true">·</span>
+                <span>{formatEta(item.eta)} left</span>
+              </>
+            )}
+          </div>
+        )}
+
+        {!isSender && item.status === 'completed' && item.verified && (
+          <span className="verified-badge" title="SHA-256 integrity check passed">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <polyline points="20 6 9 17 4 12" />
+            </svg>
+            Verified
+          </span>
         )}
       </div>
 

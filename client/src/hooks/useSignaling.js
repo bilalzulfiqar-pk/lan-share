@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { io } from 'socket.io-client';
 
 const SIGNALING_SERVER_PORT = 3001;
@@ -188,6 +188,7 @@ export function useSignaling(displayName) {
     const [deviceId] = useState(() => getOrCreateDeviceId());
     const [serverUrl, setServerUrl] = useState('');
     const [transportName, setTransportName] = useState('pending');
+    const joinedThisConnectionRef = useRef(false);
     const [serverDebug, setServerDebug] = useState({
         publicIp: null,
         networkFingerprints: [],
@@ -270,15 +271,33 @@ export function useSignaling(displayName) {
         };
     }, []); // Only run once on mount (connection logic)
 
-    // Handle name updates if socket is connected
+    // Join immediately when the connection comes up, then debounce updates so
+    // typing a new display name does not spam the server on every keystroke.
     useEffect(() => {
-        if (socket && isConnected) {
+        if (!socket || !isConnected) {
+            joinedThisConnectionRef.current = false;
+            return;
+        }
+
+        if (!joinedThisConnectionRef.current) {
+            joinedThisConnectionRef.current = true;
             socket.emit('join', {
                 name: displayName,
                 networkFingerprints,
                 deviceId
             });
+            return;
         }
+
+        const timer = window.setTimeout(() => {
+            socket.emit('join', {
+                name: displayName,
+                networkFingerprints,
+                deviceId
+            });
+        }, 400);
+
+        return () => window.clearTimeout(timer);
     }, [deviceId, displayName, socket, isConnected, networkFingerprints]);
 
     return {

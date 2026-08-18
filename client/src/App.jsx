@@ -1,11 +1,21 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 // eslint-disable-next-line no-unused-vars
-import { AnimatePresence, motion } from 'framer-motion';
+import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 import './App.css';
 import { useSignaling } from './hooks/useSignaling';
 import { useWebRTC } from './hooks/useWebRTC';
 import { DeviceList } from './components/DeviceList';
 import { HistoryPanel } from './components/HistoryPanel';
+import { ChatPanel } from './components/ChatPanel';
+import { QrPopup } from './components/QrPopup';
+import { copyText } from './lib/clipboard';
+import { playNotificationBlip } from './lib/sound';
+import {
+  requestNotificationPermission,
+  showNotification,
+  areNotificationsSupported,
+  getNotificationPermission,
+} from './lib/notifications';
 
 const THEMES = [
   {
@@ -36,6 +46,9 @@ const THEMES = [
 
 const DEFAULT_THEME = 'ocean-light';
 const STORAGE_KEY = 'lan-share-theme';
+const CHAT_STORAGE_KEY = 'lan-share-chat';
+const CHAT_HISTORY_LIMIT = 200;
+const NOTIFY_STORAGE_KEY = 'lan-share-notify-enabled';
 
 function updateFavicon(themeKey) {
   const [themeId, mode] = themeKey.split('-');
@@ -74,7 +87,140 @@ function App() {
   const [showThemeMenu, setShowThemeMenu] = useState(false);
 
   const { socket, peers, isConnected, isReconnecting, connectionStartTime, myId, debugInfo } = useSignaling(displayName);
-  const { history, connectionStatus, channelReady, sendFilesOffer, requestFile, saveReceivedFile, cancelTransfer, error } = useWebRTC(socket, myId);
+
+  const getPeerName = useCallback((peerId) => {
+    if (!peerId) return 'Unknown';
+    if (peerId === myId) return 'Me';
+    const peer = peers.find((p) => p.id === peerId);
+    return peer?.name || peerId.slice(0, 8) + '…';
+  }, [peers, myId]);
+
+  const [notifyEnabled, setNotifyEnabled] = useState(() => localStorage.getItem(NOTIFY_STORAGE_KEY) === 'true');
+
+  useEffect(() => {
+    localStorage.setItem(NOTIFY_STORAGE_KEY, notifyEnabled ? 'true' : 'false');
+  }, [notifyEnabled]);
+
+  const announceEvent = useCallback((title, body) => {
+    if (!notifyEnabled) return;
+
+    playNotificationBlip();
+    if (document.hidden) {
+      showNotification(title, { body, tag: 'lan-share' });
+    }
+  }, [notifyEnabled]);
+
+  const handleNotifyToggle = useCallback(async () => {
+    if (!notifyEnabled) {
+      // Sound-only mode always works; only re-prompt for the system
+      // notification permission if the browser supports it and the user
+      // hasn't decided yet (blocked/unsupported browsers still get audio).
+      if (areNotificationsSupported() && getNotificationPermission() === 'default') {
+        await requestNotificationPermission();
+      }
+      setNotifyEnabled(true);
+      return;
+    }
+    setNotifyEnabled(false);
+  }, [notifyEnabled]);
+
+  // { peerId, key } — the history key is pinned when the chat opens so the
+  // panel keeps its history even if the peer list momentarily empties during
+  // a signaling reconnect.
+  const [chatSession, setChatSession] = useState({ peerId: null, key: null });
+  const [chatByDevice, setChatByDevice] = useState(() => {
+    try {
+      return JSON.parse(localStorage.getItem(CHAT_STORAGE_KEY)) || {};
+    } catch {
+      return {};
+    }
+  });
+  const [unreadByDevice, setUnreadByDevice] = useState({});
+
+  const deviceKeyForPeer = useCallback((peerId) => {
+    const peer = peers.find((p) => p.id === peerId);
+    return peer?.deviceId || peerId;
+  }, [peers]);
+
+  const appendChatMessage = useCallback((key, message) => {
+    setChatByDevice((prev) => ({
+      ...prev,
+      [key]: [...(prev[key] || []), message].slice(-CHAT_HISTORY_LIMIT)
+    }));
+  }, []);
+
+  const handleIncomingChat = useCallback((peerId, message) => {
+    const key = deviceKeyForPeer(peerId);
+    appendChatMessage(key, {
+      id: message.id,
+      text: message.text,
+      ts: message.ts,
+      direction: 'in'
+    });
+
+    if (chatSession.peerId !== peerId) {
+      setUnreadByDevice((prev) => ({ ...prev, [key]: (prev[key] || 0) + 1 }));
+      announceEvent(`Message from ${getPeerName(peerId)}`, message.text.length > 80 ? `${message.text.slice(0, 80)}…` : message.text);
+    } else {
+      // Refresh the pinned key in case the peer reconnected with a new
+      // socket id but the same device.
+      setChatSession((current) => (current.peerId === peerId ? { ...current, key } : current));
+    }
+  }, [announceEvent, appendChatMessage, chatSession.peerId, deviceKeyForPeer, getPeerName]);
+
+  const { history, peerStatus, error, sendFilesOffer, requestFile, saveReceivedFile, cancelTransfer, sendChat } =
+    useWebRTC(socket, myId, {
+      getPeerName,
+      onChat: handleIncomingChat,
+      onNotify: (event) => announceEvent(event.title, event.body)
+    });
+
+  const openChatWithPeer = useCallback((peerId) => {
+    setChatSession({ peerId, key: deviceKeyForPeer(peerId) });
+    setUnreadByDevice((prev) => ({ ...prev, [deviceKeyForPeer(peerId)]: 0 }));
+  }, [deviceKeyForPeer]);
+
+  const closeChat = useCallback(() => {
+    setChatSession({ peerId: null, key: null });
+  }, []);
+
+  const handleSendChat = useCallback((text) => {
+    if (!chatSession.peerId || !chatSession.key) return;
+
+    appendChatMessage(chatSession.key, {
+      id: (crypto.randomUUID ? crypto.randomUUID() : `m-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`),
+      text,
+      ts: Date.now(),
+      direction: 'out'
+    });
+    sendChat(chatSession.peerId, text);
+  }, [appendChatMessage, chatSession, sendChat]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(CHAT_STORAGE_KEY, JSON.stringify(chatByDevice));
+    } catch {
+      // storage full or unavailable — chat history stays in memory
+    }
+  }, [chatByDevice]);
+
+  const unreadBySocketId = useMemo(() => {
+    const map = {};
+    peers.forEach((peer) => {
+      const count = unreadByDevice[peer.deviceId];
+      if (count > 0) {
+        map[peer.id] = count;
+      }
+    });
+    return map;
+  }, [peers, unreadByDevice]);
+
+  const chatMessages = chatSession.key ? (chatByDevice[chatSession.key] || []) : [];
+  const chatStatusLabel = peerStatus[chatSession.peerId] === 'CONNECTED'
+    ? 'Connected · peer-to-peer'
+    : peerStatus[chatSession.peerId] === 'CONNECTING'
+      ? 'Connecting…'
+      : 'Not connected';
 
   const [disconnectElapsed, setDisconnectElapsed] = useState(0);
 
@@ -113,6 +259,11 @@ function App() {
   const [showGuide, setShowGuide] = useState(true);
   const [showDebugSidebar, setShowDebugSidebar] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [dismissedStatusEpisode, setDismissedStatusEpisode] = useState(0);
+  const [dismissedError, setDismissedError] = useState(null);
+  const [showQrPopup, setShowQrPopup] = useState(false);
+  const [isWindowDragActive, setIsWindowDragActive] = useState(false);
+  const reduceMotion = useReducedMotion();
 
   const themePickerRef = useRef(null);
   const themeButtonRef = useRef(null);
@@ -126,6 +277,11 @@ function App() {
     document.documentElement.setAttribute('data-theme', theme);
     localStorage.setItem(STORAGE_KEY, theme);
     updateFavicon(theme);
+
+    const bgColor = getComputedStyle(document.documentElement).getPropertyValue('--bg-app').trim();
+    if (bgColor) {
+      document.querySelector('meta[name="theme-color"]')?.setAttribute('content', bgColor);
+    }
   }, [theme]);
 
   useEffect(() => {
@@ -207,22 +363,67 @@ function App() {
     }
   };
 
+  // Page-level drag & drop: dropping files anywhere sends them to the
+  // selected device (or the only visible peer).
+  const dragDropTarget = selectedDevice || (peers.length === 1 ? peers[0].id : null);
+
+  useEffect(() => {
+    let dragDepth = 0;
+
+    const hasFiles = (event) => Array.from(event.dataTransfer?.types || []).includes('Files');
+
+    const onDragEnter = (event) => {
+      if (!hasFiles(event)) return;
+      dragDepth += 1;
+      setIsWindowDragActive(true);
+    };
+
+    const onDragOver = (event) => {
+      if (hasFiles(event)) {
+        event.preventDefault();
+        event.dataTransfer.dropEffect = 'copy';
+      }
+    };
+
+    const onDragLeave = (event) => {
+      if (!hasFiles(event)) return;
+      dragDepth = Math.max(0, dragDepth - 1);
+      if (dragDepth === 0) {
+        setIsWindowDragActive(false);
+      }
+    };
+
+    const onDrop = (event) => {
+      if (!hasFiles(event)) return;
+      event.preventDefault();
+      dragDepth = 0;
+      setIsWindowDragActive(false);
+
+      const files = Array.from(event.dataTransfer?.files || []);
+      if (files.length > 0 && dragDropTarget) {
+        sendFilesOffer(dragDropTarget, files);
+      }
+    };
+
+    window.addEventListener('dragenter', onDragEnter);
+    window.addEventListener('dragover', onDragOver);
+    window.addEventListener('dragleave', onDragLeave);
+    window.addEventListener('drop', onDrop);
+    return () => {
+      window.removeEventListener('dragenter', onDragEnter);
+      window.removeEventListener('dragover', onDragOver);
+      window.removeEventListener('dragleave', onDragLeave);
+      window.removeEventListener('drop', onDrop);
+    };
+  }, [dragDropTarget, sendFilesOffer]);
+
   const handleCopyId = async () => {
     if (!debugInfo.deviceId) return;
-    try {
-      await navigator.clipboard.writeText(debugInfo.deviceId);
+    const succeeded = await copyText(debugInfo.deviceId);
+    if (succeeded) {
       setCopied(true);
       window.setTimeout(() => setCopied(false), 1400);
-    } catch {
-      /* clipboard unavailable */
     }
-  };
-
-  const getPeerName = (peerId) => {
-    if (!peerId) return 'Unknown';
-    if (peerId === myId) return 'Me';
-    const peer = peers.find((p) => p.id === peerId);
-    return peer?.name || peerId.slice(0, 8) + '…';
   };
 
   return (
@@ -264,6 +465,40 @@ function App() {
                 <span className="theme-swatch-dot" style={{ background: currentSwatch.primary }} aria-hidden="true" />
               </button>
             </div>
+
+            <button
+              className="btn-icon"
+              onClick={() => setShowQrPopup((prev) => !prev)}
+              title="Show QR code for this app"
+              aria-label="Show QR code for this app"
+              aria-pressed={showQrPopup}
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <rect x="3" y="3" width="7" height="7" rx="1" />
+                <rect x="14" y="3" width="7" height="7" rx="1" />
+                <rect x="3" y="14" width="7" height="7" rx="1" />
+                <path d="M14 14h3v3h-3z" />
+                <path d="M21 14v.01" />
+                <path d="M17 21h.01" />
+                <path d="M21 21h.01" />
+                <path d="M14 17.5v.01" />
+                <path d="M18.5 17.5v.01" />
+              </svg>
+            </button>
+
+            <button
+              className={`btn-icon ${notifyEnabled ? 'is-active-icon' : ''}`}
+              onClick={handleNotifyToggle}
+              title={notifyEnabled ? 'Notifications on — click to mute' : 'Get notified about files and messages'}
+              aria-label={notifyEnabled ? 'Disable notifications' : 'Enable notifications'}
+              aria-pressed={notifyEnabled}
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9" />
+                <path d="M10.3 21a1.94 1.94 0 0 0 3.4 0" />
+                {!notifyEnabled && <line x1="4" y1="4" x2="20" y2="20" />}
+              </svg>
+            </button>
 
             <button
               className="btn-icon"
@@ -322,7 +557,7 @@ function App() {
             initial={{ opacity: 0, scale: 0.95, y: -6 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.95, y: -6 }}
-            transition={{ type: 'spring', stiffness: 420, damping: 32 }}
+            transition={reduceMotion ? { duration: 0 } : { type: 'spring', stiffness: 420, damping: 32 }}
           >
             <div className="theme-menu-header">
               <span>Theme</span>
@@ -388,7 +623,7 @@ function App() {
               initial={{ opacity: 0, x: 360 }}
               animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0, x: 360 }}
-              transition={{ type: 'spring', stiffness: 280, damping: 30 }}
+              transition={reduceMotion ? { duration: 0 } : { type: 'spring', stiffness: 280, damping: 30 }}
               role="dialog"
               aria-label="Debug details"
             >
@@ -452,7 +687,9 @@ function App() {
                   <div className="debug-value">{debugInfo.transportName}</div>
                   <div className="debug-label">WebRTC</div>
                   <div className="debug-value">
-                    {connectionStatus} / {channelReady ? 'ready' : 'not ready'}
+                    {selectedDevice
+                      ? `${peerStatus[selectedDevice] || 'IDLE'} · ${getPeerName(selectedDevice)}`
+                      : `${Object.values(peerStatus).filter((s) => s !== 'DISCONNECTED').length} active session(s)`}
                   </div>
                   <div className="debug-label">Selected</div>
                   <div className="debug-value">
@@ -487,13 +724,13 @@ function App() {
       </AnimatePresence>
 
       <AnimatePresence>
-        {serverStatusMessage && !isConnected && (
+        {serverStatusMessage && !isConnected && dismissedStatusEpisode !== connectionStartTime && (
           <motion.div
             className={`server-status-popup ${serverStatusMessage.type}`}
             initial={{ opacity: 0, y: -10, x: '-50%' }}
             animate={{ opacity: 1, y: 0, x: '-50%' }}
             exit={{ opacity: 0, y: -10, x: '-50%' }}
-            transition={{ duration: 0.3, type: 'spring', stiffness: 400, damping: 32 }}
+            transition={reduceMotion ? { duration: 0 } : { duration: 0.3, type: 'spring', stiffness: 400, damping: 32 }}
             role="status"
             aria-live="polite"
           >
@@ -521,13 +758,70 @@ function App() {
               <h3>{serverStatusMessage.title}</h3>
               <p>{serverStatusMessage.description}</p>
             </div>
+            <button
+              className="server-status-dismiss"
+              onClick={() => setDismissedStatusEpisode(connectionStartTime)}
+              title="Dismiss"
+              aria-label="Dismiss server status message"
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="M18 6 6 18" />
+                <path d="m6 6 12 12" />
+              </svg>
+            </button>
           </motion.div>
         )}
       </AnimatePresence>
 
-      {error && (
+      <QrPopup
+        open={showQrPopup}
+        url={typeof window !== 'undefined' ? window.location.href : ''}
+        onClose={() => setShowQrPopup(false)}
+        reduceMotion={reduceMotion}
+      />
+
+      {isWindowDragActive && (
+        <div className="drop-overlay" role="status" aria-live="polite">
+          <div className="drop-overlay-card">
+            <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+              <polyline points="17 8 12 3 7 8" />
+              <line x1="12" y1="3" x2="12" y2="15" />
+            </svg>
+            <h3>{dragDropTarget ? `Drop to send to ${getPeerName(dragDropTarget)}` : 'Pick a device first'}</h3>
+            <p>
+              {dragDropTarget
+                ? 'Files stream directly between devices.'
+                : 'Click a device on the radar, then drop the files.'}
+            </p>
+          </div>
+        </div>
+      )}
+
+      <ChatPanel
+        open={Boolean(chatSession.peerId)}
+        peerName={chatSession.peerId ? getPeerName(chatSession.peerId) : ''}
+        connectionLabel={chatStatusLabel}
+        messages={chatMessages}
+        onSend={handleSendChat}
+        onClose={closeChat}
+        reduceMotion={reduceMotion}
+      />
+
+      {error && error !== dismissedError && (
         <div className="global-error-banner" role="alert">
           {error}
+          <button
+            className="error-banner-dismiss"
+            onClick={() => setDismissedError(error)}
+            title="Dismiss"
+            aria-label="Dismiss error message"
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M18 6 6 18" />
+              <path d="m6 6 12 12" />
+            </svg>
+          </button>
         </div>
       )}
 
@@ -542,6 +836,8 @@ function App() {
             devices={peers}
             onToogle={handleDeviceToggle}
             selectedDevice={selectedDevice}
+            unreadCounts={unreadBySocketId}
+            onDropFiles={(peerId, files) => sendFilesOffer(peerId, files)}
           />
 
           <AnimatePresence>
@@ -551,7 +847,7 @@ function App() {
                 initial={{ opacity: 0, y: 10, x: '-50%' }}
                 animate={{ opacity: 1, y: 0, x: '-50%' }}
                 exit={{ opacity: 0, y: 10, x: '-50%' }}
-                transition={{ type: 'spring', stiffness: 320, damping: 30 }}
+                transition={reduceMotion ? { duration: 0 } : { type: 'spring', stiffness: 320, damping: 30 }}
               >
                 <div className="file-selection-popup-label">
                   <span>Send to</span>
@@ -565,15 +861,27 @@ function App() {
                   className="visually-hidden-input"
                   aria-label="Select files to send"
                 />
-                <label htmlFor="fileInput" className="btn btn-primary">
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                    <polyline points="17 8 12 3 7 8" />
-                    <line x1="12" y1="3" x2="12" y2="15" />
-                  </svg>
-                  Select files
-                </label>
-                <span className="file-selection-hint">Up to 150 MB per file</span>
+                <div className="file-selection-actions">
+                  <label htmlFor="fileInput" className="btn btn-primary no-glow">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                      <polyline points="17 8 12 3 7 8" />
+                      <line x1="12" y1="3" x2="12" y2="15" />
+                    </svg>
+                    Select files
+                  </label>
+                  <button
+                    type="button"
+                    className="btn btn-secondary"
+                    onClick={() => openChatWithPeer(selectedDevice)}
+                  >
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                      <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+                    </svg>
+                    Chat
+                  </button>
+                </div>
+              {/* <span className="file-selection-hint">Any size · streamed directly between devices</span> */}
                 <button
                   onClick={() => setSelectedDevice(null)}
                   className="cancel-selection-link"
@@ -599,7 +907,10 @@ function App() {
           <HistoryPanel
             history={history}
             onRequest={requestFile}
-            onSave={saveReceivedFile}
+            onSave={(fileId) => {
+              const item = history.find((entry) => entry.id === fileId);
+              saveReceivedFile(fileId, item?.fileName);
+            }}
             onCancel={cancelTransfer}
             getPeerName={getPeerName}
           />

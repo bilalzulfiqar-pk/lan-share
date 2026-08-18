@@ -1,6 +1,6 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 // eslint-disable-next-line no-unused-vars
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
 
 const seededRandom = (seed) => {
   let hash = 0;
@@ -43,12 +43,16 @@ const RadarCenter = () => (
 );
 
 const detectDeviceShape = (device) => {
+  if (device?.deviceType === 'mobile') return 'phone';
   const ua = (device?.userAgent || '').toLowerCase();
   if (/android|iphone|ipad|ipod|mobile/.test(ua)) return 'phone';
   return 'monitor';
 };
 
-export const DeviceList = ({ devices, onToogle, selectedDevice }) => {
+export const DeviceList = ({ devices, onToogle, selectedDevice, unreadCounts = {}, onDropFiles }) => {
+  const [dropTargetId, setDropTargetId] = useState(null);
+  const reduceMotion = useReducedMotion();
+
   const devicePositions = useMemo(() => {
     return devices.map((device) => {
       const seed = device.id;
@@ -73,18 +77,36 @@ export const DeviceList = ({ devices, onToogle, selectedDevice }) => {
           const x = Math.cos((device.angle * Math.PI) / 180) * device.radius;
           const y = Math.sin((device.angle * Math.PI) / 180) * device.radius;
           const shape = detectDeviceShape(device);
+          const unreadCount = unreadCounts[device.id] || 0;
+          const isDropTarget = dropTargetId === device.id;
 
           return (
             <motion.button
               key={device.id}
               type="button"
-              className={`radar-blip ${selectedDevice === device.id ? 'selected' : ''}`}
+              className={`radar-blip ${selectedDevice === device.id ? 'selected' : ''} ${isDropTarget ? 'drop-target' : ''}`}
               style={{ top: `${50 + y}%`, left: `${50 + x}%` }}
               onClick={() => onToogle(device.id)}
-              initial={{ scale: 0, opacity: 0 }}
+              onDragOver={(event) => {
+                event.preventDefault();
+                event.dataTransfer.dropEffect = 'copy';
+                setDropTargetId(device.id);
+              }}
+              onDragLeave={() => {
+                setDropTargetId((current) => (current === device.id ? null : current));
+              }}
+              onDrop={(event) => {
+                event.preventDefault();
+                setDropTargetId(null);
+                const files = Array.from(event.dataTransfer?.files || []);
+                if (files.length > 0) {
+                  onDropFiles?.(device.id, files);
+                }
+              }}
+              initial={reduceMotion ? false : { scale: 0, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0, opacity: 0 }}
-              transition={{ type: 'spring', stiffness: 220, damping: 18 }}
+              exit={reduceMotion ? { opacity: 0 } : { scale: 0, opacity: 0 }}
+              transition={reduceMotion ? { duration: 0 } : { type: 'spring', stiffness: 220, damping: 18 }}
               aria-label={`Select ${device.name || 'device'}`}
               aria-pressed={selectedDevice === device.id}
             >
@@ -93,6 +115,11 @@ export const DeviceList = ({ devices, onToogle, selectedDevice }) => {
                 <span className="radar-blip-ring" aria-hidden="true" />
               </div>
               <span className="radar-blip-label">{device.name || 'Unknown'}</span>
+              {unreadCount > 0 && (
+                <span className="blip-unread-badge" aria-label={`${unreadCount} unread messages`}>
+                  {unreadCount > 9 ? '9+' : unreadCount}
+                </span>
+              )}
             </motion.button>
           );
         })}
