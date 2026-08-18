@@ -65,6 +65,7 @@
   --text-tertiary: #94a3b8;
   --text-on-accent: #ffffff;
   --primary: #2454d6;
+    --primary-strong: #2454d6;
   --primary-hover: #1d47b8;
   --primary-soft: rgba(36, 84, 214, 0.1);
   --primary-soft-hover: rgba(36, 84, 214, 0.16);
@@ -109,6 +110,7 @@
   --text-tertiary: #64748b;
   --text-on-accent: #ffffff;
   --primary: #60a5fa;
+    --primary-strong: #2454d6;
   --primary-hover: #3b82f6;
   --primary-soft: rgba(96, 165, 250, 0.14);
   --primary-soft-hover: rgba(96, 165, 250, 0.22);
@@ -154,6 +156,7 @@
   --text-tertiary: #8caa9a;
   --text-on-accent: #ffffff;
   --primary: #059669;
+    --primary-strong: #059669;
   --primary-hover: #047a56;
   --primary-soft: rgba(5, 150, 105, 0.1);
   --primary-soft-hover: rgba(5, 150, 105, 0.16);
@@ -197,6 +200,7 @@
   --text-tertiary: #4a7361;
   --text-on-accent: #ffffff;
   --primary: #34d399;
+    --primary-strong: #059669;
   --primary-hover: #10b981;
   --primary-soft: rgba(52, 211, 153, 0.14);
   --primary-soft-hover: rgba(52, 211, 153, 0.22);
@@ -242,6 +246,7 @@
   --text-tertiary: #a87d89;
   --text-on-accent: #ffffff;
   --primary: #e11d48;
+    --primary-strong: #e11d48;
   --primary-hover: #be123c;
   --primary-soft: rgba(225, 29, 72, 0.1);
   --primary-soft-hover: rgba(225, 29, 72, 0.16);
@@ -286,6 +291,7 @@
   --text-tertiary: #8b5a68;
   --text-on-accent: #ffffff;
   --primary: #fb7185;
+    --primary-strong: #e11d48;
   --primary-hover: #f43f5e;
   --primary-soft: rgba(251, 113, 133, 0.14);
   --primary-soft-hover: rgba(251, 113, 133, 0.22);
@@ -331,6 +337,7 @@
   --text-tertiary: #a87daa;
   --text-on-accent: #ffffff;
   --primary: #c026d3;
+    --primary-strong: #c026d3;
   --primary-hover: #a21caf;
   --primary-soft: rgba(192, 38, 211, 0.1);
   --primary-soft-hover: rgba(192, 38, 211, 0.16);
@@ -376,6 +383,7 @@
   --text-tertiary: #7c2d8a;
   --text-on-accent: #0a0414;
   --primary: #e879f9;
+    --primary-strong: #c026d3;
   --primary-hover: #d946ef;
   --primary-soft: rgba(232, 121, 249, 0.14);
   --primary-soft-hover: rgba(232, 121, 249, 0.22);
@@ -424,6 +432,10 @@ body {
   margin: 0;
   padding: 0;
   overflow-x: hidden;
+  /* Keep a stable scrollbar gutter so overlays (QR, chat, debug, server
+     popup) never cause the page to shift horizontally by toggling the
+     vertical scrollbar on open. */
+  scrollbar-gutter: stable;
 }
 
 body {
@@ -568,8 +580,8 @@ button {
 .btn-primary {
   width: 100%;
   color: var(--text-on-accent);
-  background-color: var(--primary);
-  border-color: var(--primary);
+  background-color: var(--primary-strong);
+  border-color: var(--primary-strong);
   box-shadow:
     0 1px 2px rgba(0, 0, 0, 0),
     0 6px 20px -6px transparent,
@@ -589,12 +601,12 @@ button {
   background-color: color-mix(
     in srgb,
     var(--primary-hover) 50%,
-    var(--primary) 50%
+    var(--primary-strong) 50%
   );
   border-color: color-mix(
     in srgb,
     var(--primary-hover) 50%,
-    var(--primary) 50%
+    var(--primary-strong) 50%
   );
   box-shadow:
     0 1px 2px rgba(0, 0, 0, 0.08),
@@ -611,8 +623,8 @@ button {
 }
 
 .btn-primary:active {
-  background-color: color-mix(in srgb, var(--primary-hover) 80%, black 20%);
-  border-color: color-mix(in srgb, var(--primary-hover) 80%, black 20%);
+  background-color: color-mix(in srgb, var(--primary-strong) 85%, black 15%);
+  border-color: color-mix(in srgb, var(--primary-strong) 85%, black 15%);
   box-shadow:
     0 1px 2px rgba(0, 0, 0, 0.12) inset,
     0 6px 20px -6px transparent,
@@ -776,7 +788,7 @@ button {
 }
 
 .logo-wrapper {
-  background: var(--primary);
+  background: var(--primary-strong);
   color: var(--text-on-accent);
   width: 40px;
   height: 40px;
@@ -2502,7 +2514,7 @@ button {
 }
 
 .chat-bubble-out {
-  background: var(--primary);
+  background: var(--primary-strong);
   color: var(--text-on-accent);
   border-bottom-right-radius: var(--radius-xs);
 }
@@ -2599,14 +2611,22 @@ button {
   white-space: nowrap;
 }
 
-/* The send button reacts as a block — deeper accent fill instead of the
-   default primary hover (no icon lift, no glow ring). */
-.chat-send-button:hover {
+/* The send button reacts as a block — resting fill is the deep brand color,
+   hover shifts towards the accent with a soft float (no ring, no icon lift),
+   and pressing gives a subtle scale-in for feedback. */
+.chat-send-button:hover:not(:disabled) {
   background-color: var(--primary-hover);
   border-color: var(--primary-hover);
   box-shadow:
     0 1px 2px rgba(0, 0, 0, 0.08),
-    0 6px 20px -6px var(--primary-glow);
+    0 10px 22px -12px var(--primary-glow);
+}
+
+.chat-send-button:active:not(:disabled) {
+  transform: scale(0.97);
+  box-shadow:
+    0 1px 2px rgba(0, 0, 0, 0.12) inset,
+    0 4px 10px -6px var(--primary-glow);
 }
 
 .chat-send-button:hover > svg,
@@ -2713,6 +2733,7 @@ button {
   align-items: center;
   justify-content: center;
   padding: 1rem;
+  overflow-y: auto;
 }
 
 .qr-card {
@@ -2725,6 +2746,11 @@ button {
   display: flex;
   flex-direction: column;
   gap: 0.85rem;
+  /* Keep the card on a stable compositor layer even after the entrance
+     animation finishes (framer removes its temporary will-change) — without
+     this, a sub-pixel centered card can snap ~1px when the layer is
+     de-promoted at the end of the open animation. */
+  will-change: transform;
 }
 
 .qr-card-header {
