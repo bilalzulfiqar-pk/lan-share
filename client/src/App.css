@@ -1057,6 +1057,7 @@ button {
   font-weight: 600;
   color: var(--text-secondary);
   white-space: nowrap;
+  margin-left: auto;
 }
 
 .status-dot {
@@ -2207,8 +2208,7 @@ button {
   }
 
   .logo-section {
-    width: 100%;
-    justify-content: center;
+    width: auto;
   }
 
   .logo-section h1 {
@@ -2225,24 +2225,27 @@ button {
     justify-content: space-between;
     align-items: center;
     gap: 0.5rem;
+    min-width: 0;
   }
 
   .icon-button-group {
     order: 1;
+    flex-shrink: 1;
+    min-width: 0;
   }
 
   .server-indicator {
-    order: 2;
-    padding: 0.4rem 0.55rem;
+    flex-shrink: 0;
+    padding: 0.4rem 0.7rem;
   }
 
   .user-badge {
     order: 3;
     margin-left: auto;
     width: fit-content;
-    min-width: 145px;
+    min-width: 0;
     max-width: 220px;
-    flex: 0 0 auto;
+    flex: 0 1 auto;
     padding: 0.25rem 0.25rem 0.25rem 0.75rem;
   }
 
@@ -2254,10 +2257,6 @@ button {
   .user-id-chip {
     max-width: 120px;
     font-size: 0.62rem;
-  }
-
-  .server-indicator span {
-    display: none;
   }
 
   .mini-heading {
