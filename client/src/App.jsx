@@ -564,18 +564,13 @@ function App() {
         </div>
       </header>
 
-      <AnimatePresence>
-        {showThemeMenu && (
-          <motion.div
-            className="theme-menu"
-            style={menuStyle}
-            ref={themeMenuRef}
-            role="menu"
-            initial={{ opacity: 0, scale: 0.95, y: -6 }}
-            animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.95, y: -6 }}
-            transition={reduceMotion ? { duration: 0 } : { type: 'spring', stiffness: 420, damping: 32 }}
-          >
+      <div
+        className={`theme-menu ${showThemeMenu ? 'is-open' : ''}`}
+        style={menuStyle}
+        ref={themeMenuRef}
+        role="menu"
+        aria-hidden={!showThemeMenu}
+      >
             <div className="theme-menu-header">
               <span>Theme</span>
             </div>
@@ -621,9 +616,7 @@ function App() {
                 );
               })}
             </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+      </div>
 
       <div
         className={`debug-sidebar-backdrop ${showDebugSidebar ? 'is-visible' : ''}`}

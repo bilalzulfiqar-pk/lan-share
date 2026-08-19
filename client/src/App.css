@@ -904,6 +904,26 @@ button {
   flex-direction: column;
   overflow: hidden;
   z-index: var(--z-sidebar-backdrop);
+  /* Native compositor open/close — same approach as the side panels.
+     Hidden when closed (off-screen from interaction + tab order), visible
+     instantly on open, hidden only after the close transition. */
+  transform: scale(0.94);
+  opacity: 0;
+  visibility: hidden;
+  transition:
+    transform 0.18s var(--ease-soft),
+    opacity 0.18s var(--ease-out),
+    visibility 0s linear 0.18s;
+}
+
+.theme-menu.is-open {
+  transform: scale(1);
+  opacity: 1;
+  visibility: visible;
+  transition:
+    transform 0.18s var(--ease-soft),
+    opacity 0.18s var(--ease-out),
+    visibility 0s;
 }
 
 .theme-menu-header {
