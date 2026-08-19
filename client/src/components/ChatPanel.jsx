@@ -1,8 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 // eslint-disable-next-line no-unused-vars
-import { AnimatePresence, motion } from 'framer-motion';
+import { motion } from 'framer-motion';
 import { copyText } from '../lib/clipboard';
-import { useCoarsePointer } from '../lib/useCoarsePointer';
 
 const URL_SPLIT_PATTERN = /(https?:\/\/[^\s<>"']+)/g;
 const URL_MATCH_PATTERN = /^https?:\/\/[^\s<>"']+$/;
@@ -86,7 +85,6 @@ export function ChatPanel({ open, peerName, connectionLabel, messages, onSend, o
   const [copiedId, setCopiedId] = useState(null);
   const scrollRef = useRef(null);
   const inputRef = useRef(null);
-  const coarsePointer = useCoarsePointer();
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -117,30 +115,19 @@ export function ChatPanel({ open, peerName, connectionLabel, messages, onSend, o
   };
 
   return (
-    <AnimatePresence>
-      {open && (
-        <>
-          <motion.div
-            className="chat-backdrop"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            onClick={onClose}
-          />
-          <motion.section
-            className="chat-panel"
-            initial={reduceMotion ? false : { opacity: 0, x: 360 }}
-            animate={{ opacity: 1, x: 0 }}
-            exit={reduceMotion ? { opacity: 0 } : { opacity: 0, x: 360 }}
-            transition={reduceMotion
-              ? { duration: 0 }
-              : coarsePointer
-                ? { type: 'tween', duration: 0.22, ease: [0.16, 1, 0.3, 1] }
-                : { type: 'spring', stiffness: 280, damping: 30 }}
-            role="dialog"
-            aria-label={`Chat with ${peerName}`}
-          >
-            <header className="chat-header">
+    <>
+      <div
+        className={`chat-backdrop ${open ? 'is-visible' : ''}`}
+        aria-hidden={!open}
+        onClick={open ? onClose : undefined}
+      />
+      <section
+        className={`chat-panel ${open ? 'is-open' : ''}`}
+        role="dialog"
+        aria-label={`Chat with ${peerName}`}
+        aria-hidden={!open}
+      >
+        <header className="chat-header">
               <div className="chat-header-meta">
                 <h3>{peerName}</h3>
                 <p>{connectionLabel}</p>
@@ -201,9 +188,7 @@ export function ChatPanel({ open, peerName, connectionLabel, messages, onSend, o
                 Send
               </button>
             </form>
-          </motion.section>
-        </>
-      )}
-    </AnimatePresence>
+      </section>
+    </>
   );
 }

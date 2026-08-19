@@ -16,7 +16,6 @@ import {
   areNotificationsSupported,
   getNotificationPermission,
 } from './lib/notifications';
-import { useCoarsePointer } from './lib/useCoarsePointer';
 
 const THEMES = [
   {
@@ -275,7 +274,6 @@ function App() {
   const [showQrPopup, setShowQrPopup] = useState(false);
   const [isWindowDragActive, setIsWindowDragActive] = useState(false);
   const reduceMotion = useReducedMotion();
-  const coarsePointer = useCoarsePointer();
 
   const themePickerRef = useRef(null);
   const themeMenuRef = useRef(null);
@@ -627,32 +625,20 @@ function App() {
         )}
       </AnimatePresence>
 
-      <AnimatePresence>
-        {showDebugSidebar && (
-          <>
-            <motion.div
-              className="debug-sidebar-backdrop"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              onClick={() => setShowDebugSidebar(false)}
-            />
-            <motion.aside
-              className="debug-sidebar"
-              initial={{ opacity: 0, x: 360 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: 360 }}
-              transition={reduceMotion
-                ? { duration: 0 }
-                : coarsePointer
-                  ? { type: 'tween', duration: 0.22, ease: [0.16, 1, 0.3, 1] }
-                  : { type: 'spring', stiffness: 280, damping: 30 }}
-              role="dialog"
-              aria-label="Debug details"
-            >
-              <div className="debug-sidebar-header">
-                <div className="debug-sidebar-header-meta">
-                  <h3>Debug details</h3>
+      <div
+        className={`debug-sidebar-backdrop ${showDebugSidebar ? 'is-visible' : ''}`}
+        aria-hidden={!showDebugSidebar}
+        onClick={() => setShowDebugSidebar(false)}
+      />
+      <aside
+        className={`debug-sidebar ${showDebugSidebar ? 'is-open' : ''}`}
+        role="dialog"
+        aria-label="Debug details"
+        aria-hidden={!showDebugSidebar}
+      >
+        <div className="debug-sidebar-header">
+          <div className="debug-sidebar-header-meta">
+            <h3>Debug details</h3>
                   <p>Temporary diagnostics for discovery and WebRTC.</p>
                 </div>
                 <button
@@ -741,10 +727,7 @@ function App() {
                 <h4>Browser</h4>
                 <p className="debug-user-agent">{debugInfo.userAgent}</p>
               </div>
-            </motion.aside>
-          </>
-        )}
-      </AnimatePresence>
+      </aside>
 
       <AnimatePresence>
         {serverStatusMessage && !isConnected && dismissedStatusEpisode !== connectionStartTime && (

@@ -605,17 +605,22 @@ button {
   width: auto;
 }
 
-.btn-primary:hover {
-  background-color: var(--primary-lift);
-  border-color: var(--primary-lift);
-  box-shadow:
-    0 1px 2px rgba(0, 0, 0, 0.08),
-    0 6px 20px -6px var(--primary-glow),
-    0 0 0 5px color-mix(in srgb, var(--primary-glow) 40%, transparent);
-}
+/* Hover effects are desktop-only — on touch there is no cursor, and running
+   box-shadow/glow/lift on taps causes repaint jank. Mobile gets the snappy
+   :active press instead (below). */
+@media (hover: hover) and (pointer: fine) {
+  .btn-primary:hover {
+    background-color: var(--primary-lift);
+    border-color: var(--primary-lift);
+    box-shadow:
+      0 1px 2px rgba(0, 0, 0, 0.08),
+      0 6px 20px -6px var(--primary-glow),
+      0 0 0 5px color-mix(in srgb, var(--primary-glow) 40%, transparent);
+  }
 
-.btn-primary:hover > svg {
-  transform: translateY(-1px);
+  .btn-primary:hover > svg {
+    transform: translateY(-1px);
+  }
 }
 
 .btn-primary > svg {
@@ -633,11 +638,21 @@ button {
 
 /* Full-width action buttons (Select files, chat Send) drop the outer glow
    ring — that accent is reserved for the small Download/Save buttons. The
-   subtle elevation shadow stays so hover still reads as a lift. */
-.btn-primary.no-glow:hover {
-  box-shadow:
-    0 1px 2px rgba(0, 0, 0, 0.08),
-    0 6px 16px -6px color-mix(in srgb, var(--text-primary) 17%, transparent);
+   subtle elevation shadow stays so hover still reads as a lift.
+   Hover effects are desktop-only (touch uses :active below). */
+@media (hover: hover) and (pointer: fine) {
+  .btn-primary.no-glow:hover {
+    box-shadow:
+      0 1px 2px rgba(0, 0, 0, 0.08),
+      0 6px 16px -6px color-mix(in srgb, var(--text-primary) 17%, transparent);
+  }
+}
+
+/* Snappy press on all devices — mobile has no hover, so the tap should feel
+   instant; desktop keeps its rich 350ms hover but the press is quick too. */
+.btn-primary:active,
+.chat-send-button:active:not(:disabled) {
+  transition-duration: 80ms;
 }
 
 .btn-secondary {
@@ -1191,6 +1206,15 @@ button {
   backdrop-filter: blur(2px);
   -webkit-backdrop-filter: blur(2px);
   z-index: var(--z-sidebar-backdrop);
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.3s var(--ease-out), visibility 0s linear 0.3s;
+}
+
+.debug-sidebar-backdrop.is-visible {
+  opacity: 1;
+  visibility: visible;
+  transition: opacity 0.3s var(--ease-out), visibility 0s;
 }
 
 .debug-sidebar {
@@ -1209,6 +1233,17 @@ button {
   display: flex;
   flex-direction: column;
   gap: 1rem;
+  /* Native compositor slide — see .chat-panel. */
+  transform: translate3d(100%, 0, 0);
+  visibility: hidden;
+  transition: transform 0.38s var(--ease-soft), visibility 0s linear 0.38s;
+  contain: layout style paint;
+}
+
+.debug-sidebar.is-open {
+  transform: translate3d(0, 0, 0);
+  visibility: visible;
+  transition: transform 0.38s var(--ease-soft), visibility 0s;
 }
 
 .debug-sidebar-header {
@@ -2430,6 +2465,15 @@ button {
   inset: 0;
   background: rgba(11, 18, 32, 0.4);
   z-index: var(--z-sidebar-backdrop);
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.3s var(--ease-out), visibility 0s linear 0.3s;
+}
+
+.chat-backdrop.is-visible {
+  opacity: 1;
+  visibility: visible;
+  transition: opacity 0.3s var(--ease-out), visibility 0s;
 }
 
 .chat-panel {
@@ -2445,6 +2489,18 @@ button {
   z-index: var(--z-sidebar);
   display: flex;
   flex-direction: column;
+  /* Native compositor slide (GPU, not main-thread JS). Off-screen + hidden
+     when closed; visible instantly on open, hidden only after slide-out. */
+  transform: translate3d(100%, 0, 0);
+  visibility: hidden;
+  transition: transform 0.38s var(--ease-soft), visibility 0s linear 0.38s;
+  contain: layout style paint;
+}
+
+.chat-panel.is-open {
+  transform: translate3d(0, 0, 0);
+  visibility: visible;
+  transition: transform 0.38s var(--ease-soft), visibility 0s;
 }
 
 .chat-header {
@@ -2487,6 +2543,7 @@ button {
   display: flex;
   flex-direction: column;
   gap: 0.6rem;
+  contain: layout style paint;
 }
 
 /* Slim, modern scrollbar for the chat list (no arrow buttons). */
@@ -2668,13 +2725,16 @@ button {
 
 /* The send button reacts as a block — resting fill is the deep brand color,
    hover shifts towards the accent with a soft float (no ring, no icon lift),
-   and pressing gives a subtle scale-in for feedback. */
-.chat-send-button:hover:not(:disabled) {
-  background-color: var(--primary-lift);
-  border-color: var(--primary-lift);
-  box-shadow:
-    0 1px 2px rgba(0, 0, 0, 0.08),
-    0 4px 12px -6px color-mix(in srgb, var(--text-primary) 17%, transparent);
+   and pressing gives a subtle scale-in for feedback.
+   Hover effects are desktop-only (touch uses :active below). */
+@media (hover: hover) and (pointer: fine) {
+  .chat-send-button:hover:not(:disabled) {
+    background-color: var(--primary-lift);
+    border-color: var(--primary-lift);
+    box-shadow:
+      0 1px 2px rgba(0, 0, 0, 0.08),
+      0 4px 12px -6px color-mix(in srgb, var(--text-primary) 17%, transparent);
+  }
 }
 
 .chat-send-button:active:not(:disabled) {
@@ -2940,11 +3000,5 @@ button {
   .debug-sidebar,
   .chat-panel {
     box-shadow: none;
-  }
-
-  .chat-panel,
-  .debug-sidebar,
-  .qr-card {
-    will-change: transform, opacity;
   }
 }
