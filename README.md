@@ -31,74 +31,100 @@ No cloud uploads. No account sign-ups. No arbitrary file size limits.
 
 ---
 
-## 📋 Table of Contents
+## Table of Contents
 
-- [Key Features](#-key-features)
-- [How It Works](#-how-it-works)
-- [Tech Stack](#-tech-stack)
-- [Getting Started](#-getting-started)
-- [Browser Support](#-browser-support)
-- [Network Troubleshooting](#-network-troubleshooting)
-- [Deployment](#-deployment)
-- [Testing & Quality Assurance](#-testing--quality-assurance)
-- [Project Structure](#-project-structure)
-- [Documentation](#-documentation)
-- [License](#-license)
-
----
-
-## ✨ Key Features
-
-* 🚀 **Full Local Wi-Fi Speeds:** Transfers flow directly peer-to-peer via WebRTC DataChannels (~30–80+ MB/s depending on your local router), bypassing internet bandwidth caps.
-* ⚡ **Zero Installation:** Runs entirely inside modern desktop and mobile browsers — no native drivers, root permissions, or app store downloads required.
-* 💾 **Direct-to-Disk Streaming (Chromium):** Uses the native File System Access API (`showSaveFilePicker`) to stream multi-gigabyte transfers directly to storage with minimal RAM usage.
-* 🛡️ **Cryptographic Verification:** End-to-end streaming SHA-256 chunk validation ensures 100% bit-for-bit file integrity upon completion.
-* 🧭 **Real-Time Radar Discovery:** Devices on the same Wi-Fi or subnet appear automatically on an animated radar screen without manual IP entry or pairing PINs.
-* 💬 **Encrypted P2P Chat:** Ephemeral text messaging with link parsing, monospace formatting, and one-tap copy-to-clipboard.
-* 📱 **Instant QR Pairing:** Display a QR code in the header so smartphones on the same Wi-Fi can join the radar in seconds.
-* 🎨 **Adaptive Theming & PWA:** 8 theme variants (Ocean, Forest, Rose, Neon across light and dark modes) with standalone Progressive Web App install support.
-* 🔄 **Reconnection Resilience:** Ongoing file transfers survive temporary signaling server disconnections without aborting.
+- [Key Features](#key-features)
+- [How It Works](#how-it-works)
+- [Tech Stack](#tech-stack)
+- [Getting Started](#getting-started)
+- [Browser Support](#browser-support)
+- [Network Troubleshooting](#network-troubleshooting)
+- [Deployment](#deployment)
+- [Testing & Quality Assurance](#testing--quality-assurance)
+- [Project Structure](#project-structure)
+- [Documentation](#documentation)
+- [License](#license)
 
 ---
 
-## 🔍 How It Works
+## Key Features
+
+- **Direct LAN Speeds:** Transfers flow directly peer-to-peer via WebRTC DataChannels (~30–80+ MB/s depending on your local router), bypassing internet bandwidth caps.
+- **Zero Installation:** Runs entirely inside modern desktop and mobile browsers — no native drivers, root permissions, or app store downloads required.
+- **Direct-to-Disk Streaming (Chromium):** Uses the native File System Access API (`showSaveFilePicker`) to stream multi-gigabyte transfers directly to storage with minimal RAM usage.
+- **Cryptographic Verification:** End-to-end streaming SHA-256 chunk validation ensures 100% bit-for-bit file integrity upon completion.
+- **Real-Time Radar Discovery:** Devices on the same Wi-Fi or subnet appear automatically on an animated radar screen without manual IP entry or pairing PINs.
+- **Encrypted P2P Chat:** Ephemeral text messaging with link parsing, monospace formatting, and one-tap copy-to-clipboard.
+- **Instant QR Pairing:** Display a QR code in the header so smartphones on the same Wi-Fi can join the radar in seconds.
+- **Adaptive Theming & PWA:** 8 theme variants (Ocean, Forest, Rose, Neon across light and dark modes) with standalone Progressive Web App install support.
+- **Reconnection Resilience:** Ongoing file transfers survive temporary signaling server disconnections without aborting.
+
+---
+
+## How It Works
 
 LAN Share separates the **discovery handshake** from the **actual file payload**:
 
-```
-┌──────────────┐         Signaling (Socket.IO)         ┌──────────────┐
-│  Browser A   │ ◄───────────────────────────────────► │  Signaling   │  (Render free tier)
-│  (Sender)    │    ~2 KB SDP Offer/Answer Handshake   │    Server    │  Relays discovery ONLY
-└──────┬───────┘                                       └──────┬───────┘  Zero file data touches server
-       │                                                      │
-       │                   WebRTC DataChannel                 │
-       │               ┌────────────────────────┐             │
-       └──────────────►│ Direct LAN Peer-to-Peer│◄────────────┘
-                       │  Encrypted Files & Chat│
-                       └───────────▲────────────┘
-                                   │
-                             ┌─────┴────────┐
-                             │  Browser B   │
-                             │  (Receiver)  │
-                             └──────────────┘
+```mermaid
+flowchart LR
+    subgraph Internet ["☁️ Internet"]
+        Server["Signaling Server<br/>(Discovery Only)"]
+    end
+
+    subgraph HomeWiFi ["🏠 Your Local Wi-Fi Network"]
+        DevA["💻 Laptop"]
+        DevB["📱 Phone"]
+        DevA == "Direct P2P Transfer<br/>(Full LAN Speed)" ==> DevB
+    end
+
+    DevA -. "1. Handshake (~2 KB)" .-> Server
+    Server -. "1. Handshake (~2 KB)" .-> DevB
 ```
 
 1. **Signaling & Clustering:** When a device opens the app, it connects to a tiny Socket.IO signaling server. The server derives local subnet and STUN fingerprints, placing the device into an in-memory inverted index (`SimilarityIndex`) so only devices on the same physical network can discover each other.
 2. **Handshake Relay:** When you select a peer, the signaling server relays ~2 KB of WebRTC session descriptions (SDP offer/answer and ICE candidates).
 3. **Direct Data Streaming:** The two browsers establish a direct, DTLS-encrypted WebRTC `RTCDataChannel`. All file chunks and chat messages stream directly across your local Wi-Fi. **Your files never touch any cloud server.**
 
+<details>
+<summary><b>View detailed WebRTC handshake sequence</b></summary>
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor A as Laptop (Sender)
+    participant S as Signaling Server
+    actor B as Phone (Receiver)
+
+    Note over A,B: Phase 1: Local Subnet Discovery & Handshake (~2 KB)
+    A->>S: Join (Subnet & IP Fingerprint)
+    B->>S: Join (Subnet & IP Fingerprint)
+    S-->>A: Discovered Peer (Phone)
+    S-->>B: Discovered Peer (Laptop)
+    A->>S: Relay WebRTC Offer & ICE Candidates
+    S->>B: Forward Offer & ICE Candidates
+    B->>S: Relay WebRTC Answer & ICE Candidates
+    S->>A: Forward Answer & ICE Candidates
+
+    Note over A,B: Phase 2: Direct Peer-to-Peer Transfer (Zero Cloud Data)
+    A->>B: Open WebRTC DataChannel (Local Wi-Fi UDP)
+    A->>B: Stream 64 KiB Chunks at Full LAN Speed
+    A->>B: Verify SHA-256 Cryptographic Hash
+```
+
+</details>
+
 ---
 
-## 🛠 Tech Stack
+## Tech Stack
 
-* **Frontend:** [React 19](https://react.dev/), [Vite](https://vitejs.dev/), WebRTC DataChannels, Streams API, Lucide Icons
-* **Signaling Server:** [Node.js](https://nodejs.org/), [Express](https://expressjs.com/), [Socket.IO](https://socket.io/), custom $O(M^2)$ `SimilarityIndex`
-* **Testing:** [Vitest](https://vitest.dev/) (Unit test suites + live child-process server integration tests)
-* **Code Quality:** ESLint with React Hooks rules
+- **Frontend:** [React 19](https://react.dev/), [Vite](https://vitejs.dev/), WebRTC DataChannels, Streams API, Lucide Icons
+- **Signaling Server:** [Node.js](https://nodejs.org/), [Express](https://expressjs.com/), [Socket.IO](https://socket.io/), custom $O(M^2)$ `SimilarityIndex`
+- **Testing:** [Vitest](https://vitest.dev/) (Unit test suites + live child-process server integration tests)
+- **Code Quality:** ESLint with React Hooks rules
 
 ---
 
-## 🚀 Getting Started
+## Getting Started
 
 ### Prerequisites
 * [Node.js](https://nodejs.org/) (v18 or higher recommended)
@@ -131,20 +157,20 @@ Open the printed local network URL on any two devices connected to the same Wi-F
 
 ---
 
-## 🌐 Browser Support
+## Browser Support
 
 | Capability | Chrome / Edge (Desktop) | Safari (macOS / iOS) | Firefox | Android Chrome |
 | :--- | :---: | :---: | :---: | :---: |
-| **Radar Discovery & Chat** | ✅ Full | ✅ Full | ✅ Full | ✅ Full |
-| **File Transfer** | ✅ Direct-to-Disk (Multi-GB) | ⚠️ In-Memory (~2 GB cap) | ⚠️ In-Memory (~2 GB cap) | ⚠️ In-Memory (~2 GB cap) |
-| **Integrity Verification (SHA-256)** | ✅ Verified | ✅ Verified | ✅ Verified | ✅ Verified |
-| **PWA Installation** | ✅ Supported | ✅ Add to Home Screen | ⚠️ Varies | ✅ Supported |
+| **Radar Discovery & Chat** | ✓ Full | ✓ Full | ✓ Full | ✓ Full |
+| **File Transfer** | ✓ Direct-to-Disk (Multi-GB) | Limited (2 GB in-memory) | Limited (2 GB in-memory) | Limited (2 GB in-memory) |
+| **Integrity Verification (SHA-256)** | ✓ Verified | ✓ Verified | ✓ Verified | ✓ Verified |
+| **PWA Installation** | ✓ Supported | ✓ Add to Home Screen | Limited | ✓ Supported |
 
 > **Note on Large Files:** Desktop Chromium browsers stream files directly to disk via `window.showSaveFilePicker`. Mobile browsers and Firefox assemble chunks in memory, which is ideal for photos, videos, and documents up to ~2 GB.
 
 ---
 
-## ⚠️ Network Troubleshooting
+## Network Troubleshooting
 
 ### Router AP / Client Isolation
 On strict public Wi-Fi networks (hotels, airports, universities, dorms), routers often have **Client Isolation** enabled. This prevents devices on the same Wi-Fi from talking directly to each other via UDP.
@@ -155,7 +181,7 @@ On strict public Wi-Fi networks (hotels, airports, universities, dorms), routers
 
 ---
 
-## 🚢 Deployment
+## Deployment
 
 ### Client (Static Hosting — Vercel / Netlify / Cloudflare Pages)
 * **Root Directory:** `client/`
@@ -180,7 +206,7 @@ On strict public Wi-Fi networks (hotels, airports, universities, dorms), routers
 
 ---
 
-## 🧪 Testing & Quality Assurance
+## Testing & Quality Assurance
 
 The codebase includes 50 automated unit and integration tests across both the client and server:
 
@@ -199,7 +225,7 @@ For pre-release or physical multi-device verification, refer to the comprehensiv
 
 ---
 
-## 📁 Project Structure
+## Project Structure
 
 ```
 lan-share/
@@ -224,7 +250,7 @@ lan-share/
 
 ---
 
-## 📚 Documentation
+## Documentation
 
 * [Changelog](docs/CHANGELOG.md) — Complete log of features, optimizations, and bug fixes.
 * [Manual QA Checklist](docs/QA-CHECKLIST.md) — Comprehensive checklist for cross-device testing.
@@ -232,6 +258,6 @@ lan-share/
 
 ---
 
-## 📄 License
+## License
 
 This project is open-source and free to use. See [LICENSE](LICENSE) for details.
