@@ -3,15 +3,16 @@
 Share files and messages directly between devices on the same network — no
 uploads, no accounts, no file size limits in the browser you already have.
 
-LAN Share discovers other devices on your Wi-Fi automatically, then transfers
-everything peer-to-peer over WebRTC. Your files never touch a server.
+LAN Share uses a lightweight handshake (~2 KB) to discover devices on your
+Wi-Fi automatically, then transfers everything directly peer-to-peer over
+WebRTC at full local network speed. Your files never touch a server.
 
 ## Features
 
 - **Automatic discovery** — devices on the same network appear on the radar;
   no pairing codes needed to connect
 - **Large file transfers** — files stream in chunks straight from disk and
-  (on Chrome/Edge) straight to disk on the receiver, so multi-gigabyte files
+  (on Chrome/Edge desktop) straight to disk on the receiver, so multi-gigabyte files
   work without loading them into memory. Every transfer is verified with a
   SHA-256 digest
 - **Parallel & multi-device** — download several files at once, stay
@@ -54,8 +55,8 @@ everything peer-to-peer over WebRTC. Your files never touch a server.
   authenticated by socket (spoofed `sender` fields are overridden), relays
   are rate-limited, and payloads are validated and size-capped.
 - **Transfers** — one `RTCPeerConnection` per peer with a control channel
-  plus a dedicated reliable data channel per file. Chunks are sized from the
-  negotiated SCTP limit (up to 256 KiB) with `bufferedamountlow` backpressure,
+  plus a dedicated reliable data channel per file. Chunks are sized for
+  universal cross-browser reliability (up to 64 KiB) with `bufferedamountlow` backpressure,
   so uploads continue even in background tabs. Transient disconnects get a
   grace period and an ICE restart before failing.
 
@@ -119,14 +120,15 @@ The app is designed for a static host plus a small WebSocket service:
 
 ## Browser support
 
-| Capability | Chrome / Edge | Firefox / Safari |
+| Capability | Chrome / Edge (Desktop) | Mobile / Safari / Firefox |
 | --- | --- | --- |
 | Core sharing + chat | ✅ | ✅ |
-| Maximum file size | Effectively unlimited (streams to disk) | ~2 GB (buffered in memory) |
+| File transfer | Unlimited (streams straight to disk via File System Access) | In-memory buffering (ideal for photos, videos, and documents) |
 | Installable PWA | ✅ | Varies |
 
 See [`docs/QA-CHECKLIST.md`](docs/QA-CHECKLIST.md) for the full manual test
-plan, including the multi-gigabyte streaming test.
+plan, and [`docs/ROADMAP.md`](docs/ROADMAP.md) for future architectural notes
+and planned enhancements.
 
 ## License
 
