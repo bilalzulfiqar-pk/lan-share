@@ -14,6 +14,7 @@ export function useWebRTC(socket, myId, { getPeerName, onChat, onNotify } = {}) 
     const getPeerNameRef = useRef(getPeerName);
     const onChatRef = useRef(onChat);
     const onNotifyRef = useRef(onNotify);
+    const myIdRef = useRef(myId);
 
     useEffect(() => {
         getPeerNameRef.current = getPeerName;
@@ -21,12 +22,20 @@ export function useWebRTC(socket, myId, { getPeerName, onChat, onNotify } = {}) 
         onNotifyRef.current = onNotify;
     });
 
+    // Keep myId updated in the engine without tearing down active WebRTC sessions
     useEffect(() => {
-        if (!socket || !myId) return undefined;
+        myIdRef.current = myId;
+        if (engineRef.current && myId) {
+            engineRef.current.updateMyId(myId);
+        }
+    }, [myId]);
+
+    useEffect(() => {
+        if (!socket) return undefined;
 
         const engine = new TransferEngine({
             socket,
-            myId,
+            myId: myIdRef.current || myId,
             getPeerName: (peerId) => getPeerNameRef.current?.(peerId) || 'Unknown',
             onEvent: (event) => {
                 switch (event.type) {
@@ -60,7 +69,7 @@ export function useWebRTC(socket, myId, { getPeerName, onChat, onNotify } = {}) 
             engine.destroy();
             engineRef.current = null;
         };
-    }, [socket, myId]);
+    }, [socket]);
 
     useEffect(() => {
         if (!error) return undefined;

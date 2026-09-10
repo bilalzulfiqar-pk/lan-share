@@ -22,13 +22,13 @@ describe('file channel labels', () => {
 });
 
 describe('negotiateChunkSize', () => {
-    it('caps at 256 KiB', () => {
-        expect(negotiateChunkSize(1024 * 1024)).toBe(262144);
+    it('caps at 64 KiB for cross-browser reliability', () => {
+        expect(negotiateChunkSize(1024 * 1024)).toBe(65536);
     });
 
     it('respects a smaller negotiated maximum', () => {
-        expect(negotiateChunkSize(65536)).toBe(65536);
-        expect(negotiateChunkSize(120000)).toBe(120000);
+        expect(negotiateChunkSize(32768)).toBe(32768);
+        expect(negotiateChunkSize(16384)).toBe(16384);
     });
 
     it('falls back to 64 KiB for missing or invalid values', () => {

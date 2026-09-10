@@ -52,12 +52,14 @@ export function buildIceServers() {
 }
 
 // SCTP message size is negotiated per connection. Stay within whichever limit
-// the pair supports, capped at 256 KiB (large enough for LAN throughput,
-// small enough to keep per-chunk memory and retransmission units sane).
+// the pair supports, capped at 64 KiB (65,536 bytes) for universal cross-browser
+// reliability across Chrome, Edge, Safari, and Firefox.
+export const MAX_CHUNK_SIZE_BYTES = 65536;
+
 export function negotiateChunkSize(maxMessageSize) {
     const limit = Number(maxMessageSize);
-    const safeLimit = Number.isFinite(limit) && limit > 0 ? limit : 65536;
-    return Math.min(262144, safeLimit);
+    const safeLimit = Number.isFinite(limit) && limit > 0 ? limit : MAX_CHUNK_SIZE_BYTES;
+    return Math.min(MAX_CHUNK_SIZE_BYTES, safeLimit);
 }
 
 // Send-side backpressure hysteresis: pause filling above the high-water mark

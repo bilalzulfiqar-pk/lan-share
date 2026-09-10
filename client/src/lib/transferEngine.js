@@ -126,6 +126,11 @@ export class TransferEngine {
         this.attachSocketHandlers();
     }
 
+    updateMyId(newMyId) {
+        if (!newMyId || this.myId === newMyId) return;
+        this.myId = newMyId;
+    }
+
     // ------------------------------------------------------------------
     // Event helpers
     // ------------------------------------------------------------------
@@ -908,6 +913,11 @@ export class TransferEngine {
         state.buffers = [];
         this.receives.delete(fileId);
         this.offered.delete(fileId);
+        const url = this.downloadUrls.get(fileId);
+        if (url) {
+            URL.revokeObjectURL(url);
+            this.downloadUrls.delete(fileId);
+        }
     }
 
     saveReceivedFile(fileId, fileName) {
@@ -923,7 +933,8 @@ export class TransferEngine {
 
         this.historyUpdate(fileId, { saved: true, downloadUrl: null });
         this.downloadUrls.delete(fileId);
-        window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+        // Delay revoking to give browser download manager ample time to stream large files from RAM to disk
+        window.setTimeout(() => URL.revokeObjectURL(url), 60000);
     }
 
     // ------------------------------------------------------------------
@@ -931,6 +942,12 @@ export class TransferEngine {
     // ------------------------------------------------------------------
 
     cancelTransfer(fileId) {
+        const url = this.downloadUrls.get(fileId);
+        if (url) {
+            URL.revokeObjectURL(url);
+            this.downloadUrls.delete(fileId);
+        }
+
         const outgoingEntry = this.outgoing.get(fileId);
         const receiveState = this.receives.get(fileId);
         const offeredMeta = this.offered.get(fileId);
@@ -964,6 +981,12 @@ export class TransferEngine {
     }
 
     handleRemoteCancel(fileId) {
+        const url = this.downloadUrls.get(fileId);
+        if (url) {
+            URL.revokeObjectURL(url);
+            this.downloadUrls.delete(fileId);
+        }
+
         const outgoingEntry = this.outgoing.get(fileId);
 
         if (outgoingEntry) {
