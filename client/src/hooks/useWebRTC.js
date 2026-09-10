@@ -35,7 +35,7 @@ export function useWebRTC(socket, myId, { getPeerName, onChat, onNotify } = {}) 
 
         const engine = new TransferEngine({
             socket,
-            myId: myIdRef.current || myId,
+            myId: myIdRef.current,
             getPeerName: (peerId) => getPeerNameRef.current?.(peerId) || 'Unknown',
             onEvent: (event) => {
                 switch (event.type) {
