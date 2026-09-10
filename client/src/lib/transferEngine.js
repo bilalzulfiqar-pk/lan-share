@@ -367,7 +367,10 @@ export class TransferEngine {
                 session.pc?.connectionState !== 'connected' &&
                 !session.channelReady
             ) {
-                this.teardownSession(session, 'Device did not respond.');
+                this.teardownSession(
+                    session,
+                    'Device did not respond. If you are on hotel, university, or public Wi-Fi, the router may have Client Isolation enabled.'
+                );
             }
         }, CONNECT_TIMEOUT_MS);
     }
@@ -427,6 +430,10 @@ export class TransferEngine {
 
         this.sessions.delete(peerId);
         this.peerStatus(peerId, 'DISCONNECTED');
+
+        if (reason && reason !== 'Session ended.' && reason !== 'Connection closed.') {
+            this.notifyError(reason);
+        }
     }
 
     // ------------------------------------------------------------------

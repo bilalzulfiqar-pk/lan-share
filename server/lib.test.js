@@ -10,7 +10,8 @@ import {
     getVisibleUsersFor,
     isValidSessionDescription,
     isValidIceCandidate,
-    createRateLimiter
+    createRateLimiter,
+    SimilarityIndex
 } from './lib.js';
 
 describe('sanitizeName', () => {
@@ -207,5 +208,65 @@ describe('createRateLimiter', () => {
 
         limiter.reset('a');
         expect(limiter.tryConsume('a')).toBe(true);
+    });
+});
+
+describe('SimilarityIndex', () => {
+    it('indexes users by public IP and returns matching candidates', () => {
+        const index = new SimilarityIndex();
+        const userA = { id: 'sock-1', publicIp: '1.2.3.4', networkFingerprints: [] };
+        const userB = { id: 'sock-2', publicIp: '1.2.3.4', networkFingerprints: [] };
+        const userC = { id: 'sock-3', publicIp: '5.6.7.8', networkFingerprints: [] };
+
+        index.addUser(userA);
+        index.addUser(userB);
+        index.addUser(userC);
+
+        expect(index.getCandidateIdsFor(userA)).toEqual(['sock-2']);
+        expect(index.getCandidateIdsFor(userB)).toEqual(['sock-1']);
+        expect(index.getCandidateIdsFor(userC)).toEqual([]);
+    });
+
+    it('indexes users across network fingerprints (LAN/WAN) even with divergent public IPs', () => {
+        const index = new SimilarityIndex();
+        const userA = { id: 'sock-1', publicIp: '1.2.3.4', networkFingerprints: ['lan:ipv4:192.168.1'] };
+        const userB = { id: 'sock-2', publicIp: '9.9.9.9', networkFingerprints: ['lan:ipv4:192.168.1'] };
+
+        index.addUser(userA);
+        index.addUser(userB);
+
+        expect(index.getCandidateIdsFor(userA)).toEqual(['sock-2']);
+        expect(index.getCandidateIdsFor(userB)).toEqual(['sock-1']);
+    });
+
+    it('removes users completely on disconnect', () => {
+        const index = new SimilarityIndex();
+        const userA = { id: 'sock-1', publicIp: '1.2.3.4', networkFingerprints: ['lan:ipv4:10.0.0'] };
+        const userB = { id: 'sock-2', publicIp: '1.2.3.4', networkFingerprints: ['lan:ipv4:10.0.0'] };
+
+        index.addUser(userA);
+        index.addUser(userB);
+        expect(index.getCandidateIdsFor(userA)).toEqual(['sock-2']);
+
+        index.removeUser('sock-2');
+        expect(index.getCandidateIdsFor(userA)).toEqual([]);
+        expect(index.socketKeys.has('sock-2')).toBe(false);
+        expect(index.index.size).toBeGreaterThan(0); // userA's keys remain
+
+        index.removeUser('sock-1');
+        expect(index.index.size).toBe(0); // all empty buckets pruned
+    });
+
+    it('returns affected socket ids including the user themselves', () => {
+        const index = new SimilarityIndex();
+        const userA = { id: 'sock-1', publicIp: '1.2.3.4', networkFingerprints: [] };
+        const userB = { id: 'sock-2', publicIp: '1.2.3.4', networkFingerprints: [] };
+
+        index.addUser(userA);
+        index.addUser(userB);
+
+        const affected = index.getAffectedSocketIds(userA);
+        expect(affected).toContain('sock-1');
+        expect(affected).toContain('sock-2');
     });
 });

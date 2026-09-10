@@ -172,8 +172,16 @@ function createVisibleUser(user) {
     };
 }
 
-function getVisibleUsersFor(users, user) {
-    return Object.values(users)
+function getVisibleUsersFor(users, user, candidateIds = null) {
+    if (!user) {
+        return [];
+    }
+
+    const candidates = candidateIds
+        ? candidateIds.map((id) => users[id]).filter(Boolean)
+        : Object.values(users);
+
+    return candidates
         .filter((candidate) => candidate.id !== user.id && areUsersVisible(user, candidate))
         .map(createVisibleUser);
 }
@@ -242,6 +250,92 @@ function createRateLimiter({ capacity = 40, refillPerSecond = 20, maxEntries = 5
     };
 }
 
+// Inverted index for fast candidate lookup. Maps network similarity keys
+// (public IP, LAN fingerprints, WAN fingerprints) to sets of socket IDs.
+// Reduces global N^2 visibility comparisons to O(M^2) within matching subnets.
+class SimilarityIndex {
+    constructor() {
+        this.index = new Map();
+        this.socketKeys = new Map();
+    }
+
+    _getKeysFor(user) {
+        const keys = new Set();
+        if (user && user.publicIp) {
+            keys.add(`ip:${user.publicIp}`);
+        }
+        if (user && Array.isArray(user.networkFingerprints)) {
+            for (const fp of user.networkFingerprints) {
+                if (typeof fp === 'string' && fp.trim()) {
+                    keys.add(`fp:${fp.trim().toLowerCase()}`);
+                }
+            }
+        }
+        return keys;
+    }
+
+    addUser(user) {
+        if (!user || !user.id) return;
+        this.removeUser(user.id);
+
+        const keys = this._getKeysFor(user);
+        this.socketKeys.set(user.id, keys);
+
+        for (const key of keys) {
+            let bucket = this.index.get(key);
+            if (!bucket) {
+                bucket = new Set();
+                this.index.set(key, bucket);
+            }
+            bucket.add(user.id);
+        }
+    }
+
+    removeUser(socketId) {
+        if (!socketId) return;
+        const keys = this.socketKeys.get(socketId);
+        if (!keys) return;
+
+        for (const key of keys) {
+            const bucket = this.index.get(key);
+            if (bucket) {
+                bucket.delete(socketId);
+                if (bucket.size === 0) {
+                    this.index.delete(key);
+                }
+            }
+        }
+
+        this.socketKeys.delete(socketId);
+    }
+
+    getCandidateIdsFor(user) {
+        if (!user || !user.id) return [];
+        const keys = this._getKeysFor(user);
+        const candidates = new Set();
+
+        for (const key of keys) {
+            const bucket = this.index.get(key);
+            if (bucket) {
+                for (const socketId of bucket) {
+                    if (socketId !== user.id) {
+                        candidates.add(socketId);
+                    }
+                }
+            }
+        }
+
+        return Array.from(candidates);
+    }
+
+    getAffectedSocketIds(user) {
+        if (!user || !user.id) return [];
+        const candidates = this.getCandidateIdsFor(user);
+        candidates.push(user.id);
+        return candidates;
+    }
+}
+
 module.exports = {
     sanitizeName,
     sanitizeNetworkFingerprint,
@@ -257,5 +351,6 @@ module.exports = {
     getVisibleUsersFor,
     isValidSessionDescription,
     isValidIceCandidate,
-    createRateLimiter
+    createRateLimiter,
+    SimilarityIndex
 };

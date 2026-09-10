@@ -9,7 +9,8 @@ const {
     getVisibleUsersFor,
     isValidSessionDescription,
     isValidIceCandidate,
-    createRateLimiter
+    createRateLimiter,
+    SimilarityIndex
 } = require('./lib');
 
 const USERS_UPDATE_DEBOUNCE_MS = 100;
@@ -32,42 +33,59 @@ const io = new Server(server, {
 
 // Store connected users: socketId -> { id, name, deviceId, deviceType, publicIp, networkFingerprints }
 const users = {};
+const similarityIndex = new SimilarityIndex();
 
 const relayLimiter = createRateLimiter({ capacity: 40, refillPerSecond: 20 });
 const joinLimiter = createRateLimiter({ capacity: 10, refillPerSecond: 5 });
 const relayStrikes = new Map();
 
-function emitDebugState(user) {
+function emitDebugState(user, visiblePeers = null) {
     if (!user) {
         return;
     }
+
+    const peers = visiblePeers || getVisibleUsersFor(users, user, similarityIndex.getCandidateIdsFor(user));
 
     io.to(user.id).emit('debug-state', {
         publicIp: user.publicIp,
         networkFingerprints: user.networkFingerprints || [],
         deviceId: user.deviceId,
-        visiblePeers: getVisibleUsersFor(users, user)
+        visiblePeers: peers
     });
 }
 
-function emitUsersUpdateForAllUsers() {
-    Object.values(users).forEach((user) => {
-        io.to(user.id).emit('users-update', getVisibleUsersFor(users, user));
-        emitDebugState(user);
-    });
-}
-
-// Coalesce rapid membership changes (multiple joins, renames) into one
-// broadcast round so traffic stays linear rather than quadratic in bursts.
+// Coalesce rapid membership changes (multiple joins, renames) and update only
+// the affected candidate sockets in O(M^2) rather than all global users in O(N^2).
+const pendingUpdateSocketIds = new Set();
 let usersUpdateTimer = null;
-function scheduleUsersUpdate() {
+
+function scheduleUsersUpdate(affectedSocketIds = null) {
+    if (affectedSocketIds && affectedSocketIds.length > 0) {
+        affectedSocketIds.forEach((id) => pendingUpdateSocketIds.add(id));
+    } else {
+        Object.keys(users).forEach((id) => pendingUpdateSocketIds.add(id));
+    }
+
     if (usersUpdateTimer) {
         return;
     }
 
     usersUpdateTimer = setTimeout(() => {
         usersUpdateTimer = null;
-        emitUsersUpdateForAllUsers();
+        const targetSocketIds = Array.from(pendingUpdateSocketIds);
+        pendingUpdateSocketIds.clear();
+
+        targetSocketIds.forEach((socketId) => {
+            const user = users[socketId];
+            if (!user) {
+                return;
+            }
+
+            const candidateIds = similarityIndex.getCandidateIdsFor(user);
+            const visiblePeers = getVisibleUsersFor(users, user, candidateIds);
+            io.to(user.id).emit('users-update', visiblePeers);
+            emitDebugState(user, visiblePeers);
+        });
     }, USERS_UPDATE_DEBOUNCE_MS);
 }
 
@@ -77,7 +95,10 @@ function removeUser(socketId) {
         return null;
     }
 
+    const affected = similarityIndex.getAffectedSocketIds(existingUser);
+    similarityIndex.removeUser(socketId);
     delete users[socketId];
+    scheduleUsersUpdate(affected);
     return existingUser;
 }
 
@@ -127,7 +148,10 @@ io.on('connection', (socket) => {
         const deviceType = detectDeviceType(socket.handshake.headers['user-agent']);
 
         removeDuplicateDeviceEntries(deviceId, socket.id);
-        users[socket.id] = {
+        const existingUser = users[socket.id];
+        const oldAffected = existingUser ? similarityIndex.getAffectedSocketIds(existingUser) : [];
+
+        const newUser = {
             id: socket.id,
             name,
             deviceId,
@@ -135,8 +159,12 @@ io.on('connection', (socket) => {
             publicIp,
             networkFingerprints
         };
+        users[socket.id] = newUser;
+        similarityIndex.addUser(newUser);
 
-        scheduleUsersUpdate();
+        const newAffected = similarityIndex.getAffectedSocketIds(newUser);
+        const affected = Array.from(new Set([...oldAffected, ...newAffected]));
+        scheduleUsersUpdate(affected);
     });
 
     // Signaling relays. The sender is always taken from the authenticated
@@ -175,7 +203,6 @@ io.on('connection', (socket) => {
         relayLimiter.reset(socket.id);
         joinLimiter.reset(socket.id);
         relayStrikes.delete(socket.id);
-        scheduleUsersUpdate();
     });
 });
 
@@ -184,4 +211,4 @@ server.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
 });
 
-module.exports = { app, server };
+module.exports = { app, server, users, similarityIndex };
