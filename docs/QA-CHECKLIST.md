@@ -19,6 +19,7 @@ devices on the same Wi-Fi — ideally one laptop (Chrome or Edge) and one phone.
 ## File transfer — core
 
 - [ ] Small file (< 10 MB): offer → Download → completes with a "Verified" badge → Save works
+- [ ] Completed download URL remains functional for at least 60 seconds (grace period) and cleans up cleanly without memory leaks
 - [ ] Progress shows live % and speed/ETA on both sides
 - [ ] Two files requested at the same time from the same sender both complete, both verified
 - [ ] Cancel during an active transfer stops it on both sides
@@ -36,8 +37,11 @@ devices on the same Wi-Fi — ideally one laptop (Chrome or Edge) and one phone.
 
 - [ ] Minimize/switch away from the sender's tab mid-upload — the upload continues
 - [ ] Brief Wi-Fi interruption (< 8 s) does not kill an established session
+- [ ] Signaling reconnect resilience: Temporarily disconnecting/reconnecting the signaling server mid-transfer does not abort active P2P transfers
 - [ ] Closing the sender's tab mid-transfer marks the transfer as errored on the receiver
-- [ ] A device that never answers times out with "Device did not respond." (~20 s)
+- [ ] AP / Client Isolation detection: A device that never answers times out (~20 s) with:
+      "Device did not respond. If you are on hotel, university, or public Wi-Fi, the router may have Client Isolation enabled."
+      (surfaces in both the transfer history status badge and the top global error banner)
 
 ## Chat
 

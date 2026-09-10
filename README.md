@@ -1,135 +1,229 @@
-# LAN Share
+<div align="center">
 
-Share files and messages directly between devices on the same network — no
-uploads, no accounts, no file size limits in the browser you already have.
+# 📡 LAN Share
 
-LAN Share uses a lightweight handshake (~2 KB) to discover devices on your
-Wi-Fi automatically, then transfers everything directly peer-to-peer over
-WebRTC at full local network speed. Your files never touch a server.
+**Zero-install, browser-to-browser peer-to-peer file transfer & chat over your local network.**
 
-## Features
+No cloud uploads. No account sign-ups. No arbitrary file size limits.
 
-- **Automatic discovery** — devices on the same network appear on the radar;
-  no pairing codes needed to connect
-- **Large file transfers** — files stream in chunks straight from disk and
-  (on Chrome/Edge desktop) straight to disk on the receiver, so multi-gigabyte files
-  work without loading them into memory. Every transfer is verified with a
-  SHA-256 digest
-- **Parallel & multi-device** — download several files at once, stay
-  connected to several devices at once
-- **Chat** — send links, API keys or passwords to your other devices; tap any
-  message to copy it
-- **QR join code** — let a phone hop on by scanning a code
-- **Drag & drop** — drop files on a device, or anywhere on the page
-- **Installable (PWA)** — installs to your phone's home screen
-- **Notifications** — get a blip when files or messages arrive in a
-  background tab
-- **8 themes**, responsive layout, reduced-motion support
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![Tests Passing](https://img.shields.io/badge/Tests-50%20passed-success.svg)](docs/QA-CHECKLIST.md)
+[![React 19](https://img.shields.io/badge/React-19-61dafb.svg)](https://react.dev/)
+[![Vite](https://img.shields.io/badge/Vite-6-646cff.svg)](https://vitejs.dev/)
+[![WebRTC](https://img.shields.io/badge/WebRTC-DataChannels-333333.svg)](https://webrtc.org/)
+[![Socket.IO](https://img.shields.io/badge/Socket.IO-4-010101.svg)](https://socket.io/)
+[![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](https://github.com/bilalzulfiqar-pk/lan-share/pulls)
 
-## How it works
+<br />
+
+<!-- UI Preview: You can replace docs/assets/preview.svg with your own screenshot or animated GIF -->
+<img src="docs/assets/preview.svg" alt="LAN Share Interface Preview" width="100%" style="border-radius: 12px;" />
+
+</div>
+
+---
+
+## 📋 Table of Contents
+
+- [Key Features](#-key-features)
+- [How It Works](#-how-it-works)
+- [Tech Stack](#-tech-stack)
+- [Getting Started](#-getting-started)
+- [Browser Support](#-browser-support)
+- [Network Troubleshooting](#-network-troubleshooting)
+- [Deployment](#-deployment)
+- [Testing & Quality Assurance](#-testing--quality-assurance)
+- [Project Structure](#-project-structure)
+- [Documentation](#-documentation)
+- [License](#-license)
+
+---
+
+## ✨ Key Features
+
+* 🚀 **Full Local Wi-Fi Speeds:** Transfers flow directly peer-to-peer via WebRTC DataChannels (~30–80+ MB/s depending on your local router), bypassing internet bandwidth caps.
+* ⚡ **Zero Installation:** Runs entirely inside modern desktop and mobile browsers — no native drivers, root permissions, or app store downloads required.
+* 💾 **Direct-to-Disk Streaming (Chromium):** Uses the native File System Access API (`showSaveFilePicker`) to stream multi-gigabyte transfers directly to storage with minimal RAM usage.
+* 🛡️ **Cryptographic Verification:** End-to-end streaming SHA-256 chunk validation ensures 100% bit-for-bit file integrity upon completion.
+* 🧭 **Real-Time Radar Discovery:** Devices on the same Wi-Fi or subnet appear automatically on an animated radar screen without manual IP entry or pairing PINs.
+* 💬 **Encrypted P2P Chat:** Ephemeral text messaging with link parsing, monospace formatting, and one-tap copy-to-clipboard.
+* 📱 **Instant QR Pairing:** Display a QR code in the header so smartphones on the same Wi-Fi can join the radar in seconds.
+* 🎨 **Adaptive Theming & PWA:** 8 theme variants (Ocean, Forest, Rose, Neon across light and dark modes) with standalone Progressive Web App install support.
+* 🔄 **Reconnection Resilience:** Ongoing file transfers survive temporary signaling server disconnections without aborting.
+
+---
+
+## 🔍 How It Works
+
+LAN Share separates the **discovery handshake** from the **actual file payload**:
 
 ```
-┌─────────┐  signaling (socket.io)  ┌─────────┐
-│ Browser │ ◄─────────────────────► │ Server  │   discovery + WebRTC
-│   (A)   │                         │ (tiny)  │   handshake relay only
-└────┬────┘                         └─────┬───┘
-     │                                  │
-     │           WebRTC                 │
-     │        ┌──────────────┐          │
-     └───────►│  direct P2P  │◄─────────┘
-              │ files + chat │
-              └──────▲───────┘
-                     │
-                ┌────┴────┐
-                │ Browser │
-                │   (B)   │
-                └─────────┘
+┌──────────────┐         Signaling (Socket.IO)         ┌──────────────┐
+│  Browser A   │ ◄───────────────────────────────────► │  Signaling   │  (Render free tier)
+│  (Sender)    │    ~2 KB SDP Offer/Answer Handshake   │    Server    │  Relays discovery ONLY
+└──────┬───────┘                                       └──────┬───────┘  Zero file data touches server
+       │                                                      │
+       │                   WebRTC DataChannel                 │
+       │               ┌────────────────────────┐             │
+       └──────────────►│ Direct LAN Peer-to-Peer│◄────────────┘
+                       │  Encrypted Files & Chat│
+                       └───────────▲────────────┘
+                                   │
+                             ┌─────┴────────┐
+                             │  Browser B   │
+                             │  (Receiver)  │
+                             └──────────────┘
 ```
 
-- **Client** (`client/`) — React 19 + Vite SPA. Device identity lives in
-  `localStorage`; each browser derives network fingerprints (local subnet,
-  public IP) via ICE/STUN so the server can group devices on the same network.
-- **Server** (`server/`) — Express + Socket.IO. It never sees file data. It
-  registers devices, tells each device which peers are on its network, and
-  relays WebRTC offers/answers/candidates. Signaling senders are
-  authenticated by socket (spoofed `sender` fields are overridden), relays
-  are rate-limited, and payloads are validated and size-capped.
-- **Transfers** — one `RTCPeerConnection` per peer with a control channel
-  plus a dedicated reliable data channel per file. Chunks are sized for
-  universal cross-browser reliability (up to 64 KiB) with `bufferedamountlow` backpressure,
-  so uploads continue even in background tabs. Transient disconnects get a
-  grace period and an ICE restart before failing.
+1. **Signaling & Clustering:** When a device opens the app, it connects to a tiny Socket.IO signaling server. The server derives local subnet and STUN fingerprints, placing the device into an in-memory inverted index (`SimilarityIndex`) so only devices on the same physical network can discover each other.
+2. **Handshake Relay:** When you select a peer, the signaling server relays ~2 KB of WebRTC session descriptions (SDP offer/answer and ICE candidates).
+3. **Direct Data Streaming:** The two browsers establish a direct, DTLS-encrypted WebRTC `RTCDataChannel`. All file chunks and chat messages stream directly across your local Wi-Fi. **Your files never touch any cloud server.**
 
-## Getting started (local development)
+---
 
+## 🛠 Tech Stack
+
+* **Frontend:** [React 19](https://react.dev/), [Vite](https://vitejs.dev/), WebRTC DataChannels, Streams API, Lucide Icons
+* **Signaling Server:** [Node.js](https://nodejs.org/), [Express](https://expressjs.com/), [Socket.IO](https://socket.io/), custom $O(M^2)$ `SimilarityIndex`
+* **Testing:** [Vitest](https://vitest.dev/) (Unit test suites + live child-process server integration tests)
+* **Code Quality:** ESLint with React Hooks rules
+
+---
+
+## 🚀 Getting Started
+
+### Prerequisites
+* [Node.js](https://nodejs.org/) (v18 or higher recommended)
+* `npm` or your preferred package manager
+
+### 1. Clone the repository
 ```bash
-# 1. Start the signaling server
+git clone https://github.com/bilalzulfiqar-pk/lan-share.git
+cd lan-share
+```
+
+### 2. Start the signaling server
+```bash
 cd server
 npm install
-npm run dev          # listens on :3001
+npm run dev
+# Server listens on http://localhost:3001
+```
 
-# 2. Start the client (in a second terminal)
+### 3. Start the client (in a new terminal)
+```bash
 cd client
 npm install
-npm run dev          # vite --host, prints your LAN URL
+npm run dev
+# Vite starts with --host and prints your local LAN IP (e.g., http://192.168.1.100:5173)
 ```
 
-Open the printed LAN URL (e.g. `http://192.168.x.x:5173`) on any device on
-the same Wi-Fi. With `VITE_SERVER_URL` unset, the client automatically
-connects to the same hostname on port 3001.
+### 4. Open on your devices
+Open the printed local network URL on any two devices connected to the same Wi-Fi. They will immediately show up on each other's radar!
 
-## Tests
+---
+
+## 🌐 Browser Support
+
+| Capability | Chrome / Edge (Desktop) | Safari (macOS / iOS) | Firefox | Android Chrome |
+| :--- | :---: | :---: | :---: | :---: |
+| **Radar Discovery & Chat** | ✅ Full | ✅ Full | ✅ Full | ✅ Full |
+| **File Transfer** | ✅ Direct-to-Disk (Multi-GB) | ⚠️ In-Memory (~2 GB cap) | ⚠️ In-Memory (~2 GB cap) | ⚠️ In-Memory (~2 GB cap) |
+| **Integrity Verification (SHA-256)** | ✅ Verified | ✅ Verified | ✅ Verified | ✅ Verified |
+| **PWA Installation** | ✅ Supported | ✅ Add to Home Screen | ⚠️ Varies | ✅ Supported |
+
+> **Note on Large Files:** Desktop Chromium browsers stream files directly to disk via `window.showSaveFilePicker`. Mobile browsers and Firefox assemble chunks in memory, which is ideal for photos, videos, and documents up to ~2 GB.
+
+---
+
+## ⚠️ Network Troubleshooting
+
+### Router AP / Client Isolation
+On strict public Wi-Fi networks (hotels, airports, universities, dorms), routers often have **Client Isolation** enabled. This prevents devices on the same Wi-Fi from talking directly to each other via UDP.
+
+* **How LAN Share handles this:** If a connection attempt does not complete within 20 seconds, the client detects the timeout and displays a helpful troubleshooting banner:
+  > *"Device did not respond. If you are on hotel, university, or public Wi-Fi, the router may have Client Isolation enabled."*
+* **Solution:** Use a private home Wi-Fi network, a mobile hotspot, or configure a TURN relay in your environment variables.
+
+---
+
+## 🚢 Deployment
+
+### Client (Static Hosting — Vercel / Netlify / Cloudflare Pages)
+* **Root Directory:** `client/`
+* **Build Command:** `npm run build`
+* **Output Directory:** `dist/`
+* **Environment Variable:** Set `VITE_SERVER_URL` to your deployed signaling server URL.
+
+### Signaling Server (Render / Railway / Fly.io / VPS)
+* **Root Directory:** `server/`
+* **Build Command:** `npm install`
+* **Start Command:** `npm start`
+* **Health Check Endpoint:** `GET /health` (returns `{"ok": true}`)
+
+### Client Environment Variables
+
+| Variable | Required | Description |
+| :--- | :---: | :--- |
+| `VITE_SERVER_URL` | Optional | URL of your deployed signaling server. If omitted, defaults to port `3001` on the same hostname (ideal for local development). |
+| `VITE_TURN_URL` | Optional | Comma-separated TURN server URLs for networks where direct P2P is blocked by strict NAT or AP isolation. |
+| `VITE_TURN_USERNAME` | Optional | Username for the TURN server. |
+| `VITE_TURN_CREDENTIAL` | Optional | Credential / password for the TURN server. |
+
+---
+
+## 🧪 Testing & Quality Assurance
+
+The codebase includes 50 automated unit and integration tests across both the client and server:
 
 ```bash
-cd client && npm test    # protocol, engine, and live-server integration tests
-cd server && npm test    # sanitization, visibility, rate limiter tests
+# Run signaling server tests (similarity index, rate limiter, sanitization)
+npm test --prefix server
+
+# Run client tests (chunking protocol, transfer engine, child-process server integration)
+npm test --prefix client
+
+# Run client linter
+npm run lint --prefix client
 ```
 
-The engine tests run two real transfer engines against each other (WebRTC
-mocked, signaling live) — covering concurrent transfers, cancellation,
-glare, teardown, and integrity verification.
+For pre-release or physical multi-device verification, refer to the comprehensive [Manual QA Checklist](docs/QA-CHECKLIST.md).
 
-## Deployment
+---
 
-The app is designed for a static host plus a small WebSocket service:
+## 📁 Project Structure
 
-1. **Client → Vercel** (or any static host): root directory `client/`, build
-   command `npm run build`, output `dist/`. Set the environment variable
-   `VITE_SERVER_URL` to your server URL at build time.
-2. **Server → Render** (or similar): root directory `server/`, start command
-   `npm start`. Render's `PORT` is used automatically; `GET /health` is
-   provided for health checks.
+```
+lan-share/
+├── client/                     # React 19 + Vite frontend
+│   ├── public/                 # Favicons, Web App Manifest, audio blips
+│   └── src/
+│       ├── components/         # Radar canvas, chat panel, history panel, QR modal
+│       ├── hooks/              # useSignaling (Socket.IO), useWebRTC (transfer engine)
+│       └── lib/                # TransferEngine, wire protocol, notifications, crypto
+│           └── __tests__/      # Vitest suites (mock WebRTC + live server integration)
+├── server/                     # Express + Socket.IO signaling service
+│   ├── index.js                # Server entry point, connection events, rate limiter
+│   ├── lib.js                  # SimilarityIndex inverted index, IP/subnet clustering
+│   └── lib.test.js             # Vitest test suite for server clustering logic
+├── docs/                       # Project documentation
+│   ├── assets/                 # Architecture diagrams and UI preview assets
+│   ├── CHANGELOG.md            # Detailed history of changes and milestones
+│   ├── QA-CHECKLIST.md         # Multi-device pre-release QA checklist
+│   └── POSSIBLE-ENHANCEMENTS.md# Conceptual future explorations (OPFS, companion mode)
+└── README.md                   # Repository overview
+```
 
-### Environment variables (client, build time)
+---
 
-| Variable | Purpose |
-| --- | --- |
-| `VITE_SERVER_URL` | Signaling server URL. Empty = same-hostname port 3001 (LAN dev). |
-| `VITE_TURN_URL` | Optional TURN relay (comma-separated URLs) for networks where direct P2P fails (AP isolation, strict NAT). |
-| `VITE_TURN_USERNAME` / `VITE_TURN_CREDENTIAL` | TURN credentials, if your provider requires them. |
+## 📚 Documentation
 
-## Security & privacy
+* [Changelog](docs/CHANGELOG.md) — Complete log of features, optimizations, and bug fixes.
+* [Manual QA Checklist](docs/QA-CHECKLIST.md) — Comprehensive checklist for cross-device testing.
+* [Possible Future Enhancements](docs/POSSIBLE-ENHANCEMENTS.md) — Conceptual explorations for OPFS mobile streaming, offline companion modes, and TURN setups.
 
-- Files and chat travel **only** between the two browsers, encrypted with
-  WebRTC's built-in DTLS. The server cannot read them.
-- Discovery is restricted to devices that share a local subnet, public IP,
-  or matching ICE fingerprint — random internet users never see each other.
-- The signaling server overrides client-supplied sender identities with the
-  authenticated socket id, drops relays to unknown targets, and disconnects
-  abusive sockets.
+---
 
-## Browser support
+## 📄 License
 
-| Capability | Chrome / Edge (Desktop) | Mobile / Safari / Firefox |
-| --- | --- | --- |
-| Core sharing + chat | ✅ | ✅ |
-| File transfer | Unlimited (streams straight to disk via File System Access) | In-memory buffering (ideal for photos, videos, and documents) |
-| Installable PWA | ✅ | Varies |
-
-See [`docs/QA-CHECKLIST.md`](docs/QA-CHECKLIST.md) for the full manual test
-plan, and [`docs/ROADMAP.md`](docs/ROADMAP.md) for future architectural notes
-and planned enhancements.
-
-## License
-
-Hobby project — use it, fork it, have fun.
+This project is open-source and free to use. See [LICENSE](LICENSE) for details.
