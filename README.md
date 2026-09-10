@@ -85,8 +85,10 @@ flowchart LR
 2. **Handshake Relay:** When you select a peer, the signaling server relays ~2 KB of WebRTC session descriptions (SDP offer/answer and ICE candidates).
 3. **Direct Data Streaming:** The two browsers establish a direct, DTLS-encrypted WebRTC `RTCDataChannel`. All file chunks and chat messages stream directly across your local Wi-Fi. **Your files never touch any cloud server.**
 
+<br />
+
 <details>
-<summary><b>View detailed WebRTC handshake sequence</b></summary>
+<summary><b>View detailed WebRTC handshake sequence 🔍</b></summary>
 
 ```mermaid
 sequenceDiagram
