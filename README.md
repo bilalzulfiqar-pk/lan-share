@@ -16,8 +16,16 @@ No cloud uploads. No account sign-ups. No arbitrary file size limits.
 
 <br />
 
-<!-- UI Preview: You can replace docs/assets/preview.svg with your own screenshot or animated GIF -->
-<img src="docs/assets/preview.svg" alt="LAN Share Interface Preview" width="100%" style="border-radius: 12px;" />
+<img src="docs/assets/banner.svg" alt="LAN Share — Fast · Local · Secure" width="100%" style="border-radius: 12px;" />
+<!-- Tip: Your previous coded vector banner is also preserved at `docs/assets/banner_coded.svg` -->
+
+<!-- 
+  📸 SCREENSHOT / DEMO PLACEHOLDER:
+  To display an authentic screenshot or animated GIF of your application:
+  1. Save your capture as `docs/assets/preview.png` (or `.gif`).
+  2. Uncomment the line below:
+  <p align="center"><img src="docs/assets/preview.png" alt="LAN Share Interface Preview" width="100%" style="border-radius: 12px;" /></p>
+-->
 
 </div>
 
