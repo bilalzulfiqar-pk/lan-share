@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-theme="ocean-light">
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
@@ -7,11 +7,474 @@
     <link rel="apple-touch-icon" href="/icon-192.png" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="theme-color" content="#eef1f6" />
-    <meta name="description" content="Share files and messages directly between devices on your local network." />
-    <title>LAN Share</title>
+
+    <!-- Standard SEO Meta Tags -->
+    <title>LAN Share - Fast, Private P2P Local File Transfer</title>
+    <meta name="description" content="Share files and encrypted messages directly between devices on your local network using WebRTC. Zero cloud uploads, no file size limits, and 100% private." />
+    <meta name="keywords" content="LAN Share, WebRTC, P2P, local network, peer-to-peer file transfer, local file sharing, encrypted chat, zero cloud, private network" />
+    <meta name="author" content="Bilal Zulfiqar" />
+    <meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1" />
+    <link rel="canonical" href="https://lan-share.vercel.app/" />
+
+    <!-- Search Engine Verification -->
+    <meta name="google-site-verification" content="DHnratBv1S_dz0-1ZkPiYkeja63sR7_5fgNPPmG1Z18" />
+    <meta name="msvalidate.01" content="E2F8270ECA549FF1745C49B5CC7F766B" />
+
+    <!-- Open Graph Social Metadata -->
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="LAN Share" />
+    <meta property="og:url" content="https://lan-share.vercel.app/" />
+    <meta property="og:title" content="LAN Share - Fast, Private P2P Local File Transfer" />
+    <meta property="og:description" content="Share files and encrypted messages directly between devices on your local network using WebRTC. Zero cloud uploads, no file size limits, and 100% private." />
+    <meta property="og:image" content="https://lan-share.vercel.app/banner.png" />
+    <meta property="og:image:secure_url" content="https://lan-share.vercel.app/banner.png" />
+    <meta property="og:image:type" content="image/png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="420" />
+    <meta property="og:image:alt" content="LAN Share - Direct P2P Local Network File Transfer and Encrypted Chat" />
+
+    <!-- Twitter Card Metadata -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="LAN Share - Fast, Private P2P Local File Transfer" />
+    <meta name="twitter:description" content="Share files and encrypted messages directly between devices on your local network using WebRTC. Zero cloud uploads, no file size limits, and 100% private." />
+    <meta name="twitter:image" content="https://lan-share.vercel.app/banner.png" />
+    <meta name="twitter:image:alt" content="LAN Share - Direct P2P Local Network File Transfer and Encrypted Chat" />
+
+    <!-- Schema.org JSON-LD Knowledge Graph -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@graph": [
+        {
+          "@type": "WebSite",
+          "@id": "https://lan-share.vercel.app/#website",
+          "url": "https://lan-share.vercel.app/",
+          "name": "LAN Share",
+          "description": "Zero-install peer-to-peer WebRTC local network file transfer and encrypted chat web application.",
+          "inLanguage": "en",
+          "publisher": {
+            "@id": "https://lan-share.vercel.app/#author"
+          }
+        },
+        {
+          "@type": "SoftwareApplication",
+          "@id": "https://lan-share.vercel.app/#application",
+          "name": "LAN Share",
+          "url": "https://lan-share.vercel.app/",
+          "applicationCategory": "FileTransferApplication",
+          "operatingSystem": "Any with WebRTC browser (Chrome, Firefox, Safari, Edge, Android, iOS)",
+          "browserRequirements": "Requires a modern web browser supporting WebRTC and WebSocket APIs",
+          "isAccessibleForFree": true,
+          "offers": {
+            "@type": "Offer",
+            "price": "0",
+            "priceCurrency": "USD",
+            "availability": "https://schema.org/InStock"
+          },
+          "screenshot": "https://lan-share.vercel.app/banner.png",
+          "author": {
+            "@id": "https://lan-share.vercel.app/#author"
+          },
+          "featureList": [
+            "Direct peer-to-peer file transfer via WebRTC DataChannels",
+            "Zero cloud storage or intermediate server uploads",
+            "Streaming SHA-256 chunk hash integrity verification",
+            "End-to-end encrypted chat with DTLS transport security",
+            "Cross-platform local network discovery via WebSocket signaling",
+            "PWA offline installability and background service worker caching"
+          ]
+        },
+        {
+          "@type": "Person",
+          "@id": "https://lan-share.vercel.app/#author",
+          "name": "Bilal Zulfiqar",
+          "url": "https://github.com/bilalzulfiqar-pk"
+        }
+      ]
+    }
+    </script>
+
+    <!-- Critical Pre-Hydration Styles (CLS = 0.000 Preservation) -->
+    <style id="pre-hydration-critical-css">
+      *, *::before, *::after {
+        box-sizing: border-box;
+      }
+      html, body {
+        margin: 0;
+        padding: 0;
+        background-color: #eef1f6;
+        color: #0b1220;
+        font-family: "Inter Variable", "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        -webkit-font-smoothing: antialiased;
+        -moz-osx-font-smoothing: grayscale;
+        overflow-x: hidden;
+        scrollbar-gutter: stable;
+      }
+      .app-container {
+        max-width: 1200px;
+        margin: 0 auto;
+        padding: 1rem 1.25rem 2rem;
+        display: flex;
+        flex-direction: column;
+        min-height: 100vh;
+        gap: 1.5rem;
+      }
+      .app-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 1rem;
+        padding: 0.9rem 1.1rem;
+        min-height: 64px;
+        background: rgba(255, 255, 255, 0.92);
+        backdrop-filter: blur(14px);
+        -webkit-backdrop-filter: blur(14px);
+        border: 1px solid rgba(15, 23, 42, 0.07);
+        border-radius: 20px;
+        position: sticky;
+        top: 1rem;
+        z-index: 50;
+      }
+      .logo-section {
+        display: flex;
+        align-items: center;
+        gap: 0.85rem;
+        min-width: 0;
+      }
+      .logo-wrapper {
+        background: #2454d6;
+        color: #ffffff;
+        width: 40px;
+        height: 40px;
+        border-radius: 12px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        box-shadow: 0 6px 14px -6px rgba(36, 84, 214, 0.3);
+        flex-shrink: 0;
+      }
+      .title-group {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+        min-width: 0;
+      }
+      .title-group h1 {
+        margin: 0;
+        font-size: 1.15rem;
+        color: #0b1220;
+        font-weight: 700;
+        letter-spacing: -0.02em;
+        line-height: 1.2;
+      }
+      .mini-heading {
+        font-size: 0.66rem;
+        font-weight: 600;
+        color: #94a3b8;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+        margin: 0;
+      }
+      .server-indicator {
+        display: flex;
+        align-items: center;
+        gap: 0.45rem;
+        font-size: 0.78rem;
+        font-weight: 500;
+        color: #475569;
+      }
+      .status-dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: #0f9b6c;
+      }
+      .status-section {
+        display: flex;
+        align-items: center;
+        gap: 0.6rem;
+        flex-shrink: 0;
+      }
+      .pre-badge {
+        display: inline-flex;
+        align-items: center;
+        height: 34px;
+        padding: 0 0.8rem;
+        background: #ffffff;
+        border: 1px solid rgba(15, 23, 42, 0.07);
+        border-radius: 999px;
+        font-size: 0.82rem;
+        color: #475569;
+      }
+      .main-layout {
+        display: flex;
+        flex-direction: column;
+        gap: 1.5rem;
+        flex: 1;
+        width: 100%;
+      }
+      .radar-section {
+        width: 100%;
+        min-height: 420px;
+        position: relative;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        padding: 2.5rem 0 1.5rem;
+      }
+      .guide-text {
+        text-align: center;
+        width: 100%;
+        padding: 0 1rem;
+        margin-bottom: 1.5rem;
+      }
+      .guide-text h2 {
+        font-size: 1.35rem;
+        font-weight: 700;
+        margin: 0 0 0.3rem 0;
+        letter-spacing: -0.02em;
+        color: #0b1220;
+      }
+      .guide-text p {
+        font-size: 0.88rem;
+        color: #475569;
+        margin: 0;
+      }
+      .radar-placeholder-ring {
+        width: 280px;
+        height: 280px;
+        border-radius: 50%;
+        border: 1px dashed rgba(36, 84, 214, 0.25);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: radial-gradient(circle, rgba(36, 84, 214, 0.05) 0%, transparent 70%);
+      }
+      .history-section {
+        background: rgba(255, 255, 255, 0.72);
+        backdrop-filter: blur(12px);
+        -webkit-backdrop-filter: blur(12px);
+        border: 1px solid rgba(15, 23, 42, 0.07);
+        border-radius: 20px;
+        padding: 1.2rem 1.3rem 1rem;
+      }
+      .section-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 0.5rem;
+      }
+      .section-title {
+        font-size: 0.95rem;
+        font-weight: 600;
+        color: #0b1220;
+        margin: 0;
+      }
+      .section-count {
+        font-size: 0.75rem;
+        font-weight: 600;
+        color: #94a3b8;
+      }
+      .seo-semantic-details {
+        display: flex;
+        flex-direction: column;
+        gap: 1.5rem;
+        margin-top: 1rem;
+      }
+      .seo-card {
+        background: rgba(255, 255, 255, 0.6);
+        border: 1px solid rgba(15, 23, 42, 0.06);
+        border-radius: 16px;
+        padding: 1.25rem 1.5rem;
+      }
+      .seo-card h2 {
+        font-size: 1.1rem;
+        font-weight: 700;
+        margin: 0 0 0.5rem 0;
+        color: #0b1220;
+      }
+      .seo-card p {
+        font-size: 0.9rem;
+        line-height: 1.6;
+        color: #475569;
+        margin: 0;
+      }
+      .faq-card {
+        background: rgba(255, 255, 255, 0.6);
+        border: 1px solid rgba(15, 23, 42, 0.06);
+        border-radius: 16px;
+        padding: 1.25rem 1.5rem;
+      }
+      .faq-card h2 {
+        font-size: 1.25rem;
+        font-weight: 700;
+        margin: 0 0 1rem 0;
+        color: #0b1220;
+      }
+      .faq-item {
+        margin-bottom: 1.25rem;
+      }
+      .faq-item:last-child {
+        margin-bottom: 0;
+      }
+      .faq-item h3 {
+        font-size: 1.05rem;
+        font-weight: 600;
+        margin: 0 0 0.35rem 0;
+        color: #0b1220;
+      }
+      .faq-item p {
+        font-size: 0.9rem;
+        line-height: 1.6;
+        color: #475569;
+        margin: 0;
+      }
+      .app-footer {
+        padding: 2rem 0;
+        text-align: center;
+        font-size: 0.85rem;
+        color: #64748b;
+        border-top: 1px solid rgba(15, 23, 42, 0.07);
+      }
+      .app-footer a {
+        color: #2454d6;
+        text-decoration: none;
+      }
+      .noscript-banner {
+        padding: 1rem 1.25rem;
+        background-color: #fef2f2;
+        border-bottom: 1px solid #fecdd3;
+        color: #991b1b;
+        text-align: center;
+        font-size: 0.95rem;
+      }
+      @media (max-width: 880px) {
+        .app-container {
+          padding: 0.75rem 0.75rem 1.5rem;
+          gap: 1.25rem;
+        }
+        .app-header {
+          flex-wrap: wrap;
+          gap: 0.6rem;
+          padding: 0.7rem 0.8rem;
+          border-radius: 16px;
+        }
+        .logo-wrapper {
+          width: 36px;
+          height: 36px;
+        }
+      }
+      @media (max-width: 480px) {
+        .app-container {
+          padding: 0.5rem;
+        }
+        .app-header {
+          margin: 0 0.25rem;
+          padding: 0.6rem 0.7rem;
+        }
+      }
+    </style>
   </head>
   <body>
-    <div id="root"></div>
+    <noscript>
+      <div class="noscript-banner">
+        <p style="margin: 0 0 0.5rem 0; font-weight: 700;">JavaScript and WebRTC Required</p>
+        <p style="margin: 0;">LAN Share requires JavaScript and WebRTC to discover local peers, stream files, and establish peer-to-peer connections. Please enable JavaScript in your browser settings to use the interactive app. Full static documentation and technical specifications are provided below.</p>
+      </div>
+    </noscript>
+    <div id="root">
+      <div class="app-container">
+        <header class="app-header">
+          <div class="logo-section">
+            <div class="logo-wrapper" aria-hidden="true">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M5 12.55a11 11 0 0 1 14.08 0"></path>
+                <path d="M1.42 9a16 16 0 0 1 21.16 0"></path>
+                <path d="M8.59 16.11a6 6 0 0 1 6.82 0"></path>
+              </svg>
+            </div>
+            <div class="title-group">
+              <h1>LAN Share</h1>
+              <p class="mini-heading">Fast · Local · Secure</p>
+            </div>
+          </div>
+          <div class="server-indicator">
+            <div class="status-dot"></div>
+            <span>Connecting...</span>
+          </div>
+          <div class="status-section">
+            <span class="pre-badge">Local P2P</span>
+          </div>
+        </header>
+
+        <main class="main-layout">
+          <section class="radar-section" aria-label="Peer Discovery Radar">
+            <div class="guide-text">
+              <h2>Look for devices nearby</h2>
+              <p>Devices on your local network will pop up on the radar.</p>
+            </div>
+            <div class="radar-placeholder-ring" aria-hidden="true">
+              <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#2454d6" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M5 12.55a11 11 0 0 1 14.08 0"></path>
+                <path d="M1.42 9a16 16 0 0 1 21.16 0"></path>
+                <path d="M8.59 16.11a6 6 0 0 1 6.82 0"></path>
+                <circle cx="12" cy="20" r="1"></circle>
+              </svg>
+            </div>
+          </section>
+
+          <section class="history-section" aria-label="Transfer History">
+            <div class="section-header">
+              <h2 class="section-title">Transfer history</h2>
+              <span class="section-count">0 items</span>
+            </div>
+          </section>
+
+          <section class="seo-semantic-details" aria-label="Architecture & Privacy Guarantees">
+            <article class="seo-card">
+              <h2>Direct Peer-to-Peer Transfers via WebRTC</h2>
+              <p>LAN Share connects browsers directly across your local Wi-Fi or Ethernet network using high-performance WebRTC DataChannels. Files and messages stream straight from sender to receiver without staging or routing through external cloud servers.</p>
+            </article>
+
+            <article class="seo-card">
+              <h2>Streaming SHA-256 File Integrity Verification</h2>
+              <p>Transfers are protected with on-the-fly streaming SHA-256 cryptographic verification. The receiver computes checksums chunk-by-chunk in real time, validating byte-level integrity against the sender hash upon completion.</p>
+            </article>
+
+            <article class="seo-card">
+              <h2>Zero-Cloud Local Network Privacy</h2>
+              <p>All transfers remain strictly local within your local area network (LAN). Lightweight WebSocket signaling orchestrates initial peer discovery and ICE candidate exchange, after which all media and payload streams flow directly over encrypted DTLS/SCTP channels.</p>
+            </article>
+          </section>
+
+          <section class="faq-card" aria-label="Frequently Asked Questions & Direct Answers">
+            <h2>Frequently Asked Questions &amp; Direct Answers</h2>
+            <div class="faq-item">
+              <h3>How does LAN Share transfer files without cloud uploads?</h3>
+              <p>LAN Share establishes direct browser-to-browser peer-to-peer WebRTC DataChannels using DTLS (Datagram Transport Layer Security) and SCTP over your local network. A lightweight Node.js/Socket.IO signaling server clusters devices by local subnet and STUN IP solely to relay ~2 KB of WebRTC handshake metadata (SDP offer/answer and ICE candidates). Once connected, all file data streams directly between devices across the local Wi-Fi or LAN. File contents never touch, transit, or get stored on any cloud server or intermediate database.</p>
+            </div>
+            <div class="faq-item">
+              <h3>What is the file size limit on LAN Share?</h3>
+              <p>LAN Share has no arbitrary file size limit. On desktop Chromium browsers (Google Chrome, Microsoft Edge), files stream directly to storage via the File System Access API (window.showSaveFilePicker), enabling multi-gigabyte transfers (e.g., 10 GB, 50 GB+) with minimal RAM consumption (&lt; 50 MB). In browsers without File System Access API support (Apple Safari, Mozilla Firefox, Android browsers), received chunks assemble in memory up to ~2 GB to prevent browser memory exhaustion.</p>
+            </div>
+            <div class="faq-item">
+              <h3>Is LAN Share secure?</h3>
+              <p>Yes. All peer-to-peer data channels and chat messages are encrypted in transit using standard WebRTC DTLS encryption. File transfers remain entirely within your local network. LAN Share requires no user accounts, collects zero telemetry, uses no tracking cookies, and logs no file metadata. Additionally, bit-for-bit file integrity is cryptographically validated using chunked streaming SHA-256 checksums calculated independently on both the sender and receiver.</p>
+            </div>
+            <div class="faq-item">
+              <h3>How does LAN Share handle router AP or Client Isolation?</h3>
+              <p>On networks with router AP or Client Isolation enabled (such as hotel, airport, or university Wi-Fi) where direct peer UDP traffic is blocked, LAN Share's built-in 20-second connection watchdog flags the timeout and displays diagnostic guidance recommending a mobile hotspot or a configured TURN relay (VITE_TURN_URL).</p>
+            </div>
+          </section>
+        </main>
+
+        <footer class="app-footer">
+          <p style="margin: 0 0 0.5rem 0;">LAN Share is free and open-source software licensed under the <a href="https://github.com/bilalzulfiqar-pk/lan-share/blob/main/LICENSE">MIT License</a>.</p>
+          <p style="margin: 0;">Authored and maintained by <a href="https://github.com/bilalzulfiqar-pk">Bilal Zulfiqar</a> · <a href="https://lan-share.vercel.app">https://lan-share.vercel.app</a></p>
+        </footer>
+      </div>
+    </div>
     <script type="module" src="/src/main.jsx"></script>
   </body>
 </html>

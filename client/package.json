@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@fontsource-variable/inter": "^5.2.8",
+    "@vercel/analytics": "^2.0.1",
     "framer-motion": "^12.23.26",
     "hash-wasm": "^4.12.0",
     "qrcode": "^1.5.4",

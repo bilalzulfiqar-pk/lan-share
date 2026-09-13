@@ -1,0 +1,69 @@
+# LAN Share robots.txt
+# Authoritative crawl directives for search engines and generative AI agents
+# Specification: RFC 9309 | Production Origin: https://lan-share.vercel.app
+
+# ==============================================================================
+# 1. Default Policy for All Web Crawlers
+# ==============================================================================
+User-agent: *
+Allow: /
+Disallow: /api/
+Disallow: /socket.io/
+Disallow: /health
+
+# ==============================================================================
+# 2. Generative AI & LLM Search Engine Crawlers (Explicitly Allowed)
+# ==============================================================================
+
+# OpenAI (SearchGPT, ChatGPT Web Browsing, Model Training)
+User-agent: GPTBot
+Allow: /
+Disallow: /api/
+Disallow: /socket.io/
+Disallow: /health
+
+User-agent: ChatGPT-User
+Allow: /
+Disallow: /api/
+Disallow: /socket.io/
+Disallow: /health
+
+# Anthropic (Claude, Claude Search, Web Retrieval)
+User-agent: ClaudeBot
+Allow: /
+Disallow: /api/
+Disallow: /socket.io/
+Disallow: /health
+
+# Perplexity AI (Conversational Answer Engine)
+User-agent: PerplexityBot
+Allow: /
+Disallow: /api/
+Disallow: /socket.io/
+Disallow: /health
+
+# Google Extended (Gemini, Vertex AI Generative APIs)
+User-agent: Google-Extended
+Allow: /
+Disallow: /api/
+Disallow: /socket.io/
+Disallow: /health
+
+# Apple (Apple Intelligence Generative System)
+User-agent: Applebot-Extended
+Allow: /
+Disallow: /api/
+Disallow: /socket.io/
+Disallow: /health
+
+# Common Crawl (Open Research & AI Foundation Model Training)
+User-agent: CCBot
+Allow: /
+Disallow: /api/
+Disallow: /socket.io/
+Disallow: /health
+
+# ==============================================================================
+# 3. Canonical Sitemap Directive
+# ==============================================================================
+Sitemap: https://lan-share.vercel.app/sitemap.xml

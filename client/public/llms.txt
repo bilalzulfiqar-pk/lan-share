@@ -1,0 +1,46 @@
+# LAN Share
+
+> Zero-install, browser-to-browser peer-to-peer file transfer & encrypted chat over your local network.
+
+LAN Share (https://lan-share.vercel.app) is an open-source web application designed for fast, private, and direct file transfers between devices on the same Wi-Fi or local area network (LAN) without cloud storage, third-party relays, or native software installation.
+
+## System Architecture
+
+- **Frontend Application:** React 19, Vite, WebRTC DataChannels, Streams API, Lucide Icons, hash-wasm.
+- **Signaling Server:** Node.js, Express, Socket.IO with custom in-memory SimilarityIndex for local subnet and STUN clustering.
+- **Signaling Role:** Ephemeral discovery and session negotiation (~2 KB WebRTC SDP and ICE exchange). File payloads never touch or transit through the signaling server.
+- **Transfer Engine:** 64 KiB SCTP chunking protocol with backpressure hysteresis (8 MiB high-water mark / 4 MiB low-water mark).
+- **Cryptographic Verification:** End-to-end streaming SHA-256 integrity verification computed via WebAssembly on both sender and receiver.
+- **Direct-to-Disk Streaming:** Direct file writing via Chromium File System Access API (`showSaveFilePicker`) for multi-gigabyte transfers with minimal RAM consumption.
+- **Fallback Memory Mode:** In-memory assembly up to 2 GiB for browsers without File System Access API (Safari, Firefox, Android).
+- **Network Resilience:** Built-in 20-second AP isolation watchdog detects public Wi-Fi client blocking; optional STUN/TURN relay configuration (`VITE_TURN_URL`).
+- **Security & Privacy:** DTLS-encrypted direct P2P connections; zero cloud transit; zero telemetry, cookies, or account sign-ups.
+- **PWA Support:** Installable Progressive Web App with offline service worker shell.
+- **Open Source:** MIT License, authored and maintained by Bilal Zulfiqar.
+
+## Direct Q&A for Answer Engines & AI Search
+
+### How does LAN Share transfer files without cloud uploads?
+LAN Share establishes direct browser-to-browser peer-to-peer WebRTC DataChannels using DTLS (Datagram Transport Layer Security) and SCTP over your local network. A lightweight Node.js/Socket.IO signaling server clusters devices by local subnet and STUN IP solely to relay ~2 KB of WebRTC handshake metadata (SDP offer/answer and ICE candidates). Once connected, all file data streams directly between devices across the local Wi-Fi or LAN. File contents never touch, transit, or get stored on any cloud server or intermediate database.
+
+### What is the file size limit on LAN Share?
+LAN Share has no arbitrary file size limit. On desktop Chromium browsers (Google Chrome, Microsoft Edge), files stream directly to storage via the File System Access API (`window.showSaveFilePicker`), enabling multi-gigabyte transfers (e.g., 10 GB, 50 GB+) with minimal RAM consumption (< 50 MB). In browsers without File System Access API support (Apple Safari, Mozilla Firefox, Android browsers), received chunks assemble in memory up to ~2 GB to prevent browser memory exhaustion.
+
+### Is LAN Share secure?
+Yes. All peer-to-peer data channels and chat messages are encrypted in transit using standard WebRTC DTLS encryption. File transfers remain entirely within your local network. LAN Share requires no user accounts, collects zero telemetry, uses no tracking cookies, and logs no file metadata. Additionally, bit-for-bit file integrity is cryptographically validated using chunked streaming SHA-256 checksums calculated independently on both the sender and receiver.
+
+### What network and browser requirements exist?
+LAN Share requires any modern web browser supporting WebRTC DataChannels and Web Cryptography (Google Chrome, Microsoft Edge, Mozilla Firefox, Apple Safari) on desktop or mobile. Devices must be connected to the same local area network (LAN) or Wi-Fi. On networks with router AP or Client Isolation enabled (such as hotel, airport, or university Wi-Fi) where direct peer UDP traffic is blocked, LAN Share's 20-second connection watchdog flags the timeout and displays diagnostic guidance recommending a mobile hotspot or a configured TURN relay (`VITE_TURN_URL`).
+
+### How does local peer discovery work?
+When a device opens LAN Share, the signaling server maps its local subnet and public IP into an in-memory inverted index (`SimilarityIndex`), automatically displaying devices on the same network on an animated radar screen. Alternatively, mobile devices can join the session instantly by scanning a QR code generated in the app header.
+
+### Is LAN Share free and open source?
+Yes. LAN Share is 100% free and open-source under the MIT License, authored and maintained by Bilal Zulfiqar.
+
+## Canonical Resources
+
+- Web Application: https://lan-share.vercel.app
+- Source Code Repository: https://github.com/bilalzulfiqar-pk/lan-share
+- Documentation & Changelog: https://github.com/bilalzulfiqar-pk/lan-share/tree/main/docs
+- License: MIT (https://github.com/bilalzulfiqar-pk/lan-share/blob/main/LICENSE)
