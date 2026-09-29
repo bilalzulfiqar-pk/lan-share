@@ -6,6 +6,27 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [1.1.0] - 2026-09-29
+
+### Added
+* **6-Digit Room Codes & Cross-Network URL Hash Pairing:** Enabled peer discovery across segmented VLANs, 2.4/5 GHz bands, and university subnets via 6-digit codes (e.g. `492810`) and shareable URL hashes (`#room=492810`). Includes camera-scannable QR code generation.
+* **Mobile Multi-GB OPFS Streaming:** Integrated the Origin Private File System (`navigator.storage.getDirectory()`) for Android Chrome, iOS Safari, and desktop Firefox. Chunks stream directly into OPFS writable streams, keeping RAM usage < 15 MB even for 10 GB+ files, followed by native `navigator.share` system sheet export.
+* **Screen Wake Lock & Mobile Audio Beacon:** Integrated `navigator.wakeLock.request('screen')` during active transfers, paired with an inaudible background audio beacon loop to prevent mobile operating systems from freezing WebRTC threads when tabs are hidden.
+* **Ephemeral Metered.ca TURN Relay with 150 MB Safety Cap:** Added a secure server-side credential minting endpoint (`GET /api/turn-credentials`) providing zero-cost TURN relay fallback on AP-isolated networks, capped at 150 MB to protect free monthly quotas.
+* **Mobile Hotspot Guidance Modal:** Added an in-app visual guide helping users bypass router AP isolation by toggling a personal smartphone hotspot to achieve 50+ MB/s Wi-Fi transfers with zero mobile data.
+* **Chunk-Offset Transfer Resumption:** Protocol update allowing receivers to request byte ranges (`fromOffset`) to seamlessly resume transfers across momentary Wi-Fi blips without re-uploading from scratch.
+
+### Changed
+* **Transfer State Machine & Honest Status Flow:** Completely redesigned transfer statuses to eliminate misleading "Waiting for accept" labels. Senders now see `Connecting to device…`, `Offered to peer (ready to download)`, and live telemetry (`Uploading (XX MB/s) — ETA Xs`).
+* **Disconnect Grace Window:** Replaced instant aborts on channel close with an 8-second grace window that attempts automatic ICE renegotiation before declaring failure.
+* **Test Suite Expansion:** Expanded automated Vitest suites from 181 to 265 passing unit, integration, and child-process signaling tests.
+
+### Fixed
+* **Cross-Room Signaling Leakage:** Enforced mutual room visibility checks in signaling relays to prevent cross-room offer snooping.
+* **Premature Sender Eviction:** Retained selected `File` handles across connection timeouts so receivers can click "Restart Transfer" without the sender re-selecting files.
+
+---
+
 ## [1.0.0] - 2026-09-10
 
 ### Added

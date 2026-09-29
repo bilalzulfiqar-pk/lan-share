@@ -70,7 +70,8 @@ describe('TransferEngine', () => {
 
         const id = await offerAndRequestId(engineA, eventsB, file);
 
-        expect(firstAddedItem(eventsA)).toMatchObject({ id, fileName: 'notes.bin', direction: 'out', status: 'idle', peerName: 'Bob' });
+        expect(firstAddedItem(eventsA)).toMatchObject({ id, fileName: 'notes.bin', direction: 'out', status: 'connecting', peerName: 'Bob' });
+        expect(lastUpdateFor(eventsA, id)?.status).toBe('offered');
         expect(firstAddedItem(eventsB)).toMatchObject({ id, fileName: 'notes.bin', direction: 'in', status: 'idle', peerName: 'Alice' });
 
         await engineB.requestFile(id);
@@ -239,5 +240,146 @@ describe('TransferEngine', () => {
         engineA.destroy();
         engineB.destroy();
         engineC.destroy();
+    });
+
+    it('correctly transitions outgoing file status: connecting -> offered -> uploading -> completed', async () => {
+        const { engineA, engineB, eventsA } = createEnginePair();
+        const file1 = createMockFile('doc1.pdf', 32 * 1024);
+
+        // Before connection is ready, offer file
+        engineA.offerFiles('bob', [file1]);
+        const addedItem = firstAddedItem(eventsA);
+        expect(addedItem.status).toBe('connecting');
+
+        // Once WebRTC connects and markControlReady runs, sender receives history:update with status: 'offered'
+        const id1 = addedItem.id;
+        await waitFor(() => lastUpdateFor(eventsA, id1)?.status === 'offered', { label: 'status is offered' });
+
+        // Second file offered while channelReady is true should immediately have status: 'offered'
+        const file2 = createMockFile('doc2.pdf', 32 * 1024);
+        engineA.offerFiles('bob', [file2]);
+        const allAdds = eventsA.filter((e) => e.type === 'history:add');
+        const secondAddedItem = allAdds[1]?.items[0];
+        expect(secondAddedItem.status).toBe('offered');
+
+        // When receiver requests file1, sender transitions to 'uploading'
+        await engineB.requestFile(id1);
+        await waitFor(() => lastUpdateFor(eventsA, id1)?.status === 'uploading', { label: 'status is uploading' });
+
+        // Finally completes
+        await waitFor(() => lastUpdateFor(eventsA, id1)?.status === 'completed', { label: 'status is completed' });
+
+        engineA.destroy();
+        engineB.destroy();
+    });
+
+    it('removes cancelled file from pendingOfferFiles if cancelled before connection is ready and offers only remaining files', async () => {
+        const { engineA, eventsA, eventsB } = createEnginePair();
+        const file1 = createMockFile('cancelled.pdf', 10 * 1024);
+        const file2 = createMockFile('kept.pdf', 20 * 1024);
+
+        engineA.offerFiles('bob', [file1, file2]);
+        const session = engineA.sessions.get('bob');
+        expect(session.pendingOfferFiles.length).toBe(2);
+
+        const file1Id = session.pendingOfferFiles[0].id;
+        const file2Id = session.pendingOfferFiles[1].id;
+        engineA.cancelTransfer(file1Id);
+
+        expect(session.pendingOfferFiles.length).toBe(1);
+        expect(session.pendingOfferFiles[0].id).toBe(file2Id);
+
+        // When connection completes, only file2 is offered to peer
+        await waitFor(() => lastUpdateFor(eventsA, file2Id)?.status === 'offered', { label: 'file2 offered' });
+        expect(lastUpdateFor(eventsA, file1Id)?.status).toBe('cancelled');
+
+        const receiverAdded = eventsB.filter((e) => e.type === 'history:add').flatMap((e) => e.items);
+        expect(receiverAdded.some((i) => i.id === file1Id)).toBe(false);
+        expect(receiverAdded.some((i) => i.id === file2Id)).toBe(true);
+
+        engineA.destroy();
+    });
+
+    it('channel.onclose on receiver sets grace timer, and expiration discards receive with error', async () => {
+        const { engineA, engineB, eventsB } = createEnginePair();
+        const file = createMockFile('stream.bin', 1024 * 1024);
+
+        const id = await offerAndRequestId(engineA, eventsB, file);
+        await engineB.requestFile(id);
+
+        await waitFor(() => lastUpdateFor(eventsB, id)?.status === 'downloading', { label: 'downloading' });
+        const receiveState = engineB.receives.get(id);
+        expect(receiveState).toBeDefined();
+
+        let graceCallback = null;
+        const originalSetTimeout = globalThis.setTimeout;
+        globalThis.setTimeout = (cb, delay) => {
+            if (delay === 8000) {
+                graceCallback = cb;
+                return 999999;
+            }
+            return originalSetTimeout(cb, delay);
+        };
+
+        try {
+            // Simulate channel close while transfer is incomplete
+            const currentChannel = engineA.outgoing.get(id)?.channel;
+            if (currentChannel) {
+                currentChannel.close();
+            }
+
+            // Immediately after close, receiveState should still exist in engineB (not discarded yet)
+            expect(engineB.receives.has(id)).toBe(true);
+            expect(graceCallback).toBeTypeOf('function');
+
+            // Trigger the grace period expiration
+            graceCallback();
+
+            // After grace expires, receive is discarded and error is dispatched
+            expect(engineB.receives.has(id)).toBe(false);
+            expect(lastUpdateFor(eventsB, id)?.status).toBe('error');
+            expect(lastUpdateFor(eventsB, id)?.error).toBe('Transfer interrupted.');
+        } finally {
+            globalThis.setTimeout = originalSetTimeout;
+            engineA.destroy();
+            engineB.destroy();
+        }
+    });
+
+    it('channel reattachment clears grace timer and preserves current progress', async () => {
+        const { engineA, engineB, eventsB } = createEnginePair();
+        const file = createMockFile('stream2.bin', 1024 * 1024);
+
+        const id = await offerAndRequestId(engineA, eventsB, file);
+        await engineB.requestFile(id);
+
+        await waitFor(() => lastUpdateFor(eventsB, id)?.status === 'downloading', { label: 'downloading' });
+        const receiveState = engineB.receives.get(id);
+        expect(receiveState).toBeDefined();
+
+        // Allow a few chunks to be received so progress > 0
+        await waitFor(() => receiveState.received > 0, { label: 'some progress made' });
+
+        // Close channel to trigger grace period
+        const currentChannel = engineA.outgoing.get(id)?.channel;
+        currentChannel?.close();
+
+        const expectedProgress = Math.floor((receiveState.received / receiveState.size) * 100);
+        expect(expectedProgress).toBeGreaterThan(0);
+        expect(receiveState.graceTimer).toBeDefined();
+
+        // Reconnect new channel
+        const mockNewChannel = { binaryType: '', readyState: 'open', close: () => {} };
+        const sessionB = engineB.sessions.get('alice');
+        engineB.attachFileReceiveChannel(sessionB, mockNewChannel, id);
+
+        // Grace timer should be cancelled
+        expect(receiveState.graceTimer).toBeNull();
+        // Progress should be preserved (not reset to 0)
+        expect(lastUpdateFor(eventsB, id)?.progress).toBe(expectedProgress);
+        expect(engineB.receives.has(id)).toBe(true);
+
+        engineA.destroy();
+        engineB.destroy();
     });
 });

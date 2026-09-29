@@ -8,6 +8,9 @@ import { DeviceList } from './components/DeviceList';
 import { HistoryPanel } from './components/HistoryPanel';
 import { ChatPanel } from './components/ChatPanel';
 import { QrPopup } from './components/QrPopup';
+import { Header } from './components/Header';
+import { RoomModal } from './components/RoomModal';
+import { HotspotGuideModal } from './components/HotspotGuideModal';
 import { copyText } from './lib/clipboard';
 import { playNotificationBlip } from './lib/sound';
 import {
@@ -88,7 +91,18 @@ function App() {
   );
   const [showThemeMenu, setShowThemeMenu] = useState(false);
 
-  const { socket, peers, isConnected, isReconnecting, connectionStartTime, myId, debugInfo } = useSignaling(displayName);
+  const {
+    socket,
+    peers,
+    isConnected,
+    isReconnecting,
+    connectionStartTime,
+    myId,
+    roomCode,
+    joinRoom,
+    leaveRoom,
+    debugInfo
+  } = useSignaling(displayName);
 
   const getPeerName = useCallback((peerId) => {
     if (!peerId) return 'Unknown';
@@ -178,12 +192,30 @@ function App() {
     }
   }, [announceEvent, appendChatMessage, chatSession.peerId, deviceKeyForPeer, getPeerName]);
 
-  const { history, peerStatus, error, sendFilesOffer, requestFile, saveReceivedFile, cancelTransfer, sendChat } =
-    useWebRTC(socket, myId, {
-      getPeerName,
-      onChat: handleIncomingChat,
-      onNotify: (event) => announceEvent(event.title, event.body)
-    });
+  const [strictLocalMode, setStrictLocalMode] = useState(
+    () => localStorage.getItem('lan-share-strict-local') === 'true'
+  );
+
+  useEffect(() => {
+    localStorage.setItem('lan-share-strict-local', strictLocalMode ? 'true' : 'false');
+  }, [strictLocalMode]);
+
+  const {
+    history,
+    peerStatus,
+    connectionTypes,
+    error,
+    sendFilesOffer,
+    requestFile,
+    saveReceivedFile,
+    cancelTransfer,
+    sendChat
+  } = useWebRTC(socket, myId, {
+    getPeerName,
+    onChat: handleIncomingChat,
+    onNotify: (event) => announceEvent(event.title, event.body),
+    strictLocalMode
+  });
 
   const openChatWithPeer = useCallback((peerId) => {
     setChatSession({ peerId, key: deviceKeyForPeer(peerId) });
@@ -272,6 +304,8 @@ function App() {
   const [dismissedStatusEpisode, setDismissedStatusEpisode] = useState(0);
   const [dismissedError, setDismissedError] = useState(null);
   const [showQrPopup, setShowQrPopup] = useState(false);
+  const [showRoomModal, setShowRoomModal] = useState(false);
+  const [showHotspotModal, setShowHotspotModal] = useState(false);
   const [isWindowDragActive, setIsWindowDragActive] = useState(false);
   const reduceMotion = useReducedMotion();
 
@@ -444,125 +478,27 @@ function App() {
 
   return (
     <div className="app-container">
-      <header className="app-header">
-        <div className="logo-section">
-          <div className="logo-wrapper" aria-hidden="true">
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M5 12.55a11 11 0 0 1 14.08 0"></path>
-              <path d="M1.42 9a16 16 0 0 1 21.16 0"></path>
-              <path d="M8.59 16.11a6 6 0 0 1 6.82 0"></path>
-            </svg>
-          </div>
-          <div className="title-group">
-            <h1>LAN Share</h1>
-            <span className="mini-heading">Fast · Local · Secure</span>
-          </div>
-        </div>
-
-        <div className="server-indicator" title={isConnected ? 'Server reachable' : 'Server unreachable'}>
-          <div className={`status-dot ${isConnected ? 'online' : 'offline'}`} />
-          <span>{isConnected ? 'Online' : 'Offline'}</span>
-        </div>
-
-        <div className="status-section">
-          <div className="icon-button-group" role="group" aria-label="App controls">
-            <div className="theme-picker" ref={themePickerRef}>
-              <button
-                className="btn-icon"
-                ref={themeButtonRef}
-                onClick={() => setShowThemeMenu((prev) => !prev)}
-                title={`Theme: ${currentTheme.name} (${currentMode})`}
-                aria-label="Change theme"
-                aria-haspopup="menu"
-                aria-expanded={showThemeMenu}
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                  <circle cx="13.5" cy="6.5" r="1.5" />
-                  <circle cx="17.5" cy="10.5" r="1.5" />
-                  <circle cx="8.5" cy="7.5" r="1.5" />
-                  <circle cx="6.5" cy="12.5" r="1.5" />
-                  <path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.926 0 1.648-.746 1.648-1.688 0-.437-.18-.835-.437-1.125-.29-.289-.438-.652-.438-1.125a1.64 1.64 0 0 1 1.668-1.668h1.996c3.051 0 5.555-2.503 5.555-5.554C21.965 6.012 17.461 2 12 2z" />
-                </svg>
-                <span className="theme-swatch-dot" style={{ background: currentSwatch.primary }} aria-hidden="true" />
-              </button>
-            </div>
-
-            <button
-              className="btn-icon"
-              onClick={() => setShowQrPopup((prev) => !prev)}
-              title="Show QR code for this app"
-              aria-label="Show QR code for this app"
-              aria-pressed={showQrPopup}
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                <rect x="3" y="3" width="7" height="7" rx="1" />
-                <rect x="14" y="3" width="7" height="7" rx="1" />
-                <rect x="3" y="14" width="7" height="7" rx="1" />
-                <path d="M14 14h3v3h-3z" />
-                <path d="M21 14v.01" />
-                <path d="M17 21h.01" />
-                <path d="M21 21h.01" />
-                <path d="M14 17.5v.01" />
-                <path d="M18.5 17.5v.01" />
-              </svg>
-            </button>
-
-            <button
-              className={`btn-icon ${notifyEnabled ? 'is-active-icon' : ''}`}
-              onClick={handleNotifyToggle}
-              title={notifyEnabled ? 'Notifications on - click to mute' : 'Get notified about files and messages'}
-              aria-label={notifyEnabled ? 'Disable notifications' : 'Enable notifications'}
-              aria-pressed={notifyEnabled}
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                <path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9" />
-                <path d="M10.3 21a1.94 1.94 0 0 0 3.4 0" />
-                {!notifyEnabled && <line x1="4" y1="4" x2="20" y2="20" />}
-              </svg>
-            </button>
-
-            <button
-              className="btn-icon"
-              onClick={toggleDebugSidebar}
-              title={showDebugSidebar ? 'Hide debug details' : 'Show debug details'}
-              aria-label={showDebugSidebar ? 'Hide debug details' : 'Show debug details'}
-              aria-pressed={showDebugSidebar}
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z" />
-              </svg>
-            </button>
-          </div>
-
-          <div
-            className="user-badge"
-            onClick={() => document.querySelector('.user-name-input')?.focus()}
-            role="group"
-            aria-label="Your display name and device ID"
-          >
-            <div className="user-badge-meta">
-              <input
-                className="user-name-input"
-                value={displayName}
-                onChange={handleNameChange}
-                maxLength={20}
-                size={1}
-                placeholder="Your name"
-                aria-label="Your display name"
-              />
-              <span className="user-id-chip" title={debugInfo.deviceId || ''}>
-                {debugInfo.deviceId ? debugInfo.deviceId.slice(0, 12) : '-'}
-              </span>
-            </div>
-            <span className="user-badge-edit" aria-hidden="true">
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
-                <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
-              </svg>
-            </span>
-          </div>
-        </div>
-      </header>
+      <Header
+        isConnected={isConnected}
+        displayName={displayName}
+        onNameChange={handleNameChange}
+        deviceId={debugInfo.deviceId}
+        themePickerRef={themePickerRef}
+        themeButtonRef={themeButtonRef}
+        showThemeMenu={showThemeMenu}
+        setShowThemeMenu={setShowThemeMenu}
+        currentTheme={currentTheme}
+        currentMode={currentMode}
+        currentSwatch={currentSwatch}
+        showQrPopup={showQrPopup}
+        setShowQrPopup={setShowQrPopup}
+        notifyEnabled={notifyEnabled}
+        handleNotifyToggle={handleNotifyToggle}
+        showDebugSidebar={showDebugSidebar}
+        toggleDebugSidebar={toggleDebugSidebar}
+        roomCode={roomCode}
+        onOpenRoomModal={() => setShowRoomModal(true)}
+      />
 
       <div
         className={`theme-menu ${showThemeMenu ? 'is-open' : ''}`}
@@ -689,13 +625,49 @@ function App() {
                   <div className="debug-value">{debugInfo.transportName}</div>
                   <div className="debug-label">WebRTC</div>
                   <div className="debug-value">
-                    {selectedDevice
-                      ? `${peerStatus[selectedDevice] || 'IDLE'} · ${getPeerName(selectedDevice)}`
-                      : `${Object.values(peerStatus).filter((s) => s !== 'DISCONNECTED').length} active session(s)`}
+                    {selectedDevice ? (
+                      <span>
+                        {peerStatus[selectedDevice] || 'IDLE'}
+                        {' · '}
+                        <span className={`conn-type-badge ${connectionTypes[selectedDevice] || 'direct-lan'}`}>
+                          {connectionTypes[selectedDevice] || 'direct-lan'}
+                        </span>
+                      </span>
+                    ) : (
+                      `${Object.values(peerStatus).filter((s) => s !== 'DISCONNECTED').length} active session(s)`
+                    )}
                   </div>
                   <div className="debug-label">Selected</div>
                   <div className="debug-value">
                     {selectedDevice ? getPeerName(selectedDevice) : 'None selected'}
+                  </div>
+                </div>
+              </div>
+
+              <div className="debug-sidebar-section">
+                <h4>Relay & Privacy Policy</h4>
+                <div className="debug-grid">
+                  <div className="debug-label">Strict Local</div>
+                  <div className="debug-value">
+                    <button
+                      type="button"
+                      className={`btn btn-sm ${strictLocalMode ? 'btn-primary' : 'btn-secondary'}`}
+                      onClick={() => setStrictLocalMode((prev) => !prev)}
+                      aria-pressed={strictLocalMode}
+                      data-testid="strict-local-toggle"
+                    >
+                      {strictLocalMode ? 'Enabled (No Relay)' : 'Disabled'}
+                    </button>
+                  </div>
+                  <div className="debug-label">Hotspot Guide</div>
+                  <div className="debug-value">
+                    <button
+                      type="button"
+                      className="btn btn-sm btn-secondary"
+                      onClick={() => setShowHotspotModal(true)}
+                    >
+                      Open Guide
+                    </button>
                   </div>
                 </div>
               </div>
@@ -779,6 +751,21 @@ function App() {
         reduceMotion={reduceMotion}
       />
 
+      <RoomModal
+        open={showRoomModal}
+        onClose={() => setShowRoomModal(false)}
+        roomCode={roomCode}
+        onJoinRoom={(code) => joinRoom(code)}
+        onLeaveRoom={() => leaveRoom()}
+        reduceMotion={reduceMotion}
+      />
+
+      <HotspotGuideModal
+        open={showHotspotModal}
+        onClose={() => setShowHotspotModal(false)}
+        reduceMotion={reduceMotion}
+      />
+
       {isWindowDragActive && (
         <div className="drop-overlay" role="status" aria-live="polite">
           <div className="drop-overlay-card">
@@ -809,7 +796,17 @@ function App() {
 
       {error && error !== dismissedError && (
         <div className="global-error-banner" role="alert">
-          {error}
+          <span>{error}</span>
+          {(error.includes('Isolation') || error.includes('hotspot') || error.includes('150 MB') || error.includes('cloud relay')) && (
+            <button
+              type="button"
+              className="btn-hotspot-guide"
+              onClick={() => setShowHotspotModal(true)}
+              data-testid="error-banner-hotspot-btn"
+            >
+              View Mobile Hotspot Guide
+            </button>
+          )}
           <button
             className="error-banner-dismiss"
             onClick={() => setDismissedError(error)}
@@ -851,6 +848,11 @@ function App() {
                 <div className="file-selection-popup-label">
                   <span>Send to</span>
                   <strong>{getPeerName(selectedDevice)}</strong>
+                  {connectionTypes[selectedDevice] && (
+                    <span className={`conn-type-badge ${connectionTypes[selectedDevice]}`} title={`Connection type: ${connectionTypes[selectedDevice]}`}>
+                      {connectionTypes[selectedDevice]}
+                    </span>
+                  )}
                 </div>
                 <input
                   type="file"
@@ -912,6 +914,7 @@ function App() {
             }}
             onCancel={cancelTransfer}
             getPeerName={getPeerName}
+            onOpenHotspotGuide={() => setShowHotspotModal(true)}
           />
         </div>
       </div>

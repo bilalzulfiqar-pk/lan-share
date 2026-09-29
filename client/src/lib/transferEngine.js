@@ -2,19 +2,30 @@ import { createSHA256 } from 'hash-wasm';
 import {
     CONTROL_CHANNEL_LABEL,
     MSG,
+    FILE_STATUS,
     fileChannelLabel,
     parseFileChannelLabel,
     buildIceServers,
     negotiateChunkSize,
     canStreamSave,
+    canOpfsSave,
     createTransferId,
     SEND_HIGH_WATER_BYTES,
     SEND_LOW_WATER_BYTES,
     MEMORY_MODE_LIMIT_BYTES,
     STREAM_SAVE_THRESHOLD_BYTES,
     CONNECT_TIMEOUT_MS,
-    DISCONNECT_GRACE_MS
+    DISCONNECT_GRACE_MS,
+    RELAY_MAX_FILE_SIZE_BYTES,
+    RELAY_SIZE_LIMIT_ERROR,
+    STRICT_LOCAL_RELAY_BLOCKED_ERROR,
+    isRelayCandidate,
+    stripRelayFromSdp,
+    resolveTurnApiUrl
 } from './protocol';
+import { wakeLockManager } from './wakeLock';
+import { playTransferCompleteChime, startAudioBeacon, stopAudioBeacon } from './sound';
+
 
 const PROGRESS_EMIT_INTERVAL_MS = 300;
 
@@ -106,11 +117,21 @@ class PeerSession {
         this.iceRestartsAttempted = 0;
         this.tearingDown = false;
         this.createdControlChannel = false;
+        this.connectionType = 'direct-lan';
     }
 }
 
 export class TransferEngine {
-    constructor({ socket, myId, getPeerName, onEvent }) {
+    constructor({
+        socket,
+        myId,
+        getPeerName,
+        onEvent,
+        turnApiUrl = '/api/turn-credentials',
+        turnCredentials = null,
+        strictLocalMode = false,
+        fetchTurnCredentials = true
+    } = {}) {
         this.socket = socket;
         this.myId = myId;
         this.getPeerName = getPeerName || (() => 'Unknown');
@@ -121,9 +142,90 @@ export class TransferEngine {
         this.offered = new Map();    // fileId -> { peerId, name, size, type } (metadata from FILES_OFFER)
         this.receives = new Map();   // fileId -> receive state
         this.downloadUrls = new Map(); // fileId -> object URL
+        this.activeTransferIds = new Set(); // fileId -> active upload or download
         this.destroyed = false;
 
+        this.turnApiUrl = resolveTurnApiUrl(turnApiUrl, socket);
+        this.turnCredentials = turnCredentials;
+        this.strictLocalMode = Boolean(strictLocalMode);
+
+        if (fetchTurnCredentials && !turnCredentials && (typeof window !== 'undefined' || this.turnApiUrl.startsWith('http'))) {
+            this.loadTurnCredentials().catch(() => {});
+        }
+
         this.attachSocketHandlers();
+    }
+
+    markTransferActive(fileId) {
+        if (!this.activeTransferIds.has(fileId)) {
+            const wasEmpty = this.activeTransferIds.size === 0;
+            this.activeTransferIds.add(fileId);
+            wakeLockManager.acquire().catch(() => {});
+            if (wasEmpty) {
+                startAudioBeacon();
+            }
+        }
+    }
+
+    markTransferInactive(fileId) {
+        if (this.activeTransferIds.has(fileId)) {
+            this.activeTransferIds.delete(fileId);
+            wakeLockManager.release().catch(() => {});
+            if (this.activeTransferIds.size === 0) {
+                stopAudioBeacon();
+            }
+        }
+    }
+
+
+    async loadTurnCredentials() {
+        try {
+            const url = resolveTurnApiUrl(this.turnApiUrl, this.socket);
+            const res = await fetch(url);
+            if (res.ok) {
+                const data = await res.json();
+                this.setTurnCredentials(data);
+                return data;
+            }
+        } catch (err) {
+            console.warn('[engine] Could not load TURN credentials from server:', err);
+        }
+        return null;
+    }
+
+    setTurnCredentials(credentials) {
+        this.turnCredentials = credentials;
+        const newIceServers = buildIceServers(this.turnCredentials, { strictLocalMode: this.strictLocalMode });
+        for (const session of this.sessions.values()) {
+            if (session.pc && typeof session.pc.setConfiguration === 'function') {
+                try {
+                    session.pc.setConfiguration({ iceServers: newIceServers });
+                } catch {
+                    // ignore if immutable in current state
+                }
+            }
+        }
+    }
+
+    setStrictLocalMode(enabled) {
+        this.strictLocalMode = Boolean(enabled);
+        const newIceServers = buildIceServers(this.turnCredentials, { strictLocalMode: this.strictLocalMode });
+        for (const session of this.sessions.values()) {
+            if (session.pc && typeof session.pc.setConfiguration === 'function') {
+                try {
+                    session.pc.setConfiguration({ iceServers: newIceServers });
+                } catch {
+                    // ignore if immutable in current state
+                }
+            }
+            if (this.strictLocalMode && session.connectionType === 'relay-turn') {
+                this.checkRelayCapForSession(session);
+            }
+        }
+    }
+
+    getConnectionType(peerId) {
+        return this.sessions.get(peerId)?.connectionType || 'direct-lan';
     }
 
     updateMyId(newMyId) {
@@ -174,6 +276,10 @@ export class TransferEngine {
     handleOffer = async ({ offer, sender: peerId }) => {
         if (!peerId || !offer) return;
 
+        if (this.strictLocalMode && offer.sdp) {
+            offer = { ...offer, sdp: stripRelayFromSdp(offer.sdp) };
+        }
+
         const session = this.getOrCreateSession(peerId, { asAnswerer: true });
 
         if (session.tearingDown) return;
@@ -198,6 +304,10 @@ export class TransferEngine {
         const session = this.sessions.get(peerId);
         if (!session || session.tearingDown || !answer) return;
 
+        if (this.strictLocalMode && answer.sdp) {
+            answer = { ...answer, sdp: stripRelayFromSdp(answer.sdp) };
+        }
+
         try {
             await session.pc.setRemoteDescription(answer);
             session.remoteDescriptionSet = true;
@@ -211,6 +321,10 @@ export class TransferEngine {
     handleIceCandidate = async ({ candidate, sender: peerId }) => {
         const session = this.sessions.get(peerId);
         if (!session || session.tearingDown || !candidate) return;
+
+        if (this.strictLocalMode && isRelayCandidate(candidate)) {
+            return;
+        }
 
         if (!session.remoteDescriptionSet) {
             session.queuedCandidates.push(candidate);
@@ -246,13 +360,18 @@ export class TransferEngine {
         // Deterministic, complementary roles for perfect negotiation.
         const polite = this.myId < peerId;
         const session = new PeerSession(peerId, polite);
-        const pc = new RTCPeerConnection({ iceServers: buildIceServers() });
+        const pc = new RTCPeerConnection({
+            iceServers: buildIceServers(this.turnCredentials, { strictLocalMode: this.strictLocalMode })
+        });
 
         session.pc = pc;
         this.sessions.set(peerId, session);
 
         pc.onicecandidate = (event) => {
             if (event.candidate) {
+                if (this.strictLocalMode && isRelayCandidate(event.candidate)) {
+                    return;
+                }
                 this.socket.emit('ice-candidate', { target: peerId, candidate: event.candidate, sender: this.myId });
             }
         };
@@ -292,12 +411,12 @@ export class TransferEngine {
         return session;
     }
 
-    async initiateOffer(session) {
+    async initiateOffer(session, options = {}) {
         if (session.tearingDown) return;
 
         try {
             session.makingOffer = true;
-            await session.pc.setLocalDescription(await session.pc.createOffer());
+            await session.pc.setLocalDescription(await session.pc.createOffer(options));
             this.socket.emit('offer', { target: session.peerId, offer: session.pc.localDescription, sender: this.myId });
         } catch (error) {
             console.error('Failed to create offer:', error);
@@ -307,14 +426,21 @@ export class TransferEngine {
     }
 
     async attemptIceRestart(session) {
-        if (session.tearingDown || session.iceRestartsAttempted >= 1) {
+        if (session.tearingDown || session.iceRestartsAttempted >= 2) {
             return false;
         }
 
         session.iceRestartsAttempted += 1;
         console.log(`Attempting ICE restart with ${session.peerId}`);
         this.peerStatus(session.peerId, 'CONNECTING');
-        await this.initiateOffer(session);
+        if (typeof session.pc?.restartIce === 'function') {
+            try {
+                session.pc.restartIce();
+            } catch {
+                // ignore
+            }
+        }
+        await this.initiateOffer(session, { iceRestart: true });
         this.startConnectWatchdog(session);
         return true;
     }
@@ -325,15 +451,19 @@ export class TransferEngine {
         if (state === 'connected') {
             this.clearDisconnectGrace(session);
             this.clearConnectWatchdog(session);
+            session.iceRestartsAttempted = 0;
+            this.detectConnectionType(session);
             if (session.channelReady) {
                 this.peerStatus(session.peerId, 'CONNECTED');
+                this.resumeActiveReceivesForSession(session);
             }
             return;
         }
 
+
         if (state === 'disconnected') {
             // Often transient (Wi-Fi hiccup, ICE consent refresh). Give the
-            // connection a grace window before touching live transfers.
+            // connection a brief grace window before triggering ICE restart.
             if (!session.disconnectGraceTimer) {
                 session.disconnectGraceTimer = setTimeout(() => {
                     session.disconnectGraceTimer = null;
@@ -344,7 +474,7 @@ export class TransferEngine {
                             }
                         });
                     }
-                }, DISCONNECT_GRACE_MS);
+                }, 2000);
             }
             return;
         }
@@ -356,6 +486,158 @@ export class TransferEngine {
                     this.teardownSession(session, 'Connection failed.');
                 }
             });
+        }
+    }
+
+    async detectConnectionType(session) {
+        if (!session || !session.pc) return 'direct-lan';
+        try {
+            if (typeof session.pc.getStats === 'function') {
+                const stats = await session.pc.getStats();
+                const type = this.parseConnectionType(stats);
+                if (type) {
+                    session.connectionType = type;
+                    this.emit({ type: 'connection-type', peerId: session.peerId, connectionType: type });
+                    this.checkRelayCapForSession(session);
+                    return type;
+                }
+            }
+        } catch (err) {
+            console.warn('[engine] Failed to getStats for connection type:', err);
+        }
+        return session.connectionType || 'direct-lan';
+    }
+
+    parseConnectionType(stats) {
+        if (!stats) return 'direct-lan';
+
+        let selectedPair = null;
+        const reports = typeof stats.values === 'function'
+            ? Array.from(stats.values())
+            : (Array.isArray(stats) ? stats : Object.values(stats));
+
+        const findReport = (id) => {
+            if (!id) return null;
+            if (typeof stats.get === 'function') return stats.get(id);
+            return reports.find((r) => r && r.id === id);
+        };
+
+        for (const report of reports) {
+            if (report && report.type === 'candidate-pair') {
+                if (report.selected || (report.nominated && (report.state === 'succeeded' || report.state === 'in-progress'))) {
+                    selectedPair = report;
+                    break;
+                }
+            }
+        }
+
+        if (!selectedPair) {
+            for (const report of reports) {
+                if (report && report.type === 'transport' && report.selectedCandidatePairId) {
+                    const pair = findReport(report.selectedCandidatePairId);
+                    if (pair) {
+                        selectedPair = pair;
+                        break;
+                    }
+                }
+            }
+        }
+
+        if (selectedPair) {
+            const local = findReport(selectedPair.localCandidateId);
+            const remote = findReport(selectedPair.remoteCandidateId);
+
+            const localType = local?.candidateType || selectedPair.localCandidateType;
+            const remoteType = remote?.candidateType || selectedPair.remoteCandidateType;
+
+            if (localType === 'relay' || remoteType === 'relay') {
+                return 'relay-turn';
+            }
+            if (localType === 'srflx' || remoteType === 'srflx' || localType === 'prflx' || remoteType === 'prflx') {
+                return 'direct-stun';
+            }
+            if (localType === 'host' && remoteType === 'host') {
+                return 'direct-lan';
+            }
+        }
+
+        for (const report of reports) {
+            if (report && (report.type === 'local-candidate' || report.type === 'remote-candidate')) {
+                if (report.candidateType === 'relay' && (report.selected || report.nominated)) {
+                    return 'relay-turn';
+                }
+                if ((report.candidateType === 'srflx' || report.candidateType === 'prflx') && (report.selected || report.nominated)) {
+                    return 'direct-stun';
+                }
+            }
+        }
+
+        return 'direct-lan';
+    }
+
+    checkRelayCapForSession(session) {
+        if (!session || session.connectionType !== 'relay-turn') return;
+
+        const isStrict = this.strictLocalMode;
+        const errorMsg = isStrict ? STRICT_LOCAL_RELAY_BLOCKED_ERROR : RELAY_SIZE_LIMIT_ERROR;
+        const shouldBlock = (size) => isStrict || size > RELAY_MAX_FILE_SIZE_BYTES;
+
+        // 1. Check pending offer files
+        if (session.pendingOfferFiles && session.pendingOfferFiles.length > 0) {
+            const blocked = [];
+            session.pendingOfferFiles = session.pendingOfferFiles.filter((f) => {
+                if (shouldBlock(f.size)) {
+                    blocked.push(f);
+                    return false;
+                }
+                return true;
+            });
+
+            for (const f of blocked) {
+                this.outgoing.delete(f.id);
+                this.historyUpdate(f.id, {
+                    status: FILE_STATUS.BLOCKED,
+                    error: errorMsg,
+                    speed: null,
+                    eta: null
+                });
+            }
+
+            if (blocked.length > 0) {
+                this.notifyError(errorMsg);
+            }
+        }
+
+        // 2. Check active outgoing entries
+        for (const [fileId, entry] of this.outgoing.entries()) {
+            if (entry.peerId === session.peerId && shouldBlock(entry.file.size)) {
+                entry.cancelled = true;
+                entry.settled = true;
+                this.outgoing.delete(fileId);
+                this.historyUpdate(fileId, {
+                    status: FILE_STATUS.BLOCKED,
+                    error: errorMsg,
+                    speed: null,
+                    eta: null
+                });
+                this.sendOnControl(session, {
+                    type: MSG.FILE_CANCEL,
+                    fileId,
+                    reason: errorMsg
+                });
+                this.notifyError(errorMsg);
+            }
+        }
+
+        // 3. Check offered incoming entries
+        for (const [fileId, meta] of this.offered.entries()) {
+            if (meta.peerId === session.peerId && shouldBlock(meta.size)) {
+                this.offered.delete(fileId);
+                this.historyUpdate(fileId, {
+                    status: FILE_STATUS.BLOCKED,
+                    error: errorMsg
+                });
+            }
         }
     }
 
@@ -400,8 +682,13 @@ export class TransferEngine {
 
         for (const [fileId, entry] of this.outgoing.entries()) {
             if (entry.peerId === peerId) {
+                if (entry.graceTimer) {
+                    clearTimeout(entry.graceTimer);
+                    entry.graceTimer = null;
+                }
                 entry.cancelled = true;
                 this.outgoing.delete(fileId);
+                this.markTransferInactive(fileId);
                 this.historyUpdate(fileId, { status: 'error', error: reason, speed: null, eta: null });
             }
         }
@@ -412,6 +699,7 @@ export class TransferEngine {
                 this.historyUpdate(fileId, { status: 'error', error: reason, speed: null, eta: null });
             }
         }
+
 
         // Files that were offered but never downloaded can no longer be
         // requested from this session.
@@ -497,7 +785,7 @@ export class TransferEngine {
                 break;
 
             case MSG.FILE_REQUEST:
-                this.startUpload(session, msg.fileId).catch((error) => {
+                this.startUpload(session, msg.fileId, msg.fromOffset || 0).catch((error) => {
                     console.error('Upload failed:', error);
                 });
                 break;
@@ -512,11 +800,39 @@ export class TransferEngine {
         }
     }
 
+    resumeActiveReceivesForSession(session) {
+        for (const [fileId, state] of this.receives.entries()) {
+            if (state.peerId === session.peerId && !state.finalized && state.received < state.size) {
+                if (state.retryCount < 2) {
+                    state.retryCount += 1;
+                    this.sendOnControl(session, {
+                        type: MSG.FILE_REQUEST,
+                        fileId,
+                        fromOffset: state.received
+                    });
+                } else {
+                    state.finalized = true;
+                    this.discardReceive(fileId, state);
+                    this.historyUpdate(fileId, {
+                        status: FILE_STATUS.FAILED,
+                        error: 'Recovery failed after 2 attempts. Click Restart Transfer to try again.',
+                        speed: null,
+                        eta: null
+                    });
+                }
+            }
+        }
+    }
+
     markControlReady(session) {
         if (session.channelReady) return;
 
         session.channelReady = true;
         this.clearConnectWatchdog(session);
+
+        if (session.connectionType === 'relay-turn') {
+            this.checkRelayCapForSession(session);
+        }
 
         if (session.pc?.connectionState === 'connected') {
             this.peerStatus(session.peerId, 'CONNECTED');
@@ -528,11 +844,22 @@ export class TransferEngine {
         session.pendingControlMessages = [];
 
         if (session.pendingOfferFiles.length > 0) {
-            const files = session.pendingOfferFiles;
+            const files = session.pendingOfferFiles.filter((file) => {
+                const entry = this.outgoing.get(file.id);
+                return entry && !entry.cancelled;
+            });
             session.pendingOfferFiles = [];
-            this.sendOnControl(session, { type: MSG.FILES_OFFER, files });
+            if (files.length > 0) {
+                this.sendOnControl(session, { type: MSG.FILES_OFFER, files });
+                for (const file of files) {
+                    this.historyUpdate(file.id, { status: FILE_STATUS.OFFERED });
+                }
+            }
         }
+
+        this.resumeActiveReceivesForSession(session);
     }
+
 
     sendOnControl(session, msg) {
         const channel = session.controlChannel;
@@ -556,6 +883,30 @@ export class TransferEngine {
         Array.from(files).forEach((file) => {
             const id = createTransferId();
 
+            const isRelay = session.connectionType === 'relay-turn';
+            const isStrictRelayBlocked = isRelay && this.strictLocalMode;
+            const isRelayCapBlocked = isRelay && file.size > RELAY_MAX_FILE_SIZE_BYTES;
+
+            if (isStrictRelayBlocked || isRelayCapBlocked) {
+                const errorMsg = isStrictRelayBlocked ? STRICT_LOCAL_RELAY_BLOCKED_ERROR : RELAY_SIZE_LIMIT_ERROR;
+                newItems.push({
+                    id,
+                    fileName: file.name,
+                    fileSize: file.size,
+                    fileType: file.type,
+                    direction: 'out',
+                    status: FILE_STATUS.BLOCKED,
+                    error: errorMsg,
+                    progress: 0,
+                    peerId,
+                    peerName,
+                    speed: null,
+                    eta: null
+                });
+                this.notifyError(errorMsg);
+                return;
+            }
+
             this.outgoing.set(id, {
                 peerId,
                 file,
@@ -572,7 +923,7 @@ export class TransferEngine {
                 fileSize: file.size,
                 fileType: file.type,
                 direction: 'out',
-                status: 'idle',
+                status: session.channelReady ? FILE_STATUS.OFFERED : FILE_STATUS.CONNECTING,
                 progress: 0,
                 peerId,
                 peerName,
@@ -590,7 +941,7 @@ export class TransferEngine {
         }
     }
 
-    async startUpload(session, fileId) {
+    async startUpload(session, fileId, fromOffset = 0) {
         const entry = this.outgoing.get(fileId);
         if (!entry || entry.peerId !== session.peerId) {
             // Sender no longer has the file (e.g. refreshed the page).
@@ -598,10 +949,51 @@ export class TransferEngine {
             return;
         }
 
-        if (entry.channel) return; // already uploading
+        const isRelay = session.connectionType === 'relay-turn';
+        const isStrictRelayBlocked = isRelay && this.strictLocalMode;
+        const isRelayCapBlocked = isRelay && entry.file.size > RELAY_MAX_FILE_SIZE_BYTES;
 
+        if (isStrictRelayBlocked || isRelayCapBlocked) {
+            const errorMsg = isStrictRelayBlocked ? STRICT_LOCAL_RELAY_BLOCKED_ERROR : RELAY_SIZE_LIMIT_ERROR;
+            entry.settled = true;
+            this.outgoing.delete(fileId);
+            this.markTransferInactive(fileId);
+            this.historyUpdate(fileId, {
+                status: FILE_STATUS.BLOCKED,
+                error: errorMsg,
+                speed: null,
+                eta: null
+            });
+            this.sendOnControl(session, {
+                type: MSG.FILE_CANCEL,
+                fileId,
+                reason: errorMsg
+            });
+            this.notifyError(errorMsg);
+            return;
+        }
+
+        if (entry.graceTimer) {
+            clearTimeout(entry.graceTimer);
+            entry.graceTimer = null;
+        }
+
+        if (entry.channel && entry.channel.readyState === 'open' && entry.uploading) {
+            try {
+                entry.channel.close();
+            } catch {
+                // ignore
+            }
+        }
+
+        const safeOffset = Math.max(0, Math.min(entry.file.size, Number(fromOffset) || 0));
         entry.cancelled = false;
-        this.historyUpdate(fileId, { status: 'uploading', progress: 0, error: null });
+        entry.settled = false;
+        entry.uploading = true;
+        this.markTransferActive(fileId);
+
+        const initialProgress = entry.file.size > 0 ? Math.floor((safeOffset / entry.file.size) * 100) : 0;
+        this.historyUpdate(fileId, { status: 'uploading', progress: initialProgress, error: null });
 
         const channel = session.pc.createDataChannel(fileChannelLabel(fileId));
         channel.binaryType = 'arraybuffer';
@@ -609,32 +1001,64 @@ export class TransferEngine {
         entry.channel = channel;
 
         channel.onopen = () => {
-            this.runUpload(session, fileId, entry, channel).catch((error) => {
+            this.runUpload(session, fileId, entry, channel, safeOffset).catch((error) => {
                 console.error('Upload loop failed:', error);
             });
         };
 
+        if (channel.readyState === 'open') {
+            channel.onopen();
+        }
+
         channel.onclose = () => {
             if (!entry.settled && !entry.cancelled) {
-                entry.settled = true;
-                this.outgoing.delete(fileId);
-                this.historyUpdate(fileId, { status: 'error', error: 'Connection closed during transfer.', speed: null, eta: null });
+                entry.channel = null;
+                entry.uploading = false;
+                this.historyUpdate(fileId, { speed: null, eta: null });
+                if (entry.graceTimer) {
+                    clearTimeout(entry.graceTimer);
+                }
+                entry.graceTimer = setTimeout(() => {
+                    entry.graceTimer = null;
+                    if (!entry.settled && !entry.cancelled) {
+                        this.markTransferInactive(fileId);
+                        this.historyUpdate(fileId, { status: 'error', error: 'Transfer interrupted.', speed: null, eta: null });
+                    }
+                }, DISCONNECT_GRACE_MS);
+
             }
         };
     }
 
-    async runUpload(session, fileId, entry, channel) {
-        const { file } = entry;
+    async runUpload(session, fileId, entry, channel, fromOffset = 0) {
+        const file = entry.file;
         const totalSize = file.size;
         const chunkSize = negotiateChunkSize(session.pc?.sctp?.maxMessageSize);
         const hasher = await createSHA256();
+
+        // If resuming from offset > 0, hash 0..fromOffset to ensure end-to-end SHA-256 integrity
+        if (fromOffset > 0) {
+            if (entry.digest) {
+                // Already have the full file digest cached
+            } else {
+                let hOffset = 0;
+                const HASH_BLOCK = 1024 * 1024;
+                while (hOffset < fromOffset) {
+                    if (entry.cancelled) throw new TransferAbortedError();
+                    const blk = await file.slice(hOffset, Math.min(fromOffset, hOffset + HASH_BLOCK)).arrayBuffer();
+                    hasher.update(new Uint8Array(blk));
+                    hOffset += blk.byteLength;
+                }
+            }
+        }
+
         const progress = createProgressTracker((update) => {
             if (!entry.cancelled) {
                 this.historyUpdate(fileId, update);
             }
         });
 
-        let offset = 0;
+        let offset = fromOffset;
 
         try {
             while (offset < totalSize) {
@@ -652,42 +1076,69 @@ export class TransferEngine {
                 if (channel.readyState !== 'open') throw new TransferAbortedError('Connection closed during transfer.');
 
                 channel.send(buffer);
-                hasher.update(new Uint8Array(buffer));
+                if (!entry.digest) {
+                    hasher.update(new Uint8Array(buffer));
+                }
                 offset += buffer.byteLength;
                 progress.noteTransferred(buffer.byteLength, offset, totalSize);
             }
 
             await waitForBufferDrain(channel, 0);
+            const fileDigest = entry.digest || hasher.digest('hex');
+            entry.digest = fileDigest;
+
             channel.send(JSON.stringify({
                 type: MSG.FILE_END,
                 id: fileId,
-                digest: hasher.digest('hex'),
+                digest: fileDigest,
                 size: totalSize
             }));
             await waitForBufferDrain(channel, 0);
 
-            entry.settled = true;
-            this.outgoing.delete(fileId);
             progress.finish();
-            this.historyUpdate(fileId, { status: 'completed', progress: 100, speed: null, eta: null, verified: true });
-            channel.close();
-        } catch (error) {
             entry.settled = true;
+            entry.uploading = false;
             this.outgoing.delete(fileId);
+            this.markTransferInactive(fileId);
+            playTransferCompleteChime();
+            this.emit({ type: 'notify', title: 'Transfer Complete', body: `Sent ${file.name}` });
 
+            this.historyUpdate(fileId, {
+                status: 'completed',
+                progress: 100,
+                error: null,
+                speed: null,
+                eta: null,
+                digest: fileDigest
+            });
+
+            // Brief delay before closing the channel so the receiver can drain
+            // the FILE_END message reliably.
+            setTimeout(() => {
+                try {
+                    channel.close();
+                } catch {
+                    // already closed
+                }
+            }, 500);
+        } catch (error) {
+            entry.uploading = false;
             try {
                 channel.close();
             } catch {
-                // already closed
+                // ignore
             }
 
-            if (entry.cancelled || error instanceof TransferAbortedError) {
-                this.historyUpdate(fileId, { status: 'cancelled', speed: null, eta: null });
-            } else {
-                this.historyUpdate(fileId, { status: 'error', error: error.message || 'Upload failed.', speed: null, eta: null });
+            if (error instanceof TransferAbortedError) {
+                // Cancelled locally or cleanly aborted; status already updated.
+                this.markTransferInactive(fileId);
+                return;
             }
+
+            // On unexpected error, if not cancelled, let grace timer manage recovery or teardown
         }
     }
+
 
     // ------------------------------------------------------------------
     // Incoming files
@@ -695,13 +1146,10 @@ export class TransferEngine {
 
     handleFilesOffer(session, files) {
         const peerName = this.getPeerName(session.peerId);
-        const streamCapable = canStreamSave();
+        const streamCapable = canStreamSave() || canOpfsSave();
         const newItems = [];
 
         files.forEach((meta) => {
-            if (!meta || typeof meta.id !== 'string') return;
-            if (this.offered.has(meta.id) || this.receives.has(meta.id)) return;
-
             this.offered.set(meta.id, {
                 peerId: session.peerId,
                 name: meta.name,
@@ -709,7 +1157,20 @@ export class TransferEngine {
                 type: meta.type
             });
 
+            const isRelay = session.connectionType === 'relay-turn';
+            const isStrictRelayBlocked = isRelay && this.strictLocalMode;
+            const isRelayCapBlocked = isRelay && meta.size > RELAY_MAX_FILE_SIZE_BYTES;
             const tooLargeForBrowser = !streamCapable && meta.size > MEMORY_MODE_LIMIT_BYTES;
+
+            let status = 'idle';
+            let error;
+            if (isStrictRelayBlocked || isRelayCapBlocked) {
+                status = FILE_STATUS.BLOCKED;
+                error = isStrictRelayBlocked ? STRICT_LOCAL_RELAY_BLOCKED_ERROR : RELAY_SIZE_LIMIT_ERROR;
+            } else if (tooLargeForBrowser) {
+                status = 'error';
+                error = 'File is too large for this browser (2 GB limit). Use Chrome or Edge on desktop for large files.';
+            }
 
             newItems.push({
                 id: meta.id,
@@ -717,10 +1178,8 @@ export class TransferEngine {
                 fileSize: meta.size,
                 fileType: meta.type,
                 direction: 'in',
-                status: tooLargeForBrowser ? 'error' : 'idle',
-                error: tooLargeForBrowser
-                    ? 'File is too large for this browser (2 GB limit). Use Chrome or Edge on desktop for large files.'
-                    : undefined,
+                status,
+                error,
                 progress: 0,
                 peerId: session.peerId,
                 peerName,
@@ -746,8 +1205,24 @@ export class TransferEngine {
         const session = this.sessions.get(meta.peerId);
         if (!session || !session.channelReady) {
             this.historyUpdate(fileId, { status: 'error', error: 'Peer is no longer connected.' });
-            this.offered.delete(fileId);
             return;
+        }
+
+        const isRelay = session.connectionType === 'relay-turn';
+        const isStrictRelayBlocked = isRelay && this.strictLocalMode;
+        const isRelayCapBlocked = isRelay && meta.size > RELAY_MAX_FILE_SIZE_BYTES;
+
+        if (isStrictRelayBlocked || isRelayCapBlocked) {
+            const errorMsg = isStrictRelayBlocked ? STRICT_LOCAL_RELAY_BLOCKED_ERROR : RELAY_SIZE_LIMIT_ERROR;
+            this.historyUpdate(fileId, { status: FILE_STATUS.BLOCKED, error: errorMsg });
+            this.notifyError(errorMsg);
+            return;
+        }
+
+        // Clean up any existing receive state if restarting
+        const existingReceive = this.receives.get(fileId);
+        if (existingReceive) {
+            this.discardReceive(fileId, existingReceive);
         }
 
         const state = {
@@ -759,12 +1234,15 @@ export class TransferEngine {
             received: 0,
             mode: 'memory',
             stream: null,          // FileSystemWritableFileStream when streaming
+            opfsFileHandle: null,
             writeChain: Promise.resolve(),
             buffers: [],
             hasher: null,
-            finalized: false
+            finalized: false,
+            retryCount: 0
         };
 
+        let pickerFailed = false;
         if (canStreamSave() && meta.size > STREAM_SAVE_THRESHOLD_BYTES) {
             try {
                 const handle = await window.showSaveFilePicker({ suggestedName: meta.name });
@@ -776,20 +1254,45 @@ export class TransferEngine {
                     return;
                 }
                 console.error('Save picker failed:', pickerError);
-                // Fall back to memory mode.
+                pickerFailed = true;
+                // Fall back to OPFS or memory mode.
+            }
+
+
+        }
+
+        // When window.showSaveFilePicker is unavailable (e.g. Android Chrome, iOS Safari, desktop Firefox),
+        // or if showSaveFilePicker threw an error, detect and use OPFS
+        if (state.mode === 'memory' && (!canStreamSave() || pickerFailed) && canOpfsSave()) {
+            try {
+                const root = await navigator.storage.getDirectory();
+                const tmpName = `transfer-${fileId}.tmp`;
+                const handle = await root.getFileHandle(tmpName, { create: true });
+                state.mode = 'opfs';
+                state.opfsFileHandle = handle;
+                state.stream = await handle.createWritable({ keepExistingData: false });
+            } catch (opfsErr) {
+                console.warn('[engine] OPFS init failed, falling back to memory mode:', opfsErr);
+                state.mode = 'memory';
+                state.opfsFileHandle = null;
+                state.stream = null;
             }
         }
 
-        if (state.mode === 'memory' && meta.size > MEMORY_MODE_LIMIT_BYTES) {
-            this.historyUpdate(fileId, { status: 'error', error: 'File exceeds the 2 GB in-memory limit of this browser.' });
-            this.offered.delete(fileId);
-            return;
+        if (state.mode === 'memory') {
+            if (meta.size > MEMORY_MODE_LIMIT_BYTES) {
+                this.historyUpdate(fileId, { status: 'error', error: 'File exceeds the 2 GB in-memory limit of this browser.' });
+                return;
+            }
+            if (meta.size > STREAM_SAVE_THRESHOLD_BYTES) {
+                this.notifyError('Browser memory limit warning: Storing files over 500 MB in RAM may crash this tab. Direct disk streaming is not supported on this browser.');
+            }
         }
 
         state.hasher = await createSHA256();
         this.receives.set(fileId, state);
-        this.historyUpdate(fileId, { status: 'waiting', error: null });
-        this.sendOnControl(session, { type: MSG.FILE_REQUEST, fileId });
+        this.historyUpdate(fileId, { status: 'waiting', progress: 0, speed: null, eta: null, error: null });
+        this.sendOnControl(session, { type: MSG.FILE_REQUEST, fileId, fromOffset: 0 });
     }
 
     attachFileReceiveChannel(session, channel, fileId) {
@@ -807,7 +1310,14 @@ export class TransferEngine {
             return;
         }
 
-        this.historyUpdate(fileId, { status: 'downloading', progress: 0, error: null });
+        if (state.graceTimer) {
+            clearTimeout(state.graceTimer);
+            state.graceTimer = null;
+        }
+
+        this.markTransferActive(fileId);
+        const currentProgress = state.size > 0 ? Math.floor((state.received / state.size) * 100) : 0;
+        this.historyUpdate(fileId, { status: 'downloading', progress: currentProgress, error: null });
 
         const progress = createProgressTracker((update) => {
             if (!state.finalized) {
@@ -816,7 +1326,7 @@ export class TransferEngine {
         });
 
         channel.onmessage = async (event) => {
-            if (state.finalized) return;
+            if (state.finalized || channel.readyState === 'closed') return;
 
             if (typeof event.data === 'string') {
                 let msg;
@@ -837,12 +1347,12 @@ export class TransferEngine {
             state.received += chunk.byteLength;
             state.hasher?.update(new Uint8Array(chunk));
 
-            if (state.mode === 'fs-access' && state.stream) {
+            if ((state.mode === 'fs-access' || state.mode === 'opfs') && state.stream) {
                 state.writeChain = state.writeChain.then(() => state.stream.write(chunk)).catch((error) => {
                     if (!state.finalized) {
                         state.finalized = true;
                         this.discardReceive(fileId, state);
-                        this.historyUpdate(fileId, { status: 'error', error: `Could not write to disk: ${error.message}` });
+                        this.historyUpdate(fileId, { status: FILE_STATUS.FAILED, error: `Could not write to disk: ${error.message}` });
                     }
                 });
             } else {
@@ -853,15 +1363,30 @@ export class TransferEngine {
         };
 
         channel.onclose = () => {
-            if (!state.finalized && state.received < state.size) {
-                state.finalized = true;
-                this.discardReceive(fileId, state);
-                this.historyUpdate(fileId, { status: 'error', error: 'Transfer interrupted.' });
+            if (!state.finalized) {
+                if (state.graceTimer) {
+                    clearTimeout(state.graceTimer);
+                }
+                this.historyUpdate(fileId, { speed: null, eta: null });
+
+                state.graceTimer = setTimeout(() => {
+                    state.graceTimer = null;
+                    if (!state.finalized) {
+                        state.finalized = true;
+                        this.discardReceive(fileId, state);
+                        this.historyUpdate(fileId, { status: 'error', error: 'Transfer interrupted.', speed: null, eta: null });
+                    }
+                }, DISCONNECT_GRACE_MS);
             }
         };
+
     }
 
     async finalizeReceive(fileId, state, endMsg) {
+        if (state.graceTimer) {
+            clearTimeout(state.graceTimer);
+            state.graceTimer = null;
+        }
         if (state.finalized) return;
         state.finalized = true;
 
@@ -878,6 +1403,7 @@ export class TransferEngine {
             try {
                 await state.writeChain;
                 await state.stream.close();
+                state.stream = null;
             } catch (error) {
                 this.discardReceive(fileId, state);
                 this.historyUpdate(fileId, { status: 'error', error: `Could not write to disk: ${error.message}` });
@@ -885,86 +1411,188 @@ export class TransferEngine {
             }
 
             this.receives.delete(fileId);
-            this.offered.delete(fileId);
-            this.historyUpdate(fileId, { status: 'completed', progress: 100, saved: true, verified, speed: null, eta: null });
-            return;
-        }
-
-        try {
-            const blob = new Blob(state.buffers, { type: state.type });
-            const url = URL.createObjectURL(blob);
-            this.downloadUrls.set(fileId, url);
-
-            this.receives.delete(fileId);
-            this.offered.delete(fileId);
-            state.buffers = [];
+            this.markTransferInactive(fileId);
+            playTransferCompleteChime();
+            this.emit({ type: 'notify', title: 'Transfer Complete', body: `Received ${state.name}` });
 
             this.historyUpdate(fileId, {
                 status: 'completed',
                 progress: 100,
-                downloadUrl: url,
                 verified,
+                saved: true,
                 speed: null,
                 eta: null
             });
-        } catch (error) {
-            this.discardReceive(fileId, state);
-            this.historyUpdate(fileId, { status: 'error', error: `Could not assemble file: ${error.message}` });
+            return;
         }
+
+        if (state.mode === 'opfs' && state.opfsFileHandle) {
+            try {
+                await state.writeChain;
+                await state.stream.close();
+                state.stream = null;
+            } catch (error) {
+                this.discardReceive(fileId, state);
+                this.historyUpdate(fileId, { status: 'error', error: `Could not write to disk: ${error.message}` });
+                return;
+            }
+
+            this.markTransferInactive(fileId);
+            playTransferCompleteChime();
+            this.emit({ type: 'notify', title: 'Transfer Complete', body: `Received ${state.name}` });
+
+            try {
+                const rawFile = await state.opfsFileHandle.getFile();
+                const file = typeof File !== 'undefined'
+                    ? new File([rawFile], state.name, { type: state.type || rawFile.type })
+                    : rawFile;
+
+                const isMobile = typeof navigator !== 'undefined' && /Android|iPhone|iPad|iPod/i.test(navigator.userAgent || '');
+                const canShare = typeof navigator !== 'undefined' && typeof navigator.share === 'function' && typeof navigator.canShare === 'function';
+
+                if (isMobile && canShare && navigator.canShare({ files: [file] })) {
+                    try {
+                        await navigator.share({
+                            files: [file],
+                            title: state.name
+                        });
+                        await this.cleanupOpfsFile(fileId);
+                        this.receives.delete(fileId);
+                        this.historyUpdate(fileId, {
+                            status: 'completed',
+                            progress: 100,
+                            verified,
+                            saved: true,
+                            speed: null,
+                            eta: null
+                        });
+                        return;
+                    } catch (shareErr) {
+                        console.warn('[engine] navigator.share failed or dismissed:', shareErr);
+                    }
+                }
+
+                // Fallback or desktop: Blob URL and trigger download
+                const url = URL.createObjectURL(file);
+                this.downloadUrls.set(fileId, url);
+                this.saveReceivedFile(fileId, state.name);
+
+                // Clean up temp OPFS file after a safe delay
+                setTimeout(() => {
+                    this.cleanupOpfsFile(fileId).catch(() => {});
+                }, 60000);
+
+                this.receives.delete(fileId);
+                this.historyUpdate(fileId, {
+                    status: 'completed',
+                    progress: 100,
+                    verified,
+                    downloadUrl: url,
+                    saved: true,
+                    speed: null,
+                    eta: null
+                });
+                return;
+            } catch (err) {
+                this.discardReceive(fileId, state);
+                this.historyUpdate(fileId, { status: 'error', error: `Failed to finalize OPFS file: ${err.message}` });
+                return;
+            }
+        }
+
+        // Memory mode: assemble blob and create download URL
+        const blob = new Blob(state.buffers, { type: state.type });
+        const url = URL.createObjectURL(blob);
+        this.downloadUrls.set(fileId, url);
+
+        this.markTransferInactive(fileId);
+        playTransferCompleteChime();
+        this.emit({ type: 'notify', title: 'Transfer Complete', body: `Received ${state.name}` });
+
+        this.historyUpdate(fileId, {
+            status: 'completed',
+            progress: 100,
+            verified,
+            downloadUrl: url,
+            saved: false,
+            speed: null,
+            eta: null
+        });
+
+        // Free the chunk buffers; the browser blob holds the data now.
+        state.buffers = [];
+        state.hasher = null;
     }
 
     discardReceive(fileId, state) {
-        if (state.mode === 'fs-access' && state.stream) {
+        if (state.graceTimer) {
+            clearTimeout(state.graceTimer);
+            state.graceTimer = null;
+        }
+        if ((state.mode === 'fs-access' || state.mode === 'opfs') && state.stream) {
             state.stream.abort?.().catch(() => {});
+            state.stream = null;
+        }
+        if (state.mode === 'opfs') {
+            this.cleanupOpfsFile(fileId).catch(() => {});
         }
         state.buffers = [];
+        state.hasher = null;
+        this.markTransferInactive(fileId);
         this.receives.delete(fileId);
-        this.offered.delete(fileId);
-        const url = this.downloadUrls.get(fileId);
-        if (url) {
-            URL.revokeObjectURL(url);
-            this.downloadUrls.delete(fileId);
+    }
+
+    async cleanupOpfsFile(fileId) {
+        try {
+            if (typeof navigator !== 'undefined' && navigator.storage?.getDirectory) {
+                const root = await navigator.storage.getDirectory();
+                await root.removeEntry(`transfer-${fileId}.tmp`);
+            }
+        } catch {
+            // ignore
         }
     }
+
 
     saveReceivedFile(fileId, fileName) {
         const url = this.downloadUrls.get(fileId);
-        if (!url) return;
+        if (!url) return false;
 
-        const link = document.createElement('a');
-        link.href = url;
-        link.download = fileName || 'file';
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-
-        this.historyUpdate(fileId, { saved: true, downloadUrl: null });
-        this.downloadUrls.delete(fileId);
-        // Delay revoking to give browser download manager ample time to stream large files from RAM to disk
-        window.setTimeout(() => URL.revokeObjectURL(url), 60000);
-    }
-
-    // ------------------------------------------------------------------
-    // Cancellation
-    // ------------------------------------------------------------------
-
-    cancelTransfer(fileId) {
-        const url = this.downloadUrls.get(fileId);
-        if (url) {
-            URL.revokeObjectURL(url);
-            this.downloadUrls.delete(fileId);
+        if (typeof document !== 'undefined' && document.body && typeof document.createElement === 'function') {
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = fileName || 'download';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
         }
 
+        this.historyUpdate(fileId, { saved: true });
+        return true;
+    }
+
+
+    cancelTransfer(fileId) {
         const outgoingEntry = this.outgoing.get(fileId);
         const receiveState = this.receives.get(fileId);
         const offeredMeta = this.offered.get(fileId);
+
         const session = this.sessions.get(
             outgoingEntry?.peerId || receiveState?.peerId || offeredMeta?.peerId
         );
 
+        if (session?.pendingOfferFiles) {
+            session.pendingOfferFiles = session.pendingOfferFiles.filter((f) => f.id !== fileId);
+        }
+
         if (outgoingEntry) {
+            if (outgoingEntry.graceTimer) {
+                clearTimeout(outgoingEntry.graceTimer);
+                outgoingEntry.graceTimer = null;
+            }
             outgoingEntry.cancelled = true;
             this.outgoing.delete(fileId);
+            this.markTransferInactive(fileId);
             try {
                 outgoingEntry.channel?.close();
             } catch {
@@ -997,8 +1625,13 @@ export class TransferEngine {
         const outgoingEntry = this.outgoing.get(fileId);
 
         if (outgoingEntry) {
+            if (outgoingEntry.graceTimer) {
+                clearTimeout(outgoingEntry.graceTimer);
+                outgoingEntry.graceTimer = null;
+            }
             outgoingEntry.cancelled = true;
             this.outgoing.delete(fileId);
+            this.markTransferInactive(fileId);
             try {
                 outgoingEntry.channel?.close();
             } catch {
@@ -1034,7 +1667,7 @@ export class TransferEngine {
         const message = {
             type: MSG.CHAT_MESSAGE,
             id: createTransferId(),
-            text: text.slice(0, 4000),
+            text,
             ts: Date.now()
         };
 
@@ -1049,15 +1682,30 @@ export class TransferEngine {
         if (this.destroyed) return;
         this.destroyed = true;
 
-        for (const session of Array.from(this.sessions.values())) {
+        stopAudioBeacon();
+        this.activeTransferIds.forEach(() => {
+            wakeLockManager.release().catch(() => {});
+        });
+        this.activeTransferIds.clear();
+
+        for (const session of this.sessions.values()) {
             this.teardownSession(session, 'Session ended.');
+        }
+
+        for (const [fileId, receive] of Array.from(this.receives.entries())) {
+            this.discardReceive(fileId, receive);
         }
 
         this.downloadUrls.forEach((url) => URL.revokeObjectURL(url));
         this.downloadUrls.clear();
 
-        this.socket.off('offer');
-        this.socket.off('answer');
-        this.socket.off('ice-candidate');
+        this.socket.off?.('offer');
+        this.socket.off?.('answer');
+        this.socket.off?.('ice-candidate');
+
+        this.outgoing.clear();
+        this.offered.clear();
+        this.receives.clear();
+        this.sessions.clear();
     }
 }

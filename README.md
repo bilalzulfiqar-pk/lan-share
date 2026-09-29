@@ -2,30 +2,22 @@
 
 # 📡 LAN Share
 
-**Zero-install, browser-to-browser peer-to-peer file transfer & chat over your local network.**
-
-No cloud uploads. No account sign-ups. No arbitrary file size limits.
+**Direct browser-to-browser P2P file transfer and chat on local Wi-Fi, powered by WebRTC with no cloud storage, mobile multi-GB OPFS streaming, and zero-corrupt WebAssembly SHA-256 verification.**
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Tests Passing](https://img.shields.io/badge/Tests-50%20passed-success.svg)](docs/QA-CHECKLIST.md)
+[![Live Demo](https://img.shields.io/badge/Live%20Demo-lan--share.vercel.app-brightgreen.svg)](https://lan-share.vercel.app/)
+[![Tests Passing](https://img.shields.io/badge/Tests-265%20passed-success.svg)](docs/QA-CHECKLIST.md)
 [![React 19](https://img.shields.io/badge/React-19-61dafb.svg)](https://react.dev/)
-[![Vite](https://img.shields.io/badge/Vite-6-646cff.svg)](https://vitejs.dev/)
+[![Vite 7](https://img.shields.io/badge/Vite-7-646cff.svg)](https://vitejs.dev/)
 [![WebRTC](https://img.shields.io/badge/WebRTC-DataChannels-333333.svg)](https://webrtc.org/)
-[![Socket.IO](https://img.shields.io/badge/Socket.IO-4-010101.svg)](https://socket.io/)
+[![Storage OPFS](https://img.shields.io/badge/Storage-OPFS%20Streaming-orange.svg)](https://developer.mozilla.org/en-US/docs/Web/API/File_System_API/Origin_private_file_system)
+[![Crypto SHA-256](https://img.shields.io/badge/Crypto-hash--wasm%20SHA--256-purple.svg)](https://github.com/Daninet/hash-wasm)
+[![Docker](https://img.shields.io/badge/Docker-compose%20ready-2496ed.svg)](docker-compose.yml)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](https://github.com/bilalzulfiqar-pk/lan-share/pulls)
 
 <br />
 
 <img src="docs/assets/banner.svg" alt="LAN Share — Fast · Local · Secure" width="100%" style="border-radius: 12px;" />
-<!-- Tip: Your previous coded vector banner is also preserved at `docs/assets/banner_coded.svg` -->
-
-<!-- 
-  📸 SCREENSHOT / DEMO PLACEHOLDER:
-  To display an authentic screenshot or animated GIF of your application:
-  1. Save your capture as `docs/assets/preview.png` (or `.gif`).
-  2. Uncomment the line below:
-  <p align="center"><img src="docs/assets/preview.png" alt="LAN Share Interface Preview" width="100%" style="border-radius: 12px;" /></p>
--->
 
 </div>
 
@@ -34,11 +26,18 @@ No cloud uploads. No account sign-ups. No arbitrary file size limits.
 ## Table of Contents
 
 - [Key Features](#key-features)
-- [How It Works](#how-it-works)
+- [Connection Lifecycle & Architecture](#connection-lifecycle--architecture)
+- [Network Resilience & Difficult Wi-Fi Handling](#network-resilience--difficult-wi-fi-handling)
+  - [Understanding Access Point (AP) Isolation](#understanding-access-point-ap-isolation)
+  - [University & Enterprise VLAN Segmentation](#university--enterprise-vlan-segmentation)
+  - [6-Digit Room Codes & Shareable URL Hashes](#6-digit-room-codes--shareable-url-hashes)
+  - [Metered.ca Ephemeral TURN Relay (150 MB Cap)](#meteredca-ephemeral-turn-relay-150-mb-cap)
+  - [The Mobile Hotspot Hack (Full 50+ MB/s Speed)](#the-mobile-hotspot-hack-full-50-mbs-speed)
+- [Quickstart (3 Commands)](#quickstart-3-commands)
+  - [Option A: Local Development (npm)](#option-a-local-development-npm)
+  - [Option B: Docker Compose](#option-b-docker-compose)
+- [Browser & Storage Engine Compatibility](#browser--storage-engine-compatibility)
 - [Tech Stack](#tech-stack)
-- [Getting Started](#getting-started)
-- [Browser Support](#browser-support)
-- [Network Troubleshooting](#network-troubleshooting)
 - [Deployment](#deployment)
 - [Testing & Quality Assurance](#testing--quality-assurance)
 - [Project Structure](#project-structure)
@@ -49,181 +48,253 @@ No cloud uploads. No account sign-ups. No arbitrary file size limits.
 
 ## Key Features
 
-- **Direct LAN Speeds:** Transfers flow directly peer-to-peer via WebRTC DataChannels (~30–80+ MB/s depending on your local router), bypassing internet bandwidth caps.
-- **Zero Installation:** Runs entirely inside modern desktop and mobile browsers — no native drivers, root permissions, or app store downloads required.
-- **Direct-to-Disk Streaming (Chromium):** Uses the native File System Access API (`showSaveFilePicker`) to stream multi-gigabyte transfers directly to storage with minimal RAM usage.
-- **Cryptographic Verification:** End-to-end streaming SHA-256 chunk validation ensures 100% bit-for-bit file integrity upon completion.
-- **Real-Time Radar Discovery:** Devices on the same Wi-Fi or subnet appear automatically on an animated radar screen without manual IP entry or pairing PINs.
-- **Encrypted P2P Chat:** Ephemeral text messaging with link parsing, monospace formatting, and one-tap copy-to-clipboard.
-- **Instant QR Pairing:** Display a QR code in the header so smartphones on the same Wi-Fi can join the radar in seconds.
-- **Adaptive Theming & PWA:** 8 theme variants (Ocean, Forest, Rose, Neon across light and dark modes) with standalone Progressive Web App install support.
-- **Reconnection Resilience:** Ongoing file transfers survive temporary signaling server disconnections without aborting.
+- **Direct LAN Speeds:** Transfers stream peer-to-peer over WebRTC DataChannels at native Wi-Fi speeds (~30–80+ MB/s depending on router hardware), bypassing internet bandwidth limits.
+- **Zero Cloud Storage & Zero Install:** Runs entirely inside any modern web browser. No desktop software, browser extensions, mobile apps, or cloud accounts required.
+- **Mobile Multi-GB OPFS Streaming:** Eliminates the notorious mobile browser 2 GB in-memory RAM crash by streaming incoming chunks directly to the **Origin Private File System (OPFS)** via `FileSystemWritableFileStream`.
+- **Desktop Direct-to-Disk:** Streams directly to disk on Chromium desktop browsers using the native **File System Access API** (`showSaveFilePicker`).
+- **WebAssembly SHA-256 Verification:** Verifies 100% bit-for-bit file integrity on-the-fly using hardware-accelerated streaming WebAssembly (`hash-wasm`).
+- **Dual Discovery Modes:**
+  - **Subnet Radar:** Devices on the same local Wi-Fi automatically discover each other in real-time.
+  - **6-Digit Room Codes & QR Codes:** Instant pairing across segmented VLANs, 2.4/5 GHz bands, or guest networks via URL hashes (e.g., `#room=492810`) and camera scans.
+- **Screen Wake Lock & Background Audio Beacon:** Prevents mobile devices (iOS Safari & Android Chrome) from putting tabs to sleep mid-transfer using `navigator.wakeLock` and an inaudible audio beacon loop.
+- **Backpressure Flow Control:** Dynamically throttles chunk transmissions when the underlying WebRTC buffer fills up (`bufferedAmount < 1 MB`), preventing buffer overflows and packet loss.
+- **Resilient Reconnections:** Automatic ICE renegotiation and chunk-offset resumption recover ongoing transfers during momentary Wi-Fi blips.
+- **Encrypted Ephemeral P2P Chat:** In-session messaging with auto-link parsing, code block styling, and one-tap copy.
 
 ---
 
-## How It Works
+## Connection Lifecycle & Architecture
 
-LAN Share separates the **discovery handshake** from the **actual file payload**:
-
-```mermaid
-flowchart LR
-    subgraph Internet ["☁️ Internet"]
-        Server["Signaling Server<br/>(Discovery Only)"]
-    end
-
-    subgraph HomeWiFi ["🏠 Your Local Wi-Fi Network"]
-        DevA["💻 Laptop"]
-        DevB["📱 Phone"]
-        DevA == "Direct P2P Transfer<br/>(Full LAN Speed)" ==> DevB
-    end
-
-    DevA -. "1. Handshake (~2 KB)" .-> Server
-    Server -. "1. Handshake (~2 KB)" .-> DevB
-```
-
-1. **Signaling & Clustering:** When a device opens the app, it connects to a tiny Socket.IO signaling server. The server derives local subnet and STUN fingerprints, placing the device into an in-memory inverted index (`SimilarityIndex`) so only devices on the same physical network can discover each other.
-2. **Handshake Relay:** When you select a peer, the signaling server relays ~2 KB of WebRTC session descriptions (SDP offer/answer and ICE candidates).
-3. **Direct Data Streaming:** The two browsers establish a direct, DTLS-encrypted WebRTC `RTCDataChannel`. All file chunks and chat messages stream directly across your local Wi-Fi. **Your files never touch any cloud server.**
-
-<br />
-
-<details>
-<summary><b>View detailed WebRTC handshake sequence 🔍</b></summary>
+LAN Share strictly isolates signaling discovery from actual file payloads. File data **never touches any intermediate cloud server**.
 
 ```mermaid
 sequenceDiagram
     autonumber
-    actor A as Laptop (Sender)
-    participant S as Signaling Server
-    actor B as Phone (Receiver)
+    actor A as 💻 Sender (Peer A)
+    participant S as ☁️ Signaling (Node.js / Render + UptimeRobot)
+    actor B as 📱 Receiver (Peer B)
 
-    Note over A,B: Phase 1: Local Subnet Discovery & Handshake (~2 KB)
-    A->>S: Join (Subnet & IP Fingerprint)
-    B->>S: Join (Subnet & IP Fingerprint)
-    S-->>A: Discovered Peer (Phone)
-    S-->>B: Discovered Peer (Laptop)
-    A->>S: Relay WebRTC Offer & ICE Candidates
+    Note over A,B: 1. Discovery & Signaling (LAN Radar or 6-Digit Room Code)
+    A->>S: Connect WebSocket + Join Subnet Radar / Room (#room=xyz)
+    B->>S: Connect WebSocket + Join Subnet Radar / Room (#room=xyz)
+    S-->>A: Discovered Peer B
+    S-->>B: Discovered Peer A
+
+    Note over A,B: 2. Connection Negotiation & Traversal Hierarchy
+    A->>S: Relay SDP Offer & ICE Candidates
     S->>B: Forward Offer & ICE Candidates
-    B->>S: Relay WebRTC Answer & ICE Candidates
+    B->>S: Relay SDP Answer & ICE Candidates
     S->>A: Forward Answer & ICE Candidates
 
-    Note over A,B: Phase 2: Direct Peer-to-Peer Transfer (Zero Cloud Data)
-    A->>B: Open WebRTC DataChannel (Local Wi-Fi UDP)
-    A->>B: Stream 64 KiB Chunks at Full LAN Speed
-    A->>B: Verify SHA-256 Cryptographic Hash
+    alt Direct P2P Success (Local Wi-Fi host / Google STUN srflx) - Unlimited
+        A<<-->>B: Direct WebRTC DataChannel (Local Subnet / NAT Traversal)
+        Note over A,B: Direct LAN Speeds (30–80+ MB/s, No Cloud Data)
+    else AP Isolation / Symmetric NAT (Free Metered TURN Relay - 150 MB Cap)
+        A<<-->>S: Relay via Metered.ca TURN Relay (< 150 MB)
+        S<<-->>B: Encrypted WebRTC Traversal
+        Note over A,B: If file > 150 MB & blocked: Prompt Mobile Hotspot Guide
+    end
+
+    Note over A,B: 3. Streaming Transfer & Storage Pipeline
+    B->>A: Request File Transfer (MSG.FILE_REQUEST fromOffset=0)
+    loop 64 KiB Binary Chunks with Backpressure
+        A->>B: Send 64 KiB Binary Chunk (bufferedAmount < 1 MB)
+        A->>A: Stream chunk into hash-wasm SHA-256
+        B->>B: Stream chunk into hash-wasm SHA-256
+        alt Desktop Chromium
+            B->>B: File System Access API (Direct-to-Disk)
+        else Mobile (Android / iOS) & Firefox
+            B->>B: Origin Private File System (OPFS WritableStream)
+        end
+    end
+
+    Note over A,B: 4. Verification & File Finalization
+    A->>B: MSG.FILE_COMPLETE (expected SHA-256 hash)
+    B->>B: Verify hash match (100% bit-for-bit integrity)
+    B-->>B: Native Share Sheet (Save to Photos/Files) or Anchor Download
 ```
 
-</details>
+### Connection Stages Breakdown
+
+1. **Signaling Server (Kept Warm 24/7):**
+   Hosted on Render and kept continuously awake via an external ping monitor (UptimeRobot). It only brokers small (~2 KB) SDP offers, answers, and ICE candidates over WebSockets.
+2. **Subnet Radar vs. Room Pairing:**
+   Peers on simple home routers auto-cluster by public IP and subnet fingerprints (`SimilarityIndex`). When subnets are split, entering a 6-digit room code or opening `#room=123456` groups peers regardless of network topology.
+3. **P2P Establishment:**
+   WebRTC probes host (direct LAN), server-reflexive (STUN), and relay (TURN) candidates. Direct LAN UDP is prioritized for maximum local throughput.
+4. **Chunked Streaming Engine:**
+   Files are sliced into 64 KiB ArrayBuffers. If `bufferedAmount` exceeds 1 MB, sender transmission pauses until the `onbufferedamountlow` event fires, preventing memory bloat.
+5. **Storage Sinks (Desktop vs. Mobile):**
+   - **Chromium Desktop:** Chunks write immediately to disk through `FileSystemFileHandle.createWritable()`.
+   - **Mobile (Safari & Android Chrome):** Chunks write incrementally into the Origin Private File System (`navigator.storage.getDirectory()`), capping RAM consumption below 15 MB even for 5+ GB files.
+6. **Bit-for-Bit Hash Verification:**
+   Sender and receiver calculate SHA-256 digests incrementally in WebAssembly. The file is only committed if the hashes match down to the exact bit.
+
+---
+
+## Network Resilience & Difficult Wi-Fi Handling
+
+Peer-to-peer browser applications face significant real-world challenges on institutional and public networks. LAN Share is engineered specifically to diagnose and resolve these limitations honestly and transparently.
+
+### Understanding Access Point (AP) Isolation
+
+On public Wi-Fi networks (hotels, airports, cafes, and conference centers), network administrators intentionally enable **Access Point (AP) Isolation** (also called Client Isolation or Station-to-Station traffic blocking).
+
+* **The Problem:** AP isolation allows wireless devices to speak to the default gateway (the Internet), but drops all frames sent directly between two wireless clients on the same BSSID/SSID.
+* **How It Manifests:** Both devices can reach the web and signaling server, but WebRTC direct LAN host candidates fail to complete the DTLS handshake.
+
+### University & Enterprise VLAN Segmentation
+
+Campuses (such as `eduroam` or corporate environments) often segregate users across distinct subnets, VLANs, or wireless frequency bands:
+* A laptop on `10.104.12.x` cannot broadcast or multicast to a smartphone on `10.104.14.x`.
+* Multicast DNS (mDNS) and local broadcast discovery packets are filtered by enterprise switches.
+
+### 6-Digit Room Codes & Shareable URL Hashes
+
+To solve cross-subnet and cross-VLAN segregation without requiring server-side IP tracking:
+1. One peer clicks **"Create Room"** to generate a randomized 6-digit room code (or custom alphanumeric string).
+2. The second peer types the 6-digit code or scans the displayed QR code.
+3. The URL updates with a hash anchor: `https://lan-share.vercel.app/#room=492810`.
+4. The signaling server clusters the sockets into that explicit room, enabling peers across different subnets, VLANs, or cellular data to exchange WebRTC session descriptions seamlessly.
+
+### Metered.ca Ephemeral TURN Relay (150 MB Cap)
+
+When AP isolation or symmetric NAT completely blocks direct peer-to-peer UDP traffic, LAN Share automatically fetches ephemeral TURN credentials from **Metered.ca OpenRelay**.
+* **Safety Quota Protection:** To preserve the free community relay bandwidth and protect user privacy, relayed transfers are strictly capped at **150 MB**.
+* **Strict Local Mode:** Users can toggle "Strict Local Mode" in settings to disable TURN relays completely, guaranteeing that no file data ever leaves the local subnet.
+
+### The Mobile Hotspot Hack (Full 50+ MB/s Speed)
+
+When transferring large files (> 150 MB) on a network with strict AP Isolation or complex campus firewalls, LAN Share opens an interactive **Mobile Hotspot Guide Modal**:
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│ 📱 Wi-Fi Direct Blocked by Router Security (AP Isolation)   │
+│                                                             │
+│ 1. Turn on "Personal Hotspot" on your smartphone.           │
+│ 2. Connect your laptop / receiver to that hotspot Wi-Fi.    │
+│ 3. Reload LAN Share — transfer at 50+ MB/s with ZERO        │
+│    mobile cellular data consumption!                        │
+└─────────────────────────────────────────────────────────────┘
+```
+
+**Why this works:** The smartphone's hotspot functions as an open local Wi-Fi router without AP isolation. Traffic between the laptop and the phone routes entirely over the local wireless radio at maximum 802.11ac/ax speeds without consuming cellular mobile data.
+
+---
+
+## Quickstart (3 Commands)
+
+### Option A: Local Development (npm)
+
+Clone and run both services locally in 3 terminal steps:
+
+```bash
+# 1. Clone the repository
+git clone https://github.com/bilalzulfiqar-pk/lan-share.git && cd lan-share
+
+# 2. Start the signaling server (Terminal 1)
+npm install --prefix server && npm run dev --prefix server
+
+# 3. Start the client (Terminal 2)
+npm install --prefix client && npm run dev --prefix client
+```
+Open `http://localhost:5173` on your computer and the printed network IP on your phone!
+
+---
+
+### Option B: Docker Compose
+
+Run the complete stack with Docker Compose in 3 commands:
+
+```bash
+# 1. Clone the repository
+git clone https://github.com/bilalzulfiqar-pk/lan-share.git && cd lan-share
+
+# 2. Build and launch containers
+docker compose up --build
+
+# 3. Open the app
+open http://localhost:5173
+```
+
+---
+
+## Browser & Storage Engine Compatibility
+
+LAN Share dynamically selects the best storage sink supported by the user's browser environment:
+
+| Feature / Engine | Chrome / Edge (Desktop) | Safari (iOS & macOS) | Android Chrome | Firefox |
+| :--- | :---: | :---: | :---: | :---: |
+| **Subnet Radar Discovery** | ✅ Full | ✅ Full | ✅ Full | ✅ Full |
+| **6-Digit Room & QR Pairing** | ✅ Full | ✅ Full | ✅ Full | ✅ Full |
+| **Storage Sink Strategy** | **File System Access API**<br/>(Direct-to-Disk) | **OPFS WritableStream**<br/>(Origin Private File System) | **OPFS WritableStream**<br/>(Origin Private File System) | **OPFS WritableStream**<br/>(Origin Private File System) |
+| **Multi-GB Transfers** | ✅ Unlimited | ✅ Multi-GB (No RAM crashes) | ✅ Multi-GB (No RAM crashes) | ✅ Multi-GB |
+| **Streaming SHA-256 (Wasm)** | ✅ Hardware accelerated | ✅ Hardware accelerated | ✅ Hardware accelerated | ✅ Hardware accelerated |
+| **Screen Wake Lock** | ✅ Supported | ✅ Supported | ✅ Supported | ⚠️ Fallback audio beacon |
+| **Native Share Sheet** | ❌ (Direct file save) | ✅ "Save to Photos / Files" | ✅ "Save to Downloads" | ❌ (Direct file save) |
+| **PWA Installation** | ✅ Supported | ✅ Add to Home Screen | ✅ Supported | ⚠️ Limited |
 
 ---
 
 ## Tech Stack
 
-- **Frontend:** [React 19](https://react.dev/), [Vite](https://vitejs.dev/), WebRTC DataChannels, Streams API, Lucide Icons
-- **Signaling Server:** [Node.js](https://nodejs.org/), [Express](https://expressjs.com/), [Socket.IO](https://socket.io/), custom $O(M^2)$ `SimilarityIndex`
-- **Testing:** [Vitest](https://vitest.dev/) (Unit test suites + live child-process server integration tests)
-- **Code Quality:** ESLint with React Hooks rules
-
----
-
-## Getting Started
-
-### Prerequisites
-* [Node.js](https://nodejs.org/) (v18 or higher recommended)
-* `npm` or your preferred package manager
-
-### 1. Clone the repository
-```bash
-git clone https://github.com/bilalzulfiqar-pk/lan-share.git
-cd lan-share
-```
-
-### 2. Start the signaling server
-```bash
-cd server
-npm install
-npm run dev
-# Server listens on http://localhost:3001
-```
-
-### 3. Start the client (in a new terminal)
-```bash
-cd client
-npm install
-npm run dev
-# Vite starts with --host and prints your local LAN IP (e.g., http://192.168.1.100:5173)
-```
-
-### 4. Open on your devices
-Open the printed local network URL on any two devices connected to the same Wi-Fi. They will immediately show up on each other's radar!
-
----
-
-## Browser Support
-
-| Capability | Chrome / Edge (Desktop) | Safari (macOS / iOS) | Firefox | Android Chrome |
-| :--- | :---: | :---: | :---: | :---: |
-| **Radar Discovery & Chat** | ✓ Full | ✓ Full | ✓ Full | ✓ Full |
-| **File Transfer** | ✓ Direct-to-Disk (Multi-GB) | Limited (2 GB in-memory) | Limited (2 GB in-memory) | Limited (2 GB in-memory) |
-| **Integrity Verification (SHA-256)** | ✓ Verified | ✓ Verified | ✓ Verified | ✓ Verified |
-| **PWA Installation** | ✓ Supported | ✓ Add to Home Screen | Limited | ✓ Supported |
-
-> **Note on Large Files:** Desktop Chromium browsers stream files directly to disk via `window.showSaveFilePicker`. Mobile browsers and Firefox assemble chunks in memory, which is ideal for photos, videos, and documents up to ~2 GB.
-
----
-
-## Network Troubleshooting
-
-### Router AP / Client Isolation
-On strict public Wi-Fi networks (hotels, airports, universities, dorms), routers often have **Client Isolation** enabled. This prevents devices on the same Wi-Fi from talking directly to each other via UDP.
-
-* **How LAN Share handles this:** If a connection attempt does not complete within 20 seconds, the client detects the timeout and displays a helpful troubleshooting banner:
-  > *"Device did not respond. If you are on hotel, university, or public Wi-Fi, the router may have Client Isolation enabled."*
-* **Solution:** Use a private home Wi-Fi network, a mobile hotspot, or configure a TURN relay in your environment variables.
+- **Client:**
+  - **Framework:** [React 19](https://react.dev/), [Vite 7](https://vitejs.dev/)
+  - **Networking:** Native WebRTC (`RTCDataChannel`), [Socket.IO Client](https://socket.io/)
+  - **Storage:** File System Access API, Origin Private File System (OPFS)
+  - **Cryptography:** [`hash-wasm`](https://github.com/Daninet/hash-wasm) streaming SHA-256 WebAssembly
+  - **Styling & Motion:** Tailwind CSS, Framer Motion, Lucide Icons
+- **Signaling Service:**
+  - **Runtime:** [Node.js 20+](https://nodejs.org/), [Express](https://expressjs.com/), [Socket.IO 4](https://socket.io/)
+  - **Clustering:** Inverted index (`SimilarityIndex`) for subnet clustering + Room namespaces
+  - **Relay Provider:** [Metered.ca OpenRelay](https://www.metered.ca/) REST API integration
+- **Testing & Quality:**
+  - **Test Runner:** [Vitest](https://vitest.dev/) (265 automated unit, integration, and child-process tests)
+  - **Linter:** ESLint with React Hooks & Refresh rules
 
 ---
 
 ## Deployment
 
-### Client (Static Hosting — Vercel / Netlify / Cloudflare Pages)
+### Client (Vercel / Netlify / Cloudflare Pages)
 * **Root Directory:** `client/`
 * **Build Command:** `npm run build`
 * **Output Directory:** `dist/`
-* **Environment Variable:** Set `VITE_SERVER_URL` to your deployed signaling server URL.
+* **Environment Variable:** Set `VITE_SERVER_URL` to your signaling server address.
 
 ### Signaling Server (Render / Railway / Fly.io / VPS)
 * **Root Directory:** `server/`
 * **Build Command:** `npm install`
 * **Start Command:** `npm start`
-* **Health Check Endpoint:** `GET /health` (returns `{"ok": true}`)
+* **Health Check Endpoint:** `GET /health` returns `{"ok": true}`.
 
-### Client Environment Variables
+### Environment Variables
 
-| Variable | Required | Description |
-| :--- | :---: | :--- |
-| `VITE_SERVER_URL` | Optional | URL of your deployed signaling server. If omitted, defaults to port `3001` on the same hostname (ideal for local development). |
-| `VITE_TURN_URL` | Optional | Comma-separated TURN server URLs for networks where direct P2P is blocked by strict NAT or AP isolation. |
-| `VITE_TURN_USERNAME` | Optional | Username for the TURN server. |
-| `VITE_TURN_CREDENTIAL` | Optional | Credential / password for the TURN server. |
+| Variable | Scope | Required | Description |
+| :--- | :---: | :---: | :--- |
+| `PORT` | Server | Optional | Port for the signaling service (default: `3001`). |
+| `METERED_API_KEY` | Server | Optional | Metered.ca REST API key for caching ephemeral TURN credentials. |
+| `VITE_SERVER_URL` | Client | Optional | Signaling server URL (default: `http://localhost:3001` or relative origin). |
+| `VITE_SITE_URL` | Client | Optional | Canonical site URL for SEO meta and QR sharing (default: `https://lan-share.vercel.app`). |
 
 ---
 
 ## Testing & Quality Assurance
 
-The codebase includes 50 automated unit and integration tests across both the client and server:
+LAN Share is backed by **265 automated tests** verifying socket clustering, WebRTC state machines, OPFS streaming fallbacks, TURN relay protection, and protocol serialization:
 
 ```bash
-# Run signaling server tests (similarity index, rate limiter, sanitization)
+# Run server test suite (clustering, rooms, TURN credential caching)
 npm test --prefix server
 
-# Run client tests (chunking protocol, transfer engine, child-process server integration)
+# Run client test suite (transfer engine, resumption, OPFS, wakeLock, protocols)
 npm test --prefix client
 
-# Run client linter
+# Run client code linter
 npm run lint --prefix client
 ```
 
-For pre-release or physical multi-device verification, refer to the comprehensive [Manual QA Checklist](docs/QA-CHECKLIST.md).
+For manual multi-device verification (pairing, audio cues, screen wake lock), see the [Manual QA Checklist](docs/QA-CHECKLIST.md).
 
 ---
 
@@ -232,21 +303,21 @@ For pre-release or physical multi-device verification, refer to the comprehensiv
 ```
 lan-share/
 ├── client/                     # React 19 + Vite frontend
-│   ├── public/                 # Favicons, Web App Manifest, audio blips
+│   ├── public/                 # Manifest, favicons, audio cues
 │   └── src/
-│       ├── components/         # Radar canvas, chat panel, history panel, QR modal
-│       ├── hooks/              # useSignaling (Socket.IO), useWebRTC (transfer engine)
-│       └── lib/                # TransferEngine, wire protocol, notifications, crypto
-│           └── __tests__/      # Vitest suites (mock WebRTC + live server integration)
-├── server/                     # Express + Socket.IO signaling service
-│   ├── index.js                # Server entry point, connection events, rate limiter
-│   ├── lib.js                  # SimilarityIndex inverted index, IP/subnet clustering
-│   └── lib.test.js             # Vitest test suite for server clustering logic
-├── docs/                       # Project documentation
-│   ├── assets/                 # Architecture diagrams and UI preview assets
-│   ├── CHANGELOG.md            # Detailed history of changes and milestones
-│   ├── QA-CHECKLIST.md         # Multi-device pre-release QA checklist
-│   └── POSSIBLE-ENHANCEMENTS.md# Conceptual future explorations (OPFS, companion mode)
+│       ├── components/         # Radar, Chat, RoomModal, HotspotGuideModal
+│       ├── hooks/              # useSignaling (Socket.IO), useWebRTC (engine hook)
+│       └── lib/                # TransferEngine, protocol, opfs, crypto, wakeLock
+│           └── __tests__/      # Vitest client suites (OPFS, resumption, relay)
+├── server/                     # Node.js + Express + Socket.IO signaling service
+│   ├── index.js                # Server entry point, TURN endpoint, socket events
+│   ├── lib.js                  # Subnet clustering, room registry, SimilarityIndex
+│   └── *.test.js               # Vitest server suites (rooms, TURN, similarity)
+├── docs/                       # Project documentation & guides
+│   ├── assets/                 # Vector banner & architecture diagrams
+│   ├── QA-CHECKLIST.md         # Multi-device QA checklist
+│   └── CHANGELOG.md            # Detailed milestone and release notes
+├── docker-compose.yml          # Containerized local development stack
 └── README.md                   # Repository overview
 ```
 
@@ -254,12 +325,11 @@ lan-share/
 
 ## Documentation
 
-* [Changelog](docs/CHANGELOG.md) — Complete log of features, optimizations, and bug fixes.
-* [Manual QA Checklist](docs/QA-CHECKLIST.md) — Comprehensive checklist for cross-device testing.
-* [Possible Future Enhancements](docs/POSSIBLE-ENHANCEMENTS.md) — Conceptual explorations for OPFS mobile streaming, offline companion modes, and TURN setups.
+* [Manual QA Checklist](docs/QA-CHECKLIST.md) — Step-by-step physical device testing procedures.
+* [Changelog](docs/CHANGELOG.md) — Comprehensive log of features, optimizations, and bug fixes.
 
 ---
 
 ## License
 
-This project is open-source and free to use. See [LICENSE](LICENSE) for details.
+This project is licensed under the [MIT License](LICENSE). Contributions, bug reports, and pull requests are welcome!

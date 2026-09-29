@@ -298,4 +298,97 @@ describe('TransferEngine against the real signaling server', () => {
             socketB.disconnect();
         }
     }, 15000);
+
+    it('pairs peers across rooms and isolates non-room sockets', async () => {
+        const socketA = await connectClient();
+        const socketB = await connectClient();
+        const socketC = await connectClient();
+
+        joinAs(socketA, 'Alice');
+        joinAs(socketB, 'Bob');
+        joinAs(socketC, 'Charlie');
+
+        try {
+            // A joins room 999888
+            socketA.emit('join-room', { roomCode: '999888' });
+            await new Promise((r) => setTimeout(r, 150));
+
+            // B also joins room 999888
+            const userListsA = [];
+            socketA.on('users-update', (users) => userListsA.push(users));
+            socketB.emit('join-room', { roomCode: '999888' });
+
+            // Alice should see Bob
+            await waitFor(
+                () => userListsA.some((users) => users.some((user) => user.id === socketB.id && user.name === 'Bob')),
+                { label: 'Alice sees Bob in room 999888', timeout: 8000 }
+            );
+
+            // Alice should NOT see Charlie (who is not in room 999888)
+            const latestA = userListsA[userListsA.length - 1];
+            expect(latestA.some((u) => u.id === socketC.id)).toBe(false);
+
+            // B leaves room
+            userListsA.length = 0;
+            socketB.emit('leave-room');
+
+            // Alice should see Bob disappear
+            await waitFor(
+                () => userListsA.some((users) => !users.some((user) => user.id === socketB.id)),
+                { label: 'Bob leaves room and disappears from Alice', timeout: 8000 }
+            );
+        } finally {
+            socketA.disconnect();
+            socketB.disconnect();
+            socketC.disconnect();
+        }
+    }, 20000);
+
+    it('blocks signaling relays between sockets in different rooms but allows them in the same room', async () => {
+        const socketA = await connectClient();
+        const socketB = await connectClient();
+        const socketC = await connectClient();
+
+        joinAs(socketA, 'Alice');
+        joinAs(socketB, 'Bob');
+        joinAs(socketC, 'Charlie');
+
+        try {
+            // Alice and Bob join ROOM-X, Charlie joins ROOM-Y
+            socketA.emit('join-room', { roomCode: 'ROOM-X' });
+            socketB.emit('join-room', { roomCode: 'ROOM-X' });
+            socketC.emit('join-room', { roomCode: 'ROOM-Y' });
+
+            await waitUntilPeerVisible(socketA, socketB.id, 'Alice sees Bob in ROOM-X');
+
+            const offersReceivedByAlice = [];
+            socketA.on('offer', (payload) => offersReceivedByAlice.push(payload));
+
+            // Charlie (ROOM-Y) attempts to relay an offer to Alice (ROOM-X)
+            socketC.emit('offer', {
+                target: socketA.id,
+                offer: { type: 'offer', sdp: 'v=0 cross-room-forbidden' }
+            });
+
+            // Allow network cycle for potential illegal delivery
+            await new Promise((resolve) => setTimeout(resolve, 350));
+            expect(offersReceivedByAlice).toHaveLength(0);
+
+            // Bob (ROOM-X) relays an offer to Alice (ROOM-X)
+            socketB.emit('offer', {
+                target: socketA.id,
+                offer: { type: 'offer', sdp: 'v=0 same-room-allowed' }
+            });
+
+            await waitFor(() => offersReceivedByAlice.length === 1, {
+                label: 'Alice receives Bob valid in-room offer',
+                timeout: 5000
+            });
+            expect(offersReceivedByAlice[0].sender).toBe(socketB.id);
+        } finally {
+            socketA.disconnect();
+            socketB.disconnect();
+            socketC.disconnect();
+        }
+    }, 20000);
 });

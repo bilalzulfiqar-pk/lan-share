@@ -4,23 +4,37 @@ const { Server } = require('socket.io');
 const cors = require('cors');
 const {
     normalizeJoinPayload,
+    sanitizeRoomCode,
     getClientIp,
     detectDeviceType,
     getVisibleUsersFor,
+    areUsersVisible,
     isValidSessionDescription,
     isValidIceCandidate,
     createRateLimiter,
     SimilarityIndex
 } = require('./lib');
+const { TurnCredentialManager, DEFAULT_STUN_SERVERS, createTurnCredentialsHandler } = require('./turn');
 
 const USERS_UPDATE_DEBOUNCE_MS = 100;
 const MAX_RELAY_STRIKES = 25;
 
 const app = express();
 app.use(cors());
+
+const turnLimiter = createRateLimiter({ capacity: 30, refillPerSecond: 1 });
+const turnManager = new TurnCredentialManager();
+const handleTurnCredentials = createTurnCredentialsHandler({
+    manager: turnManager,
+    limiter: turnLimiter,
+    getClientIp
+});
+
 app.get('/health', (req, res) => {
     res.json({ ok: true });
 });
+
+app.get('/api/turn-credentials', handleTurnCredentials);
 
 const server = http.createServer(app);
 const io = new Server(server, {
@@ -31,7 +45,7 @@ const io = new Server(server, {
     maxHttpBufferSize: 64 * 1024
 });
 
-// Store connected users: socketId -> { id, name, deviceId, deviceType, publicIp, networkFingerprints }
+// Store connected users: socketId -> { id, name, deviceId, deviceType, publicIp, networkFingerprints, roomCode }
 const users = {};
 const similarityIndex = new SimilarityIndex();
 
@@ -50,6 +64,7 @@ function emitDebugState(user, visiblePeers = null) {
         publicIp: user.publicIp,
         networkFingerprints: user.networkFingerprints || [],
         deviceId: user.deviceId,
+        roomCode: user.roomCode || null,
         visiblePeers: peers
     });
 }
@@ -143,13 +158,16 @@ io.on('connection', (socket) => {
             return;
         }
 
-        const { name, networkFingerprints, deviceId } = normalizeJoinPayload(payload);
+        const { name, networkFingerprints, deviceId, roomCode: payloadRoomCode } = normalizeJoinPayload(payload);
         const publicIp = getClientIp(socket.handshake.headers, socket.handshake.address);
         const deviceType = detectDeviceType(socket.handshake.headers['user-agent']);
 
         removeDuplicateDeviceEntries(deviceId, socket.id);
         const existingUser = users[socket.id];
         const oldAffected = existingUser ? similarityIndex.getAffectedSocketIds(existingUser) : [];
+        const roomCode = payloadRoomCode !== undefined
+            ? payloadRoomCode
+            : (existingUser ? existingUser.roomCode : null);
 
         const newUser = {
             id: socket.id,
@@ -157,7 +175,8 @@ io.on('connection', (socket) => {
             deviceId,
             deviceType,
             publicIp,
-            networkFingerprints
+            networkFingerprints,
+            roomCode
         };
         users[socket.id] = newUser;
         similarityIndex.addUser(newUser);
@@ -167,12 +186,72 @@ io.on('connection', (socket) => {
         scheduleUsersUpdate(affected);
     });
 
+    socket.on('join-room', (payload, callback) => {
+        if (!joinLimiter.tryConsume(socket.id)) {
+            if (typeof callback === 'function') callback({ success: false, error: 'Rate limited' });
+            return;
+        }
+
+        const user = users[socket.id];
+        if (!user) {
+            if (typeof callback === 'function') callback({ success: false, error: 'User not registered' });
+            return;
+        }
+
+        const rawCode = typeof payload === 'object' && payload !== null
+            ? (payload.roomCode || payload.room)
+            : payload;
+        const roomCode = sanitizeRoomCode(rawCode);
+
+        if (!roomCode) {
+            if (typeof callback === 'function') callback({ success: false, error: 'Invalid room code' });
+            return;
+        }
+
+        if (user.roomCode === roomCode) {
+            if (typeof callback === 'function') callback({ success: true, roomCode });
+            return;
+        }
+
+        const oldAffected = similarityIndex.getAffectedSocketIds(user);
+        user.roomCode = roomCode;
+        similarityIndex.addUser(user);
+        const newAffected = similarityIndex.getAffectedSocketIds(user);
+        const affected = Array.from(new Set([...oldAffected, ...newAffected]));
+
+        scheduleUsersUpdate(affected);
+        if (typeof callback === 'function') callback({ success: true, roomCode });
+    });
+
+    socket.on('leave-room', (callback) => {
+        const user = users[socket.id];
+        if (!user) {
+            if (typeof callback === 'function') callback({ success: false, error: 'User not registered' });
+            return;
+        }
+
+        if (!user.roomCode) {
+            if (typeof callback === 'function') callback({ success: true, roomCode: null });
+            return;
+        }
+
+        const oldAffected = similarityIndex.getAffectedSocketIds(user);
+        user.roomCode = null;
+        similarityIndex.addUser(user);
+        const newAffected = similarityIndex.getAffectedSocketIds(user);
+        const affected = Array.from(new Set([...oldAffected, ...newAffected]));
+
+        scheduleUsersUpdate(affected);
+        if (typeof callback === 'function') callback({ success: true, roomCode: null });
+    });
+
     // Signaling relays. The sender is always taken from the authenticated
     // socket, never from the (spoofable) payload, and a message is only
     // relayed to sockets that actually joined.
     const relay = (eventName, isValidPayload, extractPayload) => {
         socket.on(eventName, (data) => {
-            if (!users[socket.id]) {
+            const sender = users[socket.id];
+            if (!sender) {
                 return;
             }
 
@@ -183,8 +262,9 @@ io.on('connection', (socket) => {
 
             const payload = extractPayload(data);
             const target = typeof data?.target === 'string' ? data.target : null;
+            const targetUser = target ? users[target] : null;
 
-            if (!target || !users[target] || !isValidPayload(payload)) {
+            if (!targetUser || !areUsersVisible(sender, targetUser) || !isValidPayload(payload)) {
                 registerRelayStrike(socket);
                 return;
             }
@@ -211,4 +291,4 @@ server.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
 });
 
-module.exports = { app, server, users, similarityIndex };
+module.exports = { app, server, users, similarityIndex, turnManager, turnLimiter, handleTurnCredentials, DEFAULT_STUN_SERVERS };

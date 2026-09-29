@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import {
     sanitizeName,
+    sanitizeRoomCode,
     sanitizeNetworkFingerprints,
     sanitizeDeviceId,
     normalizeJoinPayload,
@@ -13,6 +14,26 @@ import {
     createRateLimiter,
     SimilarityIndex
 } from './lib.js';
+
+describe('sanitizeRoomCode', () => {
+    it('normalizes alphanumeric codes to uppercase', () => {
+        expect(sanitizeRoomCode('123456')).toBe('123456');
+        expect(sanitizeRoomCode(' room42 ')).toBe('ROOM42');
+        expect(sanitizeRoomCode(998877)).toBe('998877');
+    });
+
+    it('truncates codes longer than 16 characters', () => {
+        expect(sanitizeRoomCode('a'.repeat(30)).length).toBe(16);
+    });
+
+    it('rejects invalid characters, whitespace inside, empty, and null', () => {
+        expect(sanitizeRoomCode('12 34')).toBeNull();
+        expect(sanitizeRoomCode('code@#$')).toBeNull();
+        expect(sanitizeRoomCode('')).toBeNull();
+        expect(sanitizeRoomCode(null)).toBeNull();
+        expect(sanitizeRoomCode(undefined)).toBeNull();
+    });
+});
 
 describe('sanitizeName', () => {
     it('trims and truncates long names', () => {
@@ -73,7 +94,21 @@ describe('normalizeJoinPayload', () => {
     });
 
     it('falls back for garbage payloads', () => {
-        expect(normalizeJoinPayload(undefined)).toMatchObject({ name: 'Unknown Device' });
+        expect(normalizeJoinPayload(undefined)).toMatchObject({ name: 'Unknown Device', roomCode: null });
+    });
+
+    it('extracts and sanitizes roomCode from join payload', () => {
+        const result = normalizeJoinPayload({
+            name: 'Alice',
+            roomCode: ' room99 '
+        });
+        expect(result.roomCode).toBe('ROOM99');
+    });
+
+    it('returns roomCode: undefined when omitted from object payload and null when explicitly cleared', () => {
+        expect(normalizeJoinPayload({ name: 'Alice' }).roomCode).toBeUndefined();
+        expect(normalizeJoinPayload({ name: 'Alice', roomCode: null }).roomCode).toBeNull();
+        expect(normalizeJoinPayload({ name: 'Alice', room: '' }).roomCode).toBeNull();
     });
 });
 
@@ -139,6 +174,31 @@ describe('areUsersVisible', () => {
         expect(areUsersVisible(
             user(),
             user({ id: 'b', publicIp: '2.2.2.2' })
+        )).toBe(false);
+    });
+
+    it('shows peers sharing the same roomCode regardless of different public IPs and fingerprints', () => {
+        expect(areUsersVisible(
+            user({ roomCode: '123456', publicIp: '1.1.1.1', networkFingerprints: ['lan:ipv4:10.0.0'] }),
+            user({ id: 'b', roomCode: '123456', publicIp: '9.9.9.9', networkFingerprints: ['lan:ipv4:192.168.1'] })
+        )).toBe(true);
+    });
+
+    it('hides peers in different rooms', () => {
+        expect(areUsersVisible(
+            user({ roomCode: '123456', publicIp: '1.1.1.1' }),
+            user({ id: 'b', roomCode: '654321', publicIp: '1.1.1.1' })
+        )).toBe(false);
+    });
+
+    it('hides a peer in a room from a peer not in any room even on the same IP', () => {
+        expect(areUsersVisible(
+            user({ roomCode: '123456', publicIp: '1.1.1.1' }),
+            user({ id: 'b', roomCode: null, publicIp: '1.1.1.1' })
+        )).toBe(false);
+        expect(areUsersVisible(
+            user({ roomCode: null, publicIp: '1.1.1.1' }),
+            user({ id: 'b', roomCode: '123456', publicIp: '1.1.1.1' })
         )).toBe(false);
     });
 });
@@ -268,5 +328,23 @@ describe('SimilarityIndex', () => {
         const affected = index.getAffectedSocketIds(userA);
         expect(affected).toContain('sock-1');
         expect(affected).toContain('sock-2');
+    });
+
+    it('indexes users by roomCode and isolates them from non-room users', () => {
+        const index = new SimilarityIndex();
+        const userA = { id: 'sock-1', roomCode: 'ROOM1', publicIp: '1.1.1.1' };
+        const userB = { id: 'sock-2', roomCode: 'ROOM1', publicIp: '2.2.2.2' };
+        const userC = { id: 'sock-3', roomCode: 'ROOM2', publicIp: '1.1.1.1' };
+        const userD = { id: 'sock-4', roomCode: null, publicIp: '1.1.1.1' };
+
+        index.addUser(userA);
+        index.addUser(userB);
+        index.addUser(userC);
+        index.addUser(userD);
+
+        expect(index.getCandidateIdsFor(userA)).toEqual(['sock-2']);
+        expect(index.getCandidateIdsFor(userB)).toEqual(['sock-1']);
+        expect(index.getCandidateIdsFor(userC)).toEqual([]);
+        expect(index.getCandidateIdsFor(userD)).toEqual([]);
     });
 });

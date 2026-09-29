@@ -43,9 +43,13 @@ export class MockDataChannel {
         }
 
         queueMicrotask(() => {
+            if (this.readyState === 'closed' || !this.peer || this.peer.readyState === 'closed') {
+                return;
+            }
             this.peer._emit('message', { data });
         });
     }
+
 
     _openOne() {
         if (this.readyState !== 'connecting') return;

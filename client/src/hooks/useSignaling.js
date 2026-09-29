@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useCallback } from 'react';
 import { io } from 'socket.io-client';
 
 const SIGNALING_SERVER_PORT = 3001;
@@ -11,6 +11,16 @@ const DISCOVERY_ICE_SERVERS = [
         ]
     }
 ];
+
+export function parseRoomFromHash(hash) {
+    if (typeof hash !== 'string' || !hash) return null;
+    const cleanHash = hash.startsWith('#') ? hash.slice(1) : hash;
+    const match = cleanHash.match(/(?:^|[/?&;#])room=([A-Za-z0-9_-]+)(?:[/?&;#]|$)/i);
+    if (match && match[1]) {
+        return match[1].slice(0, 16).toUpperCase();
+    }
+    return null;
+}
 
 function createDeviceId() {
     if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
@@ -188,13 +198,85 @@ export function useSignaling(displayName) {
     const [deviceId] = useState(() => getOrCreateDeviceId());
     const [serverUrl, setServerUrl] = useState('');
     const [transportName, setTransportName] = useState('pending');
+    const [roomCode, setRoomCode] = useState(() => {
+        if (typeof window !== 'undefined' && window.location.hash) {
+            return parseRoomFromHash(window.location.hash);
+        }
+        return null;
+    });
+    const currentRoomRef = useRef(roomCode);
+    useEffect(() => {
+        currentRoomRef.current = roomCode;
+    }, [roomCode]);
     const joinedThisConnectionRef = useRef(false);
     const [serverDebug, setServerDebug] = useState({
         publicIp: null,
         networkFingerprints: [],
         deviceId: null,
+        roomCode: null,
         visiblePeers: []
     });
+
+    const joinRoom = useCallback((code) => {
+        if (!code) return;
+        const sanitized = String(code).replace(/\s+/g, '').toUpperCase().slice(0, 16);
+        if (!/^[A-Z0-9_-]+$/.test(sanitized)) return;
+
+        currentRoomRef.current = sanitized;
+        setRoomCode(sanitized);
+        if (typeof window !== 'undefined') {
+            const targetHash = `#room=${sanitized}`;
+            if (window.location.hash !== targetHash) {
+                window.location.hash = targetHash;
+            }
+        }
+        if (socket && isConnected) {
+            socket.emit('join-room', { roomCode: sanitized });
+        }
+    }, [socket, isConnected]);
+
+    const leaveRoom = useCallback(() => {
+        currentRoomRef.current = null;
+        setRoomCode(null);
+        if (typeof window !== 'undefined' && window.location.hash) {
+            if (window.location.hash.includes('room=')) {
+                const cleanHash = window.location.hash
+                    .replace(/(?:^#|[&;?])room=[^&;#]*/i, '')
+                    .replace(/^[&;?]/, '');
+                const targetUrl = window.location.pathname + window.location.search + (cleanHash ? '#' + cleanHash : '');
+                history.replaceState(null, '', targetUrl);
+            }
+        }
+        if (socket && isConnected) {
+            socket.emit('leave-room');
+        }
+    }, [socket, isConnected]);
+
+    // Keep roomCode synchronized with window hash changes
+    useEffect(() => {
+        if (typeof window === 'undefined') return;
+
+        const handleHashChange = () => {
+            const newRoom = parseRoomFromHash(window.location.hash);
+            if (newRoom === currentRoomRef.current) {
+                return;
+            }
+
+            currentRoomRef.current = newRoom;
+            setRoomCode(newRoom);
+
+            if (socket && isConnected) {
+                if (newRoom) {
+                    socket.emit('join-room', { roomCode: newRoom });
+                } else {
+                    socket.emit('leave-room');
+                }
+            }
+        };
+
+        window.addEventListener('hashchange', handleHashChange);
+        return () => window.removeEventListener('hashchange', handleHashChange);
+    }, [socket, isConnected]);
 
     useEffect(() => {
         let cancelled = false;
@@ -259,6 +341,7 @@ export function useSignaling(displayName) {
                 publicIp: payload?.publicIp || null,
                 networkFingerprints: Array.isArray(payload?.networkFingerprints) ? payload.networkFingerprints : [],
                 deviceId: payload?.deviceId || null,
+                roomCode: payload?.roomCode || null,
                 visiblePeers: Array.isArray(payload?.visiblePeers) ? payload.visiblePeers : []
             });
         });
@@ -284,7 +367,8 @@ export function useSignaling(displayName) {
             socket.emit('join', {
                 name: displayName,
                 networkFingerprints,
-                deviceId
+                deviceId,
+                roomCode: roomCode || undefined
             });
             return;
         }
@@ -293,12 +377,13 @@ export function useSignaling(displayName) {
             socket.emit('join', {
                 name: displayName,
                 networkFingerprints,
-                deviceId
+                deviceId,
+                roomCode: roomCode || undefined
             });
         }, 400);
 
         return () => window.clearTimeout(timer);
-    }, [deviceId, displayName, socket, isConnected, networkFingerprints]);
+    }, [deviceId, displayName, socket, isConnected, networkFingerprints, roomCode]);
 
     return {
         socket,
@@ -307,11 +392,15 @@ export function useSignaling(displayName) {
         isReconnecting,
         connectionStartTime,
         myId,
+        roomCode,
+        joinRoom,
+        leaveRoom,
         debugInfo: {
             deviceId,
             serverUrl,
             transportName,
             localNetworkFingerprints: networkFingerprints,
+            roomCode,
             serverDebug,
             userAgent: navigator.userAgent
         }

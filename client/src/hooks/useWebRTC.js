@@ -5,9 +5,11 @@ const ERROR_AUTO_CLEAR_MS = 6000;
 
 // Thin React binding around TransferEngine. All connection and transfer logic
 // lives in the engine; this hook only mirrors engine events into state.
-export function useWebRTC(socket, myId, { getPeerName, onChat, onNotify } = {}) {
+export function useWebRTC(socket, myId, { getPeerName, onChat, onNotify, strictLocalMode: initialStrictLocalMode = false } = {}) {
     const [history, setHistory] = useState([]);
     const [peerStatus, setPeerStatus] = useState({});
+    const [connectionTypes, setConnectionTypes] = useState({});
+    const [strictLocalMode, setStrictLocalMode] = useState(initialStrictLocalMode);
     const [error, setError] = useState(null);
 
     const engineRef = useRef(null);
@@ -15,6 +17,7 @@ export function useWebRTC(socket, myId, { getPeerName, onChat, onNotify } = {}) 
     const onChatRef = useRef(onChat);
     const onNotifyRef = useRef(onNotify);
     const myIdRef = useRef(myId);
+    const strictLocalModeRef = useRef(strictLocalMode);
 
     useEffect(() => {
         getPeerNameRef.current = getPeerName;
@@ -30,12 +33,21 @@ export function useWebRTC(socket, myId, { getPeerName, onChat, onNotify } = {}) 
         }
     }, [myId]);
 
+    // Keep strictLocalMode updated in engine
+    useEffect(() => {
+        strictLocalModeRef.current = strictLocalMode;
+        if (engineRef.current) {
+            engineRef.current.setStrictLocalMode(strictLocalMode);
+        }
+    }, [strictLocalMode]);
+
     useEffect(() => {
         if (!socket) return undefined;
 
         const engine = new TransferEngine({
             socket,
             myId: myIdRef.current,
+            strictLocalMode: strictLocalModeRef.current,
             getPeerName: (peerId) => getPeerNameRef.current?.(peerId) || 'Unknown',
             onEvent: (event) => {
                 switch (event.type) {
@@ -49,6 +61,9 @@ export function useWebRTC(socket, myId, { getPeerName, onChat, onNotify } = {}) 
                         break;
                     case 'peer-status':
                         setPeerStatus((prev) => ({ ...prev, [event.peerId]: event.status }));
+                        break;
+                    case 'connection-type':
+                        setConnectionTypes((prev) => ({ ...prev, [event.peerId]: event.connectionType }));
                         break;
                     case 'error':
                         setError(event.message);
@@ -97,14 +112,22 @@ export function useWebRTC(socket, myId, { getPeerName, onChat, onNotify } = {}) 
         engineRef.current?.sendChat(peerId, text);
     }, []);
 
+    const getConnectionType = useCallback((peerId) => {
+        return connectionTypes[peerId] || engineRef.current?.getConnectionType(peerId) || 'direct-lan';
+    }, [connectionTypes]);
+
     return {
         history,
         peerStatus,
+        connectionTypes,
+        strictLocalMode,
+        setStrictLocalMode,
         error,
         sendFilesOffer,
         requestFile,
         saveReceivedFile,
         cancelTransfer,
-        sendChat
+        sendChat,
+        getConnectionType
     };
 }

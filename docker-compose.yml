@@ -1,0 +1,22 @@
+services:
+  server:
+    build:
+      context: ./server
+      dockerfile: Dockerfile
+    ports:
+      - "3001:3001"
+    environment:
+      - PORT=3001
+    restart: unless-stopped
+
+  client:
+    build:
+      context: ./client
+      dockerfile: Dockerfile
+    ports:
+      - "5173:5173"
+    # Note: Leaving VITE_SERVER_URL unset lets the client auto-detect the host IP,
+    # enabling seamless connections from both localhost and mobile devices on the LAN.
+    depends_on:
+      - server
+    restart: unless-stopped

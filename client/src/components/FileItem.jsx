@@ -7,35 +7,54 @@ const CancelIcon = () => (
   </svg>
 );
 
-export function FileItem({ item, onRequest, onSave, onCancel, getPeerName }) {
+export function FileItem({ item, onRequest, onSave, onCancel, getPeerName, onOpenHotspotGuide }) {
   const isSender = item.direction === 'out';
   const peerName = item.peerName || (getPeerName ? getPeerName(item.peerId) : 'Unknown');
+
+  const isHotspotCandidate = Boolean(
+    onOpenHotspotGuide && (
+      item.status === 'blocked' ||
+      (item.error && (
+        item.error.includes('150 MB') ||
+        item.error.includes('Isolation') ||
+        item.error.includes('hotspot')
+      ))
+    )
+  );
 
   const statusKey = (() => {
     switch (item.status) {
       case 'completed': return isSender ? 'sent' : (item.saved ? 'saved' : 'ready');
+      case 'blocked': return 'blocked';
       case 'error':
       case 'failed': return 'failed';
       case 'cancelled':
       case 'deleted': return 'cancelled';
+      case 'connecting': return 'connecting';
+      case 'offered': return isSender ? 'offered' : 'available';
       case 'waiting': return 'waiting';
       case 'uploading': return 'sending';
       case 'downloading': return 'receiving';
-      case 'idle': return isSender ? 'waiting-accept' : 'available';
-      default: return 'idle';
+      case 'idle': return isSender ? 'connecting' : 'available';
+      default: return item.status || 'idle';
     }
   })();
 
   const STATUS_COPY = {
-    'waiting-accept': 'Waiting for accept',
+    connecting: 'Connecting to device…',
+    offered: 'Offered to peer (ready to download)',
     available: 'Available',
     waiting: 'Requesting…',
-    sending: 'Sending…',
+    sending: 'Sending...',
+    uploading: 'Sending...',
     receiving: 'Receiving…',
-    sent: 'Sent',
+    downloading: 'Receiving…',
+    sent: 'Sent & verified (SHA-256)',
+    completed: 'Sent & verified (SHA-256)',
     ready: 'Ready to save',
     saved: 'Saved',
-    failed: item.error || 'Transfer failed',
+    blocked: 'Direct connection failed',
+    failed: item.error || 'Direct connection failed',
     cancelled: 'Cancelled',
     idle: 'Idle',
   };
@@ -68,14 +87,17 @@ export function FileItem({ item, onRequest, onSave, onCancel, getPeerName }) {
   const statusClass = (() => {
     switch (item.status) {
       case 'completed': return 'completed';
-      case 'error':
-      case 'failed': return 'error';
+      case 'blocked': return 'blocked';
+      case 'failed': return 'failed';
+      case 'error': return 'error';
       case 'cancelled':
       case 'deleted': return 'cancelled';
+      case 'connecting': return 'connecting';
+      case 'offered': return 'offered';
       case 'waiting': return 'waiting';
       case 'uploading':
       case 'downloading': return 'uploading';
-      case 'idle': return 'waiting';
+      case 'idle': return isSender ? 'connecting' : 'waiting';
       default: return 'waiting';
     }
   })();
@@ -93,14 +115,46 @@ export function FileItem({ item, onRequest, onSave, onCancel, getPeerName }) {
         <div className="file-meta">
           <span className="file-size">{formatSize(item.fileSize)}</span>
           <span className="meta-sep" aria-hidden="true">·</span>
-          <span className={`transfer-status ${statusClass}`}>
+          <span className={`transfer-status ${statusClass}`} title={item.error || undefined}>
             <span className="status-pill-dot" aria-hidden="true" />
             {STATUS_COPY[statusKey]}
           </span>
+          {item.connectionType && (
+            <>
+              <span className="meta-sep" aria-hidden="true">·</span>
+              <span className={`conn-type-badge ${item.connectionType}`} title={`Connection type: ${item.connectionType}`}>
+                {item.connectionType}
+              </span>
+            </>
+          )}
           <span className="file-peer-info">
             {isSender ? `To: ${peerName}` : `From: ${peerName}`}
           </span>
         </div>
+
+        {item.error && (item.status === 'blocked' || item.status === 'failed' || item.status === 'error') && (
+          <div className="file-error-text" title={item.error}>
+            {item.error}
+          </div>
+        )}
+
+        {isHotspotCandidate && (
+          <div className="file-hotspot-container">
+            <button
+              type="button"
+              className="file-hotspot-btn"
+              onClick={onOpenHotspotGuide}
+              data-testid="file-hotspot-guide-btn"
+            >
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <circle cx="12" cy="12" r="10" />
+                <line x1="12" y1="16" x2="12" y2="12" />
+                <line x1="12" y1="8" x2="12.01" y2="8" />
+              </svg>
+              View Mobile Hotspot Guide
+            </button>
+          </div>
+        )}
 
         {isActive && (
           <div
@@ -141,13 +195,24 @@ export function FileItem({ item, onRequest, onSave, onCancel, getPeerName }) {
       </div>
 
       <div className="file-actions">
-        {!isSender && item.status === 'idle' && (
+        {!isSender && (item.status === 'idle' || item.status === 'offered') && (
           <button
             type="button"
             className="btn btn-sm btn-primary btn-auto"
             onClick={() => onRequest(item.id)}
           >
             Download
+          </button>
+        )}
+
+        {!isSender && (item.status === 'failed' || item.status === 'error' || item.status === 'blocked') && !isHotspotCandidate && (
+          <button
+            type="button"
+            className="btn btn-sm btn-primary btn-auto"
+            onClick={() => onRequest(item.id)}
+            data-testid="restart-transfer-btn"
+          >
+            Restart Transfer
           </button>
         )}
 
@@ -162,6 +227,8 @@ export function FileItem({ item, onRequest, onSave, onCancel, getPeerName }) {
         )}
 
         {(item.status === 'idle' ||
+          item.status === 'connecting' ||
+          item.status === 'offered' ||
           item.status === 'waiting' ||
           item.status === 'uploading' ||
           item.status === 'downloading') && (

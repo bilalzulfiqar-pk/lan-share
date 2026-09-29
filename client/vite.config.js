@@ -9,6 +9,14 @@ export default defineConfig(({ mode }) => {
 
   return {
     plugins: [react()],
+    server: {
+      proxy: {
+        '/api': {
+          target: 'http://localhost:3001',
+          changeOrigin: true
+        }
+      }
+    },
     define: {
       'import.meta.env.VITE_SITE_URL': JSON.stringify(siteUrl),
     },

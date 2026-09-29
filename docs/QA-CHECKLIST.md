@@ -1,78 +1,54 @@
 # Manual QA Checklist
 
-Run through this after deploying (or before a release) with at least two
-devices on the same Wi-Fi — ideally one laptop (Chrome or Edge) and one phone.
+A practical 5-minute checklist to verify LAN Share on two devices (e.g., laptop and smartphone) before a release.
 
-## Setup
+---
 
-- [ ] Server: `cd server && npm start` (or the deployed Render URL)
-- [ ] Client: `cd client && npm run dev` (or the deployed Vercel URL)
-- [ ] Both devices open the app and appear on each other's radar within ~5 s
+## 1. Discovery & Room Pairing
 
-## Discovery & identity
+- [ ] **LAN Radar:** Both devices on the same Wi-Fi appear on each other's radar within ~3–5 seconds.
+- [ ] **Room Code Creation:** Click **Room** in the header, generate a 6-digit code (e.g., `492810`), and verify the room status badge shows `In Room`.
+- [ ] **QR Code Scanning:** Scan the room QR code with a phone camera; the phone opens the app and auto-joins the room (`#room=492810`).
+- [ ] **Peer Isolation:** Devices in the room see each other; devices outside the room are hidden.
+- [ ] **Leave Room:** Click **Leave Room** on either device; verify both return to the default local radar.
 
-- [ ] Renaming your device updates on the peer's radar after a short delay (~0.5 s debounce)
-- [ ] Refreshing the page keeps your display name, device ID, theme and chat history
-- [ ] Opening the app in a second tab replaces (not duplicates) your radar presence
-- [ ] A phone shows the phone icon on the other device's radar (desktop shows a monitor)
+---
 
-## File transfer — core
+## 2. File Transfer & Status Accuracy
 
-- [ ] Small file (< 10 MB): offer → Download → completes with a "Verified" badge → Save works
-- [ ] Completed download URL remains functional for at least 60 seconds (grace period) and cleans up cleanly without memory leaks
-- [ ] Progress shows live % and speed/ETA on both sides
-- [ ] Two files requested at the same time from the same sender both complete, both verified
-- [ ] Cancel during an active transfer stops it on both sides
-- [ ] Transferring to device B does not interrupt an ongoing session with device A
+- [ ] **Honest Pre-Connection Status:** Pick a file on the sender. Verify the status displays **"Connecting to device…"** (never "Waiting for accept") while WebRTC establishes.
+- [ ] **Offered State:** Once connected, verify the sender shows **"Offered to peer (ready to download)"**.
+- [ ] **Passive Receiver Queue:** The file appears in the receiver's history with a **"Download"** button.
+- [ ] **Live Telemetry:** Click **Download**. Verify both sides show live progress (%), speed (MB/s), and ETA.
+- [ ] **SHA-256 Verification:** On completion, verify the green **"Sent & verified (SHA-256)"** badge appears and a completion chime plays.
 
-## File transfer — large files
+---
 
-- [ ] Chrome/Edge, > 512 MB: clicking Download opens a save dialog up front and streams
-      straight to disk (RAM usage stays low in Task Manager)
-- [ ] A multi-GB file (e.g. 5 GB) completes on Chrome/Edge without the tab crashing
-- [ ] Safari/Firefox: files up to 2 GB work via the memory path; larger shows a clear error
-- [ ] SHA-256 digest mismatch is detected (hard to trigger manually — trust the unit tests)
+## 3. Large Files & Mobile Storage (OPFS)
 
-## Robustness
+- [ ] **Desktop Chrome / Edge (> 512 MB):** Clicking Download triggers `showSaveFilePicker()` and streams straight to disk with low RAM usage (< 25 MB).
+- [ ] **Mobile (iOS Safari / Android Chrome):** Transfer a 500 MB–1 GB+ file to a phone. Verify the mobile tab does not crash (streams into OPFS) and opens the native Share sheet to save to Photos or Files.
+- [ ] **Screen Wake Lock:** Mobile screen stays on during active transfer without sleeping after 30 seconds.
 
-- [ ] Minimize/switch away from the sender's tab mid-upload — the upload continues
-- [ ] Brief Wi-Fi interruption (< 8 s) does not kill an established session
-- [ ] Signaling reconnect resilience: Temporarily disconnecting/reconnecting the signaling server mid-transfer does not abort active P2P transfers
-- [ ] Closing the sender's tab mid-transfer marks the transfer as errored on the receiver
-- [ ] AP / Client Isolation detection: A device that never answers times out (~20 s) with:
-      "Device did not respond. If you are on hotel, university, or public Wi-Fi, the router may have Client Isolation enabled."
-      (surfaces in both the transfer history status badge and the top global error banner)
+---
 
-## Chat
+## 4. Network Interruptions & Resumption
 
-- [ ] Chat opens from the device popup; messages deliver both ways
-- [ ] Tap a message to copy it; URLs are clickable; long keys render in monospace
-- [ ] Unread badge appears on the radar blip when a message arrives while chat is closed
-- [ ] Chat history survives a page refresh
-- [ ] Chatting with one peer while transferring files with another works simultaneously
+- [ ] **Brief Wi-Fi Blip (< 8s):** Turn Wi-Fi off and on during an active transfer. Verify the transfer pauses and resumes automatically without restarting from 0%.
+- [ ] **Restart Transfer:** If a connection is completely lost, verify the receiver shows **"Restart Transfer"**, and clicking it restarts without the sender needing to pick the file again.
 
-## QR & drag & drop
+---
 
-- [ ] Header QR button shows a scannable code; scanning it on a phone opens the app
-- [ ] Dragging files onto a radar blip highlights it and sends on drop
-- [ ] Dragging files anywhere shows the overlay; drop sends to the selected device
+## 5. AP Isolation & Cloud Relay Fallback
 
-## Notifications & PWA
+- [ ] **150 MB Relay Cap:** On a connection using cloud relay (`relay-turn`), verify files > 150 MB are blocked with a clear warning explaining the free-tier relay cap.
+- [ ] **Hotspot Guide:** Click **"View Mobile Hotspot Guide"** and verify the 3-step guide displays clearly.
+- [ ] **Strict Local Mode:** Toggle "Strict Local Mode" in settings; verify all cloud relays are disabled for 100% private LAN transfers.
 
-- [ ] Bell toggle asks for permission once; blip + notification arrive for files/messages
-      while the tab is hidden
-- [ ] "Install app" appears in browser menu; installed app opens standalone with themed
-      status bar color
+---
 
-## Server / security
+## 6. Peer-to-Peer Chat
 
-- [ ] `GET /health` on the server returns `{"ok":true}`
-- [ ] Relaying an offer with a spoofed `sender` field has no effect (sender is overridden
-      by the socket id)
-- [ ] Rapid-fire signaling from a script gets rate-limited (watch server logs)
-
-## Themes & a11y
-
-- [ ] All 8 themes render; theme-color meta and favicon update on switch
-- [ ] Keyboard: file actions, chat input, menus are reachable; focus rings visible
-- [ ] `prefers-reduced-motion` disables spring animations
+- [ ] **Messaging:** Send a message from the peer popup; verify instant delivery over the DataChannel.
+- [ ] **Links & Formatting:** Send a URL and a code snippet; verify clickable links and monospace code blocks.
+- [ ] **Unread Badge:** An unread count badge appears on the peer's radar node when chat is closed.

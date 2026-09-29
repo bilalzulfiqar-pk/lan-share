@@ -6,3 +6,8 @@ server/dist/
 /.agents
 .zcode/
 skills-lock.json
+/videos
+
+# Local development & temporary files
+docs/LAUNCH.md
+docs/launch*.md

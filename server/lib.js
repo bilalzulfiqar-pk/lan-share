@@ -3,6 +3,7 @@
 const MAX_NAME_LENGTH = 32;
 const MAX_FINGERPRINTS = 12;
 const MAX_DEVICE_ID_LENGTH = 128;
+const MAX_ROOM_CODE_LENGTH = 16;
 
 function sanitizeName(name) {
     if (typeof name !== 'string') {
@@ -11,6 +12,15 @@ function sanitizeName(name) {
 
     const normalized = name.trim().slice(0, MAX_NAME_LENGTH);
     return normalized || 'Unknown Device';
+}
+
+function sanitizeRoomCode(roomCode) {
+    if (typeof roomCode !== 'string' && typeof roomCode !== 'number') {
+        return null;
+    }
+
+    const normalized = String(roomCode).trim().toUpperCase().slice(0, MAX_ROOM_CODE_LENGTH);
+    return /^[A-Z0-9_-]+$/.test(normalized) ? normalized : null;
 }
 
 function sanitizeNetworkFingerprint(networkFingerprint) {
@@ -49,7 +59,8 @@ function normalizeJoinPayload(payload) {
             name: sanitizeName(payload),
             networkFingerprint: null,
             networkFingerprints: [],
-            deviceId: null
+            deviceId: null,
+            roomCode: null
         };
     }
 
@@ -61,11 +72,15 @@ function normalizeJoinPayload(payload) {
             networkFingerprints.push(legacyFingerprint);
         }
 
+        const hasRoomProp = 'roomCode' in payload || 'room' in payload;
+        const rawRoom = payload.roomCode !== undefined ? payload.roomCode : payload.room;
+
         return {
             name: sanitizeName(payload.name),
             networkFingerprint: networkFingerprints[0] || null,
             networkFingerprints,
-            deviceId: sanitizeDeviceId(payload.deviceId)
+            deviceId: sanitizeDeviceId(payload.deviceId),
+            roomCode: hasRoomProp ? sanitizeRoomCode(rawRoom) : undefined
         };
     }
 
@@ -73,7 +88,8 @@ function normalizeJoinPayload(payload) {
         name: 'Unknown Device',
         networkFingerprint: null,
         networkFingerprints: [],
-        deviceId: null
+        deviceId: null,
+        roomCode: null
     };
 }
 
@@ -82,7 +98,7 @@ function normalizeJoinPayload(payload) {
 // are client-controlled and only meaningful for hop-by-hop proxies we do not
 // run — so the last entry is the trustworthy one.
 function getClientIp(headers, fallbackAddress = '') {
-    const forwardedFor = headers['x-forwarded-for'];
+    const forwardedFor = headers && typeof headers === 'object' ? headers['x-forwarded-for'] : undefined;
     if (typeof forwardedFor === 'string' && forwardedFor.trim()) {
         const lastEntry = forwardedFor.split(',').pop().trim();
         if (lastEntry) {
@@ -90,7 +106,7 @@ function getClientIp(headers, fallbackAddress = '') {
         }
     }
 
-    return fallbackAddress.replace(/^::ffff:/, '');
+    return (fallbackAddress || '').replace(/^::ffff:/, '');
 }
 
 function detectDeviceType(userAgent) {
@@ -117,6 +133,16 @@ function hasOverlap(leftValues, rightValues) {
 function areUsersVisible(leftUser, rightUser) {
     if (!leftUser || !rightUser) {
         return false;
+    }
+
+    const leftRoom = sanitizeRoomCode(leftUser.roomCode);
+    const rightRoom = sanitizeRoomCode(rightUser.roomCode);
+
+    // If either user has a room code, room pairing rules apply:
+    // Sockets in the same non-empty room are always visible regardless of public IP or fingerprints.
+    // Sockets in different rooms, or a room user vs a non-room user, are not visible.
+    if (leftRoom || rightRoom) {
+        return Boolean(leftRoom && rightRoom && leftRoom === rightRoom);
     }
 
     const leftFingerprints = leftUser.networkFingerprints || [];
@@ -164,12 +190,17 @@ function areUsersVisible(leftUser, rightUser) {
 }
 
 function createVisibleUser(user) {
-    return {
+    const visible = {
         id: user.id,
         name: user.name,
         deviceId: user.deviceId,
         deviceType: user.deviceType
     };
+    const roomCode = sanitizeRoomCode(user.roomCode);
+    if (roomCode) {
+        visible.roomCode = roomCode;
+    }
+    return visible;
 }
 
 function getVisibleUsersFor(users, user, candidateIds = null) {
@@ -261,6 +292,13 @@ class SimilarityIndex {
 
     _getKeysFor(user) {
         const keys = new Set();
+        if (user && user.roomCode) {
+            const cleanRoom = sanitizeRoomCode(user.roomCode);
+            if (cleanRoom) {
+                keys.add(`room:${cleanRoom}`);
+                return keys;
+            }
+        }
         if (user && user.publicIp) {
             keys.add(`ip:${user.publicIp}`);
         }
@@ -338,6 +376,7 @@ class SimilarityIndex {
 
 module.exports = {
     sanitizeName,
+    sanitizeRoomCode,
     sanitizeNetworkFingerprint,
     sanitizeNetworkFingerprints,
     sanitizeDeviceId,
