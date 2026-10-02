@@ -575,11 +575,15 @@ export class TransferEngine {
         return 'direct-lan';
     }
 
+    getRelayBlockError(isStrict = this.strictLocalMode) {
+        return isStrict ? STRICT_LOCAL_RELAY_BLOCKED_ERROR : RELAY_SIZE_LIMIT_ERROR;
+    }
+
     checkRelayCapForSession(session) {
         if (!session || session.connectionType !== 'relay-turn') return;
 
         const isStrict = this.strictLocalMode;
-        const errorMsg = isStrict ? STRICT_LOCAL_RELAY_BLOCKED_ERROR : RELAY_SIZE_LIMIT_ERROR;
+        const errorMsg = this.getRelayBlockError(isStrict);
         const shouldBlock = (size) => isStrict || size > RELAY_MAX_FILE_SIZE_BYTES;
 
         // 1. Check pending offer files
@@ -888,7 +892,7 @@ export class TransferEngine {
             const isRelayCapBlocked = isRelay && file.size > RELAY_MAX_FILE_SIZE_BYTES;
 
             if (isStrictRelayBlocked || isRelayCapBlocked) {
-                const errorMsg = isStrictRelayBlocked ? STRICT_LOCAL_RELAY_BLOCKED_ERROR : RELAY_SIZE_LIMIT_ERROR;
+                const errorMsg = this.getRelayBlockError(isStrictRelayBlocked);
                 newItems.push({
                     id,
                     fileName: file.name,
@@ -954,7 +958,7 @@ export class TransferEngine {
         const isRelayCapBlocked = isRelay && entry.file.size > RELAY_MAX_FILE_SIZE_BYTES;
 
         if (isStrictRelayBlocked || isRelayCapBlocked) {
-            const errorMsg = isStrictRelayBlocked ? STRICT_LOCAL_RELAY_BLOCKED_ERROR : RELAY_SIZE_LIMIT_ERROR;
+            const errorMsg = this.getRelayBlockError(isStrictRelayBlocked);
             entry.settled = true;
             this.outgoing.delete(fileId);
             this.markTransferInactive(fileId);
@@ -1166,7 +1170,7 @@ export class TransferEngine {
             let error;
             if (isStrictRelayBlocked || isRelayCapBlocked) {
                 status = FILE_STATUS.BLOCKED;
-                error = isStrictRelayBlocked ? STRICT_LOCAL_RELAY_BLOCKED_ERROR : RELAY_SIZE_LIMIT_ERROR;
+                error = this.getRelayBlockError(isStrictRelayBlocked);
             } else if (tooLargeForBrowser) {
                 status = 'error';
                 error = 'File is too large for this browser (2 GB limit). Use Chrome or Edge on desktop for large files.';
@@ -1213,7 +1217,7 @@ export class TransferEngine {
         const isRelayCapBlocked = isRelay && meta.size > RELAY_MAX_FILE_SIZE_BYTES;
 
         if (isStrictRelayBlocked || isRelayCapBlocked) {
-            const errorMsg = isStrictRelayBlocked ? STRICT_LOCAL_RELAY_BLOCKED_ERROR : RELAY_SIZE_LIMIT_ERROR;
+            const errorMsg = this.getRelayBlockError(isStrictRelayBlocked);
             this.historyUpdate(fileId, { status: FILE_STATUS.BLOCKED, error: errorMsg });
             this.notifyError(errorMsg);
             return;
@@ -1529,12 +1533,19 @@ export class TransferEngine {
             clearTimeout(state.graceTimer);
             state.graceTimer = null;
         }
+        let abortPromise = Promise.resolve();
         if ((state.mode === 'fs-access' || state.mode === 'opfs') && state.stream) {
-            state.stream.abort?.().catch(() => {});
+            try {
+                abortPromise = Promise.resolve(state.stream.abort?.()).catch(() => {});
+            } catch {
+                // ignore sync error if any
+            }
             state.stream = null;
         }
         if (state.mode === 'opfs') {
-            this.cleanupOpfsFile(fileId).catch(() => {});
+            abortPromise.finally(() => {
+                this.cleanupOpfsFile(fileId).catch(() => {});
+            });
         }
         state.buffers = [];
         state.hasher = null;
@@ -1546,7 +1557,12 @@ export class TransferEngine {
         try {
             if (typeof navigator !== 'undefined' && navigator.storage?.getDirectory) {
                 const root = await navigator.storage.getDirectory();
-                await root.removeEntry(`transfer-${fileId}.tmp`);
+                try {
+                    await root.removeEntry(`transfer-${fileId}.tmp`);
+                } catch {
+                    await new Promise((resolve) => setTimeout(resolve, 80));
+                    await root.removeEntry(`transfer-${fileId}.tmp`).catch(() => {});
+                }
             }
         } catch {
             // ignore

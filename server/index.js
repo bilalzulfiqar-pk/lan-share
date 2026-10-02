@@ -20,6 +20,7 @@ const USERS_UPDATE_DEBOUNCE_MS = 100;
 const MAX_RELAY_STRIKES = 25;
 
 const app = express();
+app.set('trust proxy', 1);
 app.use(cors());
 
 const turnLimiter = createRateLimiter({ capacity: 30, refillPerSecond: 1 });
@@ -287,8 +288,10 @@ io.on('connection', (socket) => {
 });
 
 const PORT = process.env.PORT || 3001;
-server.listen(PORT, () => {
-    console.log(`Server running on port ${PORT}`);
-});
+if (require.main === module) {
+    server.listen(PORT, () => {
+        console.log(`Server running on port ${PORT}`);
+    });
+}
 
 module.exports = { app, server, users, similarityIndex, turnManager, turnLimiter, handleTurnCredentials, DEFAULT_STUN_SERVERS };
