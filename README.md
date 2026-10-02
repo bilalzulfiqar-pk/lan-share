@@ -6,7 +6,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Live Demo](https://img.shields.io/badge/Live%20Demo-lan--share.vercel.app-brightgreen.svg)](https://lan-share.vercel.app/)
-[![Tests Passing](https://img.shields.io/badge/Tests-265%20passed-success.svg)](docs/QA-CHECKLIST.md)
+[![Tests Passing](https://img.shields.io/badge/Tests-290%20passed-success.svg)](docs/QA-CHECKLIST.md)
 [![React 19](https://img.shields.io/badge/React-19-61dafb.svg)](https://react.dev/)
 [![Vite 7](https://img.shields.io/badge/Vite-7-646cff.svg)](https://vitejs.dev/)
 [![WebRTC](https://img.shields.io/badge/WebRTC-DataChannels-333333.svg)](https://webrtc.org/)
@@ -59,7 +59,8 @@
   - **6-Digit Room Codes & QR Codes:** Instant pairing across segmented VLANs, 2.4/5 GHz bands, or guest networks via URL hashes (e.g., `#room=492810`) and camera scans.
 - **Screen Wake Lock & Background Audio Beacon:** Prevents mobile devices (iOS Safari & Android Chrome) from putting tabs to sleep mid-transfer using `navigator.wakeLock` and an inaudible audio beacon loop.
 - **Backpressure Flow Control:** Dynamically throttles chunk transmissions when the underlying WebRTC buffer fills up (`bufferedAmount < 1 MB`), preventing buffer overflows and packet loss.
-- **Resilient Reconnections:** Automatic ICE renegotiation and chunk-offset resumption recover ongoing transfers during momentary Wi-Fi blips.
+- **Connection Mode Diagnostics:** Real-time transfer mode badges (`Local Wi-Fi Transfer`, `Direct Internet Transfer`, `Cloud Relay Transfer`) with interactive popovers explaining network topology, AP isolation detection, 150 MB relay quota caps, and click-to-pin states.
+- **Hardware-Accelerated Fluid UI:** Smooth cubic-bezier layout morphing, compositor layer isolation (`will-change`), and flicker-free peer selection tracking across background network scans.
 - **Encrypted Ephemeral P2P Chat:** In-session messaging with auto-link parsing, code block styling, and one-tap copy.
 
 ---
@@ -263,7 +264,7 @@ LAN Share includes a unified alert system controlled by the bell icon in the top
   - **Clustering:** Inverted index (`SimilarityIndex`) for subnet clustering + Room namespaces
   - **Relay Provider:** [Metered.ca OpenRelay](https://www.metered.ca/) REST API integration
 - **Testing & Quality:**
-  - **Test Runner:** [Vitest](https://vitest.dev/) (265 automated unit, integration, and child-process tests)
+  - **Test Runner:** [Vitest](https://vitest.dev/) (290 automated unit, integration, and child-process tests: 239 client + 51 server)
   - **Linter:** ESLint with React Hooks & Refresh rules
 
 ---
@@ -295,7 +296,7 @@ LAN Share includes a unified alert system controlled by the bell icon in the top
 
 ## Testing & Quality Assurance
 
-LAN Share is backed by **265 automated tests** verifying socket clustering, WebRTC state machines, OPFS streaming fallbacks, TURN relay protection, and protocol serialization:
+LAN Share is backed by **290 automated tests** (239 client + 51 server) verifying socket clustering, WebRTC state machines, OPFS streaming fallbacks, TURN relay protection, connection mode diagnostics, and protocol serialization:
 
 ```bash
 # Run server test suite (clustering, rooms, TURN credential caching)
@@ -319,14 +320,14 @@ lan-share/
 ├── client/                     # React 19 + Vite frontend
 │   ├── public/                 # Manifest, favicons, audio cues
 │   └── src/
-│       ├── components/         # Radar, Chat, RoomModal, HotspotGuideModal
+│       ├── components/         # Radar, Chat, RoomModal, HotspotGuideModal, ConnectionModeBadge
 │       ├── hooks/              # useSignaling (Socket.IO), useWebRTC (engine hook)
-│       └── lib/                # TransferEngine, protocol, opfs, crypto, wakeLock
-│           └── __tests__/      # Vitest client suites (OPFS, resumption, relay)
+│       └── lib/                # TransferEngine, protocol, opfs, crypto, connectionModes, wakeLock
+│           └── __tests__/      # Vitest client suites (OPFS, resumption, relay, components - 239 tests)
 ├── server/                     # Node.js + Express + Socket.IO signaling service
 │   ├── index.js                # Server entry point, TURN endpoint, socket events
 │   ├── lib.js                  # Subnet clustering, room registry, SimilarityIndex
-│   └── *.test.js               # Vitest server suites (rooms, TURN, similarity)
+│   └── *.test.js               # Vitest server suites (rooms, TURN, similarity - 51 tests)
 ├── docs/                       # Project documentation & guides
 │   ├── assets/                 # Vector banner & architecture diagrams
 │   ├── QA-CHECKLIST.md         # Multi-device QA checklist

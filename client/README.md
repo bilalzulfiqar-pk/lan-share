@@ -18,15 +18,16 @@ npm test         # vitest (includes live-server integration tests)
 ```
 src/
   App.jsx                  # app shell: header, radar, history, popups, panels
-  components/              # DeviceList (radar), FileItem, HistoryPanel, ChatPanel, QrPopup
+  components/              # DeviceList, FileItem, HistoryPanel, ChatPanel, QrPopup, RoomModal, HotspotGuideModal, ConnectionModeBadge
   hooks/
     useSignaling.js        # socket.io connection, discovery, device identity
     useWebRTC.js           # thin React binding for the transfer engine
   lib/
     transferEngine.js      # per-peer connections, streaming transfers, chat
     protocol.js            # wire protocol constants and negotiation helpers
+    connectionModes.js     # transfer mode configs (LAN, STUN, TURN) and diagnostics
     clipboard.js           # clipboard with insecure-origin fallback
     notifications.js       # browser notification helpers
     sound.js               # WebAudio notification blip
-    __tests__/             # vitest suites (mock WebRTC + real-server integration)
+    __tests__/             # vitest suites (mock WebRTC + real-server integration - 239 tests)
 ```

@@ -23,5 +23,7 @@ npm test        # Run Vitest test suite (similarity index, clustering, rate limi
 server/
 ├── index.js      # Express app, Socket.IO handlers, connection rate limiting
 ├── lib.js        # SimilarityIndex, subnet extraction, candidate clustering
-└── lib.test.js   # Automated Vitest unit test suite (28 tests)
+├── lib.test.js   # Vitest unit test suite (similarity index, clustering)
+├── rooms.test.js # Vitest test suite (room namespaces and isolation)
+└── turn.test.js  # Vitest test suite (Metered TURN credentials caching & fallback - 51 tests total)
 ```
