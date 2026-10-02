@@ -9,5 +9,17 @@ skills-lock.json
 /videos
 
 # Local development & temporary files
+artifacts/
 docs/LAUNCH.md
 docs/launch*.md
+
+# Superpowers plans & logs
+docs/superpowers/
+.superpowers/
+
+# Playwright & test artifacts
+client/scripts/
+.playwright-cli/
+test-results/
+playwright-report/
+

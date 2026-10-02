@@ -72,4 +72,15 @@ describe('Header component rendering', () => {
         expect(html).toContain('aria-pressed="true"');
         expect(html).toContain('is-active-icon');
     });
+
+    it('renders the mobile more button and desktop tool classes', () => {
+        const html = renderToStaticMarkup(<Header {...defaultProps} />);
+
+        expect(html).toContain('header-more-btn');
+        expect(html).toContain('aria-label="More settings and tools"');
+        expect(html).toContain('aria-haspopup="menu"');
+        expect(html).toContain('header-tool-theme');
+        expect(html).toContain('header-tool-qr');
+        expect(html).toContain('header-tool-debug');
+    });
 });
