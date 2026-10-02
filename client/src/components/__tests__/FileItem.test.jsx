@@ -209,6 +209,125 @@ describe('FileItem component honest state rendering', () => {
         expect(html).toContain('Restart Transfer');
         expect(html).toContain('data-testid="restart-transfer-btn"');
     });
+
+    it('renders "Peer Offline" badge and hides "Restart Transfer" when item.error is "Peer disconnected."', () => {
+        const disconnectedItem = {
+            id: 'f11',
+            fileName: 'interrupted.mp4',
+            fileSize: 10 * 1024 * 1024,
+            fileType: 'video/mp4',
+            direction: 'in',
+            status: 'error',
+            error: 'Peer disconnected.',
+            peerId: 'peer1'
+        };
+
+        const html = renderToStaticMarkup(
+            <FileItem item={disconnectedItem} getPeerName={() => 'Alice'} onRequest={() => {}} />
+        );
+
+        expect(html).not.toContain('Restart Transfer');
+        expect(html).not.toContain('data-testid="restart-transfer-btn"');
+        expect(html).toContain('Peer Offline');
+        expect(html).toContain('data-testid="peer-offline-badge"');
+    });
+
+    it('renders "Peer Offline" badge when isPeerOnline is false or peer is missing from peers array', () => {
+        const failedItem = {
+            id: 'f12',
+            fileName: 'video.mkv',
+            fileSize: 50 * 1024 * 1024,
+            fileType: 'video/x-matroska',
+            direction: 'in',
+            status: 'failed',
+            error: 'Connection closed.',
+            peerId: 'peer-leaving'
+        };
+
+        // Case A: isPeerOnline explicitly false
+        const htmlExplicitOffline = renderToStaticMarkup(
+            <FileItem item={failedItem} getPeerName={() => 'Alice'} onRequest={() => {}} isPeerOnline={false} />
+        );
+        expect(htmlExplicitOffline).not.toContain('Restart Transfer');
+        expect(htmlExplicitOffline).toContain('Peer Offline');
+
+        // Case B: peer is missing from active peers list
+        const htmlMissingFromPeers = renderToStaticMarkup(
+            <FileItem item={failedItem} getPeerName={() => 'Alice'} onRequest={() => {}} peers={[{ id: 'other-peer' }]} />
+        );
+        expect(htmlMissingFromPeers).not.toContain('Restart Transfer');
+        expect(htmlMissingFromPeers).toContain('Peer Offline');
+
+        // Case C: peer IS present in peers list
+        const htmlPeerOnline = renderToStaticMarkup(
+            <FileItem item={failedItem} getPeerName={() => 'Alice'} onRequest={() => {}} peers={[{ id: 'peer-leaving' }]} />
+        );
+        expect(htmlPeerOnline).toContain('Restart Transfer');
+        expect(htmlPeerOnline).not.toContain('Peer Offline');
+    });
+
+    it('renders "Peer Offline" badge when item.error is "Peer is no longer connected."', () => {
+        const item = {
+            id: 'f13',
+            fileName: 'document.pdf',
+            fileSize: 1024 * 1024,
+            fileType: 'application/pdf',
+            direction: 'in',
+            status: 'error',
+            error: 'Peer is no longer connected.',
+            peerId: 'peer99'
+        };
+
+        const html = renderToStaticMarkup(
+            <FileItem item={item} getPeerName={() => 'Alice'} onRequest={() => {}} />
+        );
+
+        expect(html).not.toContain('Restart Transfer');
+        expect(html).toContain('Peer Offline');
+        expect(html).toContain('data-testid="peer-offline-badge"');
+    });
+
+    it('renders ConnectionModeBadge with informative labels and details when connectionType is provided', () => {
+        const lanItem = {
+            id: 'f14',
+            fileName: 'clip.mp4',
+            fileSize: 10 * 1024 * 1024,
+            direction: 'out',
+            status: 'uploading',
+            connectionType: 'direct-lan',
+            peerId: 'peer1'
+        };
+
+        const lanHtml = renderToStaticMarkup(
+            <FileItem item={lanItem} getPeerName={() => 'Alice'} />
+        );
+        expect(lanHtml).toContain('Local Wi-Fi Transfer');
+        expect(lanHtml).toContain('mode-direct-lan');
+        expect(lanHtml).toContain('Files flow directly through your local Wi-Fi router');
+
+        const stunItem = {
+            ...lanItem,
+            id: 'f15',
+            connectionType: 'direct-stun'
+        };
+        const stunHtml = renderToStaticMarkup(
+            <FileItem item={stunItem} getPeerName={() => 'Alice'} />
+        );
+        expect(stunHtml).toContain('Direct Internet Transfer');
+        expect(stunHtml).toContain('mode-direct-stun');
+
+        const relayItem = {
+            ...lanItem,
+            id: 'f16',
+            connectionType: 'relay-turn'
+        };
+        const relayHtml = renderToStaticMarkup(
+            <FileItem item={relayItem} getPeerName={() => 'Alice'} />
+        );
+        expect(relayHtml).toContain('Cloud Relay Transfer');
+        expect(relayHtml).toContain('mode-relay-turn');
+        expect(relayHtml).toContain('(Max 150 MB per file)');
+    });
 });
 
 

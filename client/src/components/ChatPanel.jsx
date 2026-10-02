@@ -80,7 +80,7 @@ function ChatBubble({ message, copiedId, onCopy, reduceMotion }) {
   );
 }
 
-export function ChatPanel({ open, peerName, connectionLabel, messages, onSend, onClose, reduceMotion }) {
+export function ChatPanel({ open, peerName, connectionLabel, messages, onSend, onClose, reduceMotion, isPeerOnline = true }) {
   const [draft, setDraft] = useState('');
   const [copiedId, setCopiedId] = useState(null);
   const scrollRef = useRef(null);
@@ -93,10 +93,10 @@ export function ChatPanel({ open, peerName, connectionLabel, messages, onSend, o
   }, [messages, open]);
 
   useEffect(() => {
-    if (open) {
+    if (open && isPeerOnline) {
       inputRef.current?.focus();
     }
-  }, [open, peerName]);
+  }, [open, peerName, isPeerOnline]);
 
   const handleCopy = async (message) => {
     const succeeded = await copyText(message.text);
@@ -108,6 +108,7 @@ export function ChatPanel({ open, peerName, connectionLabel, messages, onSend, o
 
   const handleSubmit = (event) => {
     event.preventDefault();
+    if (!isPeerOnline) return;
     const text = draft.trim();
     if (!text) return;
     onSend(text);
@@ -130,7 +131,10 @@ export function ChatPanel({ open, peerName, connectionLabel, messages, onSend, o
         <header className="chat-header">
               <div className="chat-header-meta">
                 <h3>{peerName}</h3>
-                <p>{connectionLabel}</p>
+                <p className={`chat-status-text ${!isPeerOnline ? 'is-offline' : ''}`}>
+                  {!isPeerOnline && <span className="peer-offline-dot" aria-hidden="true" />}
+                  {connectionLabel}
+                </p>
               </div>
               <button
                 type="button"
@@ -171,14 +175,15 @@ export function ChatPanel({ open, peerName, connectionLabel, messages, onSend, o
                 className="chat-input"
                 value={draft}
                 onChange={(event) => setDraft(event.target.value)}
-                placeholder="Type a message, link or key…"
+                placeholder={isPeerOnline ? 'Type a message, link or key…' : 'Peer has disconnected'}
                 maxLength={4000}
                 aria-label="Message text"
+                disabled={!isPeerOnline}
               />
               <button
                 type="submit"
                 className="btn btn-primary chat-send-button no-glow"
-                disabled={draft.trim() === ''}
+                disabled={!isPeerOnline || draft.trim() === ''}
                 aria-label="Send message"
               >
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">

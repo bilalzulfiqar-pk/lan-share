@@ -26,14 +26,14 @@ describe('Header component rendering', () => {
         onOpenRoomModal: () => {}
     };
 
-    it('renders default Room button when not in a room', () => {
+    it('renders default Rooms button when not in a room', () => {
         const html = renderToStaticMarkup(<Header {...defaultProps} roomCode={null} />);
 
         expect(html).toContain('LAN Share');
         expect(html).toContain('Online');
         expect(html).toContain('room-header-btn');
         expect(html).not.toContain('is-in-room');
-        expect(html).toContain('Room');
+        expect(html).toContain('Rooms');
         expect(html).toContain('value="Test Device"');
         expect(html).toContain('dev-12345678');
     });

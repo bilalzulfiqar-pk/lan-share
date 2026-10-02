@@ -11,6 +11,7 @@ import { QrPopup } from './components/QrPopup';
 import { Header } from './components/Header';
 import { RoomModal } from './components/RoomModal';
 import { HotspotGuideModal } from './components/HotspotGuideModal';
+import { ConnectionModeBadge } from './components/ConnectionModeBadge';
 import { copyText } from './lib/clipboard';
 import { playNotificationBlip } from './lib/sound';
 import {
@@ -188,9 +189,10 @@ function App() {
     } else {
       // Refresh the pinned key in case the peer reconnected with a new
       // socket id but the same device.
-      setChatSession((current) => (current.peerId === peerId ? { ...current, key } : current));
+      const peer = peers.find((p) => p.id === peerId);
+      setChatSession((current) => (current.peerId === peerId ? { ...current, key, peerName: peer?.name || current.peerName } : current));
     }
-  }, [announceEvent, appendChatMessage, chatSession.peerId, deviceKeyForPeer, getPeerName]);
+  }, [announceEvent, appendChatMessage, chatSession.peerId, deviceKeyForPeer, getPeerName, peers]);
 
   const [strictLocalMode, setStrictLocalMode] = useState(
     () => localStorage.getItem('lan-share-strict-local') === 'true'
@@ -218,16 +220,44 @@ function App() {
   });
 
   const openChatWithPeer = useCallback((peerId) => {
-    setChatSession({ peerId, key: deviceKeyForPeer(peerId) });
+    const peer = peers.find((p) => p.id === peerId);
+    setChatSession({
+      peerId,
+      key: deviceKeyForPeer(peerId),
+      peerName: peer?.name || getPeerName(peerId)
+    });
     setUnreadByDevice((prev) => ({ ...prev, [deviceKeyForPeer(peerId)]: 0 }));
-  }, [deviceKeyForPeer]);
+  }, [deviceKeyForPeer, getPeerName, peers]);
 
   const closeChat = useCallback(() => {
-    setChatSession({ peerId: null, key: null });
+    setChatSession({ peerId: null, key: null, peerName: '' });
   }, []);
 
+  // If a chat peer reconnects with a fresh socket id for the same device,
+  // update the active chat session's peerId so messaging seamlessly resumes.
+  useEffect(() => {
+    if (chatSession.key) {
+      const activePeer = peers.find((p) => (p.deviceId && p.deviceId === chatSession.key) || p.id === chatSession.peerId);
+      if (activePeer && activePeer.id !== chatSession.peerId) {
+        queueMicrotask(() => {
+          setChatSession((current) => (current.key === chatSession.key ? {
+            ...current,
+            peerId: activePeer.id,
+            peerName: activePeer.name || current.peerName
+          } : current));
+        });
+      }
+    }
+  }, [peers, chatSession.key, chatSession.peerId]);
+
+  const currentChatPeer = chatSession.peerId
+    ? peers.find((p) => p.id === chatSession.peerId || (chatSession.key && p.deviceId && p.deviceId === chatSession.key))
+    : null;
+  const isChatPeerOnline = Boolean(currentChatPeer);
+  const activeChatPeerId = currentChatPeer ? currentChatPeer.id : chatSession.peerId;
+
   const handleSendChat = useCallback((text) => {
-    if (!chatSession.peerId || !chatSession.key) return;
+    if (!chatSession.peerId || !chatSession.key || !isChatPeerOnline) return;
 
     appendChatMessage(chatSession.key, {
       id: (crypto.randomUUID ? crypto.randomUUID() : `m-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`),
@@ -235,8 +265,8 @@ function App() {
       ts: Date.now(),
       direction: 'out'
     });
-    sendChat(chatSession.peerId, text);
-  }, [appendChatMessage, chatSession, sendChat]);
+    sendChat(activeChatPeerId, text);
+  }, [activeChatPeerId, appendChatMessage, chatSession.key, chatSession.peerId, isChatPeerOnline, sendChat]);
 
   useEffect(() => {
     try {
@@ -258,11 +288,13 @@ function App() {
   }, [peers, unreadByDevice]);
 
   const chatMessages = chatSession.key ? (chatByDevice[chatSession.key] || []) : [];
-  const chatStatusLabel = peerStatus[chatSession.peerId] === 'CONNECTED'
-    ? 'Connected · peer-to-peer'
-    : peerStatus[chatSession.peerId] === 'CONNECTING'
-      ? 'Connecting…'
-      : 'Not connected';
+  const chatStatusLabel = !isChatPeerOnline
+    ? 'Peer disconnected · Offline'
+    : peerStatus[activeChatPeerId] === 'CONNECTED'
+      ? 'Connected · peer-to-peer'
+      : peerStatus[activeChatPeerId] === 'CONNECTING'
+        ? 'Connecting…'
+        : 'Not connected';
 
   const [disconnectElapsed, setDisconnectElapsed] = useState(0);
 
@@ -298,6 +330,18 @@ function App() {
   }
 
   const [selectedDevice, setSelectedDevice] = useState(null);
+
+  // Auto-close floating peer action card if selected device leaves/disconnects
+  useEffect(() => {
+    if (selectedDevice && !peers.some((p) => p.id === selectedDevice || (p.deviceId && p.deviceId === selectedDevice))) {
+      const timer = window.setTimeout(() => {
+        setSelectedDevice((current) => (
+          current && !peers.some((p) => p.id === current || (p.deviceId && p.deviceId === current)) ? null : current
+        ));
+      }, 500);
+      return () => window.clearTimeout(timer);
+    }
+  }, [peers, selectedDevice]);
   const [showGuide, setShowGuide] = useState(true);
   const [showDebugSidebar, setShowDebugSidebar] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -397,25 +441,38 @@ function App() {
     setDisplayName(e.target.value);
   };
 
-  const handleDeviceToggle = (id) => {
-    setSelectedDevice((prev) => (prev === id ? null : id));
-  };
+  const handleDeviceToggle = useCallback((id) => {
+    const peer = peers.find((p) => p.id === id || (p.deviceId && p.deviceId === id));
+    const targetKey = peer?.deviceId || id;
+    setSelectedDevice((prev) => {
+      const prevPeer = peers.find((p) => p.id === prev || (p.deviceId && p.deviceId === prev));
+      const prevKey = prevPeer?.deviceId || prev;
+      return prevKey === targetKey ? null : targetKey;
+    });
+  }, [peers]);
 
   const toggleDebugSidebar = () => {
     setShowDebugSidebar((prev) => !prev);
   };
 
+  const activePeer = useMemo(() => {
+    if (!selectedDevice) return null;
+    return peers.find((p) => p.id === selectedDevice || (p.deviceId && p.deviceId === selectedDevice)) || null;
+  }, [peers, selectedDevice]);
+
+  const activeSelectedDevice = activePeer ? activePeer.id : null;
+
   const onFileSelected = (e) => {
     const files = e.target.files;
-    if (files && files.length > 0 && selectedDevice) {
-      sendFilesOffer(selectedDevice, files);
+    if (files && files.length > 0 && activeSelectedDevice) {
+      sendFilesOffer(activeSelectedDevice, files);
       e.target.value = '';
     }
   };
 
   // Page-level drag & drop: dropping files anywhere sends them to the
   // selected device (or the only visible peer).
-  const dragDropTarget = selectedDevice || (peers.length === 1 ? peers[0].id : null);
+  const dragDropTarget = activeSelectedDevice || (peers.length === 1 ? peers[0].id : null);
 
   useEffect(() => {
     let dragDepth = 0;
@@ -625,12 +682,12 @@ function App() {
                   <div className="debug-value">{debugInfo.transportName}</div>
                   <div className="debug-label">WebRTC</div>
                   <div className="debug-value">
-                    {selectedDevice ? (
+                    {activeSelectedDevice ? (
                       <span>
-                        {peerStatus[selectedDevice] || 'IDLE'}
+                        {peerStatus[activeSelectedDevice] || 'IDLE'}
                         {' · '}
-                        <span className={`conn-type-badge ${connectionTypes[selectedDevice] || 'direct-lan'}`}>
-                          {connectionTypes[selectedDevice] || 'direct-lan'}
+                        <span className={`conn-type-badge ${connectionTypes[activeSelectedDevice] || 'direct-lan'}`}>
+                          {connectionTypes[activeSelectedDevice] || 'direct-lan'}
                         </span>
                       </span>
                     ) : (
@@ -639,7 +696,7 @@ function App() {
                   </div>
                   <div className="debug-label">Selected</div>
                   <div className="debug-value">
-                    {selectedDevice ? getPeerName(selectedDevice) : 'None selected'}
+                    {activeSelectedDevice ? getPeerName(activeSelectedDevice) : 'None selected'}
                   </div>
                 </div>
               </div>
@@ -786,12 +843,13 @@ function App() {
 
       <ChatPanel
         open={Boolean(chatSession.peerId)}
-        peerName={chatSession.peerId ? getPeerName(chatSession.peerId) : ''}
+        peerName={chatSession.peerName || (chatSession.peerId ? getPeerName(chatSession.peerId) : '')}
         connectionLabel={chatStatusLabel}
         messages={chatMessages}
         onSend={handleSendChat}
         onClose={closeChat}
         reduceMotion={reduceMotion}
+        isPeerOnline={isChatPeerOnline}
       />
 
       {error && error !== dismissedError && (
@@ -831,28 +889,39 @@ function App() {
           <DeviceList
             devices={peers}
             onToogle={handleDeviceToggle}
-            selectedDevice={selectedDevice}
+            selectedDevice={activeSelectedDevice}
             unreadCounts={unreadBySocketId}
             onDropFiles={(peerId, files) => sendFilesOffer(peerId, files)}
           />
 
           <AnimatePresence>
-            {selectedDevice && (
+            {activeSelectedDevice && (
               <motion.div
+                key="file-selection-popup"
                 className="file-selection-popup"
-                initial={{ opacity: 0, y: 10, x: '-50%' }}
-                animate={{ opacity: 1, y: 0, x: '-50%' }}
-                exit={{ opacity: 0, y: 10, x: '-50%' }}
-                transition={reduceMotion ? { duration: 0 } : { type: 'spring', stiffness: 320, damping: 30 }}
+                initial={reduceMotion ? false : { opacity: 0, y: 12, x: '-50%' }}
+                animate={{
+                  opacity: 1,
+                  y: 0,
+                  x: '-50%',
+                  transition: reduceMotion ? { duration: 0 } : { duration: 0.26, ease: [0.25, 1, 0.5, 1] }
+                }}
+                exit={reduceMotion ? { opacity: 0 } : {
+                  opacity: 0,
+                  y: 8,
+                  x: '-50%',
+                  transition: { duration: 0.18, ease: [0.4, 0, 1, 1] }
+                }}
               >
                 <div className="file-selection-popup-label">
-                  <span>Send to</span>
-                  <strong>{getPeerName(selectedDevice)}</strong>
-                  {connectionTypes[selectedDevice] && (
-                    <span className={`conn-type-badge ${connectionTypes[selectedDevice]}`} title={`Connection type: ${connectionTypes[selectedDevice]}`}>
-                      {connectionTypes[selectedDevice]}
-                    </span>
-                  )}
+                  <div className="file-selection-popup-title">
+                    <span>Send to</span>
+                    <strong>{getPeerName(activeSelectedDevice)}</strong>
+                  </div>
+                  <ConnectionModeBadge
+                    mode={connectionTypes[activeSelectedDevice] || 'direct-lan'}
+                    className="file-selection-mode-badge"
+                  />
                 </div>
                 <input
                   type="file"
@@ -874,7 +943,7 @@ function App() {
                   <button
                     type="button"
                     className="btn btn-secondary"
-                    onClick={() => openChatWithPeer(selectedDevice)}
+                    onClick={() => openChatWithPeer(activeSelectedDevice)}
                   >
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                       <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
@@ -915,6 +984,7 @@ function App() {
             onCancel={cancelTransfer}
             getPeerName={getPeerName}
             onOpenHotspotGuide={() => setShowHotspotModal(true)}
+            peers={peers}
           />
         </div>
       </div>

@@ -1,4 +1,5 @@
 import React from 'react';
+import { ConnectionModeBadge } from './ConnectionModeBadge';
 
 const CancelIcon = () => (
   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -7,9 +8,18 @@ const CancelIcon = () => (
   </svg>
 );
 
-export function FileItem({ item, onRequest, onSave, onCancel, getPeerName, onOpenHotspotGuide }) {
+export function FileItem({ item, onRequest, onSave, onCancel, getPeerName, onOpenHotspotGuide, peers, isPeerOnline }) {
   const isSender = item.direction === 'out';
   const peerName = item.peerName || (getPeerName ? getPeerName(item.peerId) : 'Unknown');
+
+  const isPeerDisconnected =
+    item.error === 'Peer disconnected.' ||
+    Boolean(item.error && (
+      item.error.toLowerCase().includes('peer disconnected') ||
+      item.error.toLowerCase().includes('no longer connected')
+    )) ||
+    isPeerOnline === false ||
+    (Array.isArray(peers) && Boolean(item.peerId) && !peers.some((p) => p.id === item.peerId));
 
   const isHotspotCandidate = Boolean(
     onOpenHotspotGuide && (
@@ -122,9 +132,7 @@ export function FileItem({ item, onRequest, onSave, onCancel, getPeerName, onOpe
           {item.connectionType && (
             <>
               <span className="meta-sep" aria-hidden="true">·</span>
-              <span className={`conn-type-badge ${item.connectionType}`} title={`Connection type: ${item.connectionType}`}>
-                {item.connectionType}
-              </span>
+              <ConnectionModeBadge mode={item.connectionType} />
             </>
           )}
           <span className="file-peer-info">
@@ -206,14 +214,20 @@ export function FileItem({ item, onRequest, onSave, onCancel, getPeerName, onOpe
         )}
 
         {!isSender && (item.status === 'failed' || item.status === 'error' || item.status === 'blocked') && !isHotspotCandidate && (
-          <button
-            type="button"
-            className="btn btn-sm btn-primary btn-auto"
-            onClick={() => onRequest(item.id)}
-            data-testid="restart-transfer-btn"
-          >
-            Restart Transfer
-          </button>
+          isPeerDisconnected ? (
+            <span className="peer-offline-badge" data-testid="peer-offline-badge">
+              Peer Offline
+            </span>
+          ) : (
+            <button
+              type="button"
+              className="btn btn-sm btn-primary btn-auto"
+              onClick={() => onRequest(item.id)}
+              data-testid="restart-transfer-btn"
+            >
+              Restart Transfer
+            </button>
+          )
         )}
 
         {!isSender && item.status === 'completed' && item.downloadUrl && (
