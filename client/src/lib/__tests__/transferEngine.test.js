@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { TransferEngine } from '../transferEngine';
 import {
     installMockWebRTC,
@@ -388,7 +388,7 @@ describe('TransferEngine', () => {
         expect(engineA.soundEnabled).toBe(false);
 
         let chimeCount = 0;
-        const originalMethod = engineA.playTransferComplete;
+        const _originalMethod = engineA.playTransferComplete;
         engineA.playTransferComplete = () => {
             if (engineA.soundEnabled) {
                 chimeCount += 1;
@@ -412,5 +412,48 @@ describe('TransferEngine', () => {
         expect(chimeCount).toBe(1);
 
         engineA.destroy();
+    });
+
+    it('restarts ICE when TURN credentials load while session is actively connecting', async () => {
+        const bus = createSocketBus();
+        const socketA = new MockSocket('alice', bus);
+        const engineA = new TransferEngine({
+            socket: socketA,
+            myId: 'alice',
+            fetchTurnCredentials: false
+        });
+
+        const session = engineA.getOrCreateSession('bob');
+        const restartSpy = vi.spyOn(engineA, 'attemptIceRestart').mockResolvedValue(true);
+
+        engineA.setTurnCredentials({
+            iceServers: [{ urls: 'turn:turn.metered.ca:443', username: 'u', credential: 'p' }]
+        });
+
+        expect(restartSpy).toHaveBeenCalledWith(session);
+        engineA.destroy();
+    });
+
+    it('attaches connect watchdog to answerer sessions to prevent indefinite hang', () => {
+        vi.useFakeTimers();
+        const bus = createSocketBus();
+        const socketB = new MockSocket('bob', bus);
+        const engineB = new TransferEngine({
+            socket: socketB,
+            myId: 'bob',
+            fetchTurnCredentials: false
+        });
+
+        const session = engineB.getOrCreateSession('alice', { asAnswerer: true });
+        expect(session.connectWatchdog).not.toBeNull();
+
+        // Fast-forward past connect timeout (20s)
+        vi.advanceTimersByTime(21000);
+
+        expect(engineB.sessions.has('alice')).toBe(false);
+        expect(session.tearingDown).toBe(true);
+
+        engineB.destroy();
+        vi.useRealTimers();
     });
 });

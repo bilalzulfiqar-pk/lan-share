@@ -93,16 +93,34 @@ function normalizeJoinPayload(payload) {
     };
 }
 
-// The public IP is read from x-forwarded-for. Reverse proxies (Render et al.)
-// append the real client IP to the end of the chain, while the leading entries
-// are client-controlled and only meaningful for hop-by-hop proxies we do not
-// run — so the last entry is the trustworthy one.
+// Extract the real client IP. In production reverse-proxy deployments
+// (Render, Cloudflare, AWS ALB, Nginx), authoritative headers like
+// cf-connecting-ip, true-client-ip, and x-real-ip provide the direct client IP.
+// For standard X-Forwarded-For chains (RFC 7239: <client>, <proxy1>, <proxy2>),
+// the first entry represents the original connecting client.
 function getClientIp(headers, fallbackAddress = '') {
-    const forwardedFor = headers && typeof headers === 'object' ? headers['x-forwarded-for'] : undefined;
-    if (typeof forwardedFor === 'string' && forwardedFor.trim()) {
-        const lastEntry = forwardedFor.split(',').pop().trim();
-        if (lastEntry) {
-            return lastEntry;
+    if (headers && typeof headers === 'object') {
+        const cfConnectingIp = headers['cf-connecting-ip'];
+        if (typeof cfConnectingIp === 'string' && cfConnectingIp.trim()) {
+            return cfConnectingIp.trim().replace(/^::ffff:/, '');
+        }
+
+        const trueClientIp = headers['true-client-ip'];
+        if (typeof trueClientIp === 'string' && trueClientIp.trim()) {
+            return trueClientIp.trim().replace(/^::ffff:/, '');
+        }
+
+        const xRealIp = headers['x-real-ip'];
+        if (typeof xRealIp === 'string' && xRealIp.trim()) {
+            return xRealIp.trim().replace(/^::ffff:/, '');
+        }
+
+        const forwardedFor = headers['x-forwarded-for'];
+        if (typeof forwardedFor === 'string' && forwardedFor.trim()) {
+            const firstEntry = forwardedFor.split(',')[0].trim();
+            if (firstEntry) {
+                return firstEntry.replace(/^::ffff:/, '');
+            }
         }
     }
 
@@ -167,25 +185,22 @@ function areUsersVisible(leftUser, rightUser) {
         return true;
     }
 
+    // Both browsers explicitly reported distinct LAN subnets -> definitely not same local network segment.
+    if (bothHaveLan && !sharesLanFingerprint) {
+        return false;
+    }
+
     // Next strongest signal: both browsers independently discovered the same
     // public network identity through ICE/STUN.
     if (bothHaveWan && sharesWanFingerprint) {
         return true;
     }
 
-    if (!sharesHttpPublicIp) {
-        return false;
-    }
-
-    // If one browser only exposed LAN and the other only exposed WAN, or one
-    // side exposed nothing at all, keep the same-public-IP fallback instead of
-    // hiding a device that was valid moments earlier.
-    if (!bothHaveLan || !bothHaveWan) {
+    // Baseline: devices connect from the same public HTTP IP.
+    if (sharesHttpPublicIp) {
         return true;
     }
 
-    // Both devices exposed comparable fingerprint types but none matched, so
-    // they are likely not on the same local network segment.
     return false;
 }
 
@@ -374,6 +389,48 @@ class SimilarityIndex {
     }
 }
 
+// Tracks active WebRTC signaling sessions with a TTL (default 60s).
+// Authorizes reciprocal exchange of answer and ice-candidate packets even if
+// background radar visibility fluctuates momentarily during network discovery.
+class SignalingSessionRegistry {
+    constructor({ ttlMs = 60 * 1000, nowFn = () => Date.now() } = {}) {
+        this.ttlMs = ttlMs;
+        this.nowFn = nowFn;
+        this.sessions = new Map(); // pairKey -> expiresAt
+    }
+
+    _pairKey(a, b) {
+        return a < b ? `${a}:${b}` : `${b}:${a}`;
+    }
+
+    registerSession(peerA, peerB) {
+        if (!peerA || !peerB || peerA === peerB) return;
+        const key = this._pairKey(peerA, peerB);
+        this.sessions.set(key, this.nowFn() + this.ttlMs);
+    }
+
+    isAuthorized(peerA, peerB) {
+        if (!peerA || !peerB) return false;
+        const key = this._pairKey(peerA, peerB);
+        const expiresAt = this.sessions.get(key);
+        if (!expiresAt) return false;
+        if (this.nowFn() > expiresAt) {
+            this.sessions.delete(key);
+            return false;
+        }
+        return true;
+    }
+
+    removeSocket(socketId) {
+        if (!socketId) return;
+        for (const key of this.sessions.keys()) {
+            if (key.startsWith(`${socketId}:`) || key.endsWith(`:${socketId}`)) {
+                this.sessions.delete(key);
+            }
+        }
+    }
+}
+
 module.exports = {
     sanitizeName,
     sanitizeRoomCode,
@@ -391,5 +448,6 @@ module.exports = {
     isValidSessionDescription,
     isValidIceCandidate,
     createRateLimiter,
-    SimilarityIndex
+    SimilarityIndex,
+    SignalingSessionRegistry
 };

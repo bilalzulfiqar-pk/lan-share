@@ -150,6 +150,7 @@ export class TransferEngine {
         this.turnApiUrl = resolveTurnApiUrl(turnApiUrl, socket);
         this.turnCredentials = turnCredentials;
         this.strictLocalMode = Boolean(strictLocalMode);
+        this.turnPromise = null;
 
         if (fetchTurnCredentials && !turnCredentials && (typeof window !== 'undefined' || this.turnApiUrl.startsWith('http'))) {
             this.loadTurnCredentials().catch(() => {});
@@ -181,18 +182,22 @@ export class TransferEngine {
 
 
     async loadTurnCredentials() {
-        try {
-            const url = resolveTurnApiUrl(this.turnApiUrl, this.socket);
-            const res = await fetch(url);
-            if (res.ok) {
-                const data = await res.json();
-                this.setTurnCredentials(data);
-                return data;
+        if (this.turnPromise) return this.turnPromise;
+        this.turnPromise = (async () => {
+            try {
+                const url = resolveTurnApiUrl(this.turnApiUrl, this.socket);
+                const res = await fetch(url);
+                if (res.ok) {
+                    const data = await res.json();
+                    this.setTurnCredentials(data);
+                    return data;
+                }
+            } catch (err) {
+                console.warn('[engine] Could not load TURN credentials from server:', err);
             }
-        } catch (err) {
-            console.warn('[engine] Could not load TURN credentials from server:', err);
-        }
-        return null;
+            return null;
+        })();
+        return this.turnPromise;
     }
 
     setTurnCredentials(credentials) {
@@ -205,6 +210,12 @@ export class TransferEngine {
                 } catch {
                     // ignore if immutable in current state
                 }
+            }
+
+            // If the session is actively connecting and not yet connected,
+            // trigger an ICE restart so newly added TURN relay servers gather candidates!
+            if (!session.channelReady && session.pc?.connectionState !== 'connected' && !session.tearingDown) {
+                this.attemptIceRestart(session).catch(() => {});
             }
         }
     }
@@ -403,6 +414,7 @@ export class TransferEngine {
             this.peerStatus(peerId, 'CONNECTING');
             this.initiateOffer(session).catch((error) => console.error('Offer failed:', error));
         } else {
+            this.startConnectWatchdog(session);
             this.peerStatus(peerId, 'CONNECTING');
         }
 

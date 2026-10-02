@@ -12,7 +12,8 @@ import {
     isValidSessionDescription,
     isValidIceCandidate,
     createRateLimiter,
-    SimilarityIndex
+    SimilarityIndex,
+    SignalingSessionRegistry
 } from './lib.js';
 
 describe('sanitizeRoomCode', () => {
@@ -113,12 +114,47 @@ describe('normalizeJoinPayload', () => {
 });
 
 describe('getClientIp', () => {
-    it('uses the LAST forwarded entry (proxy-appended), not the client-controlled first', () => {
-        expect(getClientIp({ 'x-forwarded-for': '1.2.3.4, 5.6.7.8' }, '')).toBe('5.6.7.8');
+    it('extracts client IP from cf-connecting-ip with highest priority', () => {
+        const headers = {
+            'cf-connecting-ip': '203.0.113.195',
+            'x-forwarded-for': '198.51.100.1, 172.71.99.10'
+        };
+        expect(getClientIp(headers, '10.0.0.1')).toBe('203.0.113.195');
     });
 
-    it('falls back to the socket address without the v6 prefix', () => {
+    it('extracts client IP from true-client-ip when cf-connecting-ip is absent', () => {
+        const headers = {
+            'true-client-ip': '203.0.113.200',
+            'x-forwarded-for': '198.51.100.1, 172.71.99.10'
+        };
+        expect(getClientIp(headers, '10.0.0.1')).toBe('203.0.113.200');
+    });
+
+    it('extracts client IP from x-real-ip when Cloudflare headers are absent', () => {
+        const headers = {
+            'x-real-ip': '198.51.100.42',
+            'x-forwarded-for': '198.51.100.42, 10.0.0.2'
+        };
+        expect(getClientIp(headers, '10.0.0.1')).toBe('198.51.100.42');
+    });
+
+    it('extracts the FIRST entry from x-forwarded-for (RFC 7239 original client)', () => {
+        const headers = {
+            'x-forwarded-for': '203.0.113.50, 172.71.99.10, 10.0.0.1'
+        };
+        expect(getClientIp(headers, '10.0.0.1')).toBe('203.0.113.50');
+    });
+
+    it('strips IPv4-mapped IPv6 prefix ::ffff:', () => {
+        const headers = {
+            'x-forwarded-for': '::ffff:203.0.113.50, 10.0.0.1'
+        };
+        expect(getClientIp(headers, '')).toBe('203.0.113.50');
+    });
+
+    it('falls back to the socket address without ::ffff: prefix when headers are empty', () => {
         expect(getClientIp({}, '::ffff:192.168.0.5')).toBe('192.168.0.5');
+        expect(getClientIp(null, '192.168.0.5')).toBe('192.168.0.5');
     });
 });
 
@@ -168,6 +204,24 @@ describe('areUsersVisible', () => {
             user({ networkFingerprints: ['lan:ipv4:192.168.1', 'wan:ipv4:8.8.8.8'] }),
             user({ id: 'b', networkFingerprints: ['lan:ipv4:192.168.2', 'wan:ipv4:9.9.9.9'], publicIp: '1.1.1.1' })
         )).toBe(false);
+    });
+
+    it('maintains visibility when both devices share public IP but private LAN IPs are hidden by mDNS (.local)', () => {
+        const userA = user({ publicIp: '203.0.113.10', networkFingerprints: [] });
+        const userB = user({ id: 'b', publicIp: '203.0.113.10', networkFingerprints: [] });
+        expect(areUsersVisible(userA, userB)).toBe(true);
+    });
+
+    it('maintains visibility when both devices share public IP even if one or both exposed divergent WAN STUN candidates on multi-WAN office network', () => {
+        const userA = user({ publicIp: '203.0.113.10', networkFingerprints: ['wan:ipv4:203.0.113.11'] });
+        const userB = user({ id: 'b', publicIp: '203.0.113.10', networkFingerprints: ['wan:ipv4:203.0.113.12'] });
+        expect(areUsersVisible(userA, userB)).toBe(true);
+    });
+
+    it('still isolates devices sharing public IP if both explicitly exposed DIFFERENT private LAN subnets', () => {
+        const userA = user({ publicIp: '203.0.113.10', networkFingerprints: ['lan:ipv4:192.168.1'] });
+        const userB = user({ id: 'b', publicIp: '203.0.113.10', networkFingerprints: ['lan:ipv4:192.168.200'] });
+        expect(areUsersVisible(userA, userB)).toBe(false);
     });
 
     it('hides peers with different public IPs', () => {
@@ -346,5 +400,33 @@ describe('SimilarityIndex', () => {
         expect(index.getCandidateIdsFor(userB)).toEqual(['sock-1']);
         expect(index.getCandidateIdsFor(userC)).toEqual([]);
         expect(index.getCandidateIdsFor(userD)).toEqual([]);
+    });
+});
+
+describe('SignalingSessionRegistry', () => {
+    it('authorizes reciprocal signaling for registered sessions within TTL', () => {
+        const registry = new SignalingSessionRegistry({ ttlMs: 1000 });
+        registry.registerSession('peerA', 'peerB');
+
+        expect(registry.isAuthorized('peerA', 'peerB')).toBe(true);
+        expect(registry.isAuthorized('peerB', 'peerA')).toBe(true);
+        expect(registry.isAuthorized('peerA', 'peerC')).toBe(false);
+    });
+
+    it('expires sessions after TTL', () => {
+        let now = 1000;
+        const registry = new SignalingSessionRegistry({ ttlMs: 500, nowFn: () => now });
+        registry.registerSession('peerA', 'peerB');
+        expect(registry.isAuthorized('peerA', 'peerB')).toBe(true);
+
+        now = 1600;
+        expect(registry.isAuthorized('peerA', 'peerB')).toBe(false);
+    });
+
+    it('removes sessions when a socket disconnects', () => {
+        const registry = new SignalingSessionRegistry();
+        registry.registerSession('peerA', 'peerB');
+        registry.removeSocket('peerA');
+        expect(registry.isAuthorized('peerA', 'peerB')).toBe(false);
     });
 });

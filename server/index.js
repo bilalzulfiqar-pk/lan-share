@@ -12,7 +12,8 @@ const {
     isValidSessionDescription,
     isValidIceCandidate,
     createRateLimiter,
-    SimilarityIndex
+    SimilarityIndex,
+    SignalingSessionRegistry
 } = require('./lib');
 const { TurnCredentialManager, DEFAULT_STUN_SERVERS, createTurnCredentialsHandler } = require('./turn');
 
@@ -53,6 +54,7 @@ const similarityIndex = new SimilarityIndex();
 const relayLimiter = createRateLimiter({ capacity: 40, refillPerSecond: 20 });
 const joinLimiter = createRateLimiter({ capacity: 10, refillPerSecond: 5 });
 const relayStrikes = new Map();
+const signalingRegistry = new SignalingSessionRegistry();
 
 function emitDebugState(user, visiblePeers = null) {
     if (!user) {
@@ -265,9 +267,21 @@ io.on('connection', (socket) => {
             const target = typeof data?.target === 'string' ? data.target : null;
             const targetUser = target ? users[target] : null;
 
-            if (!targetUser || !areUsersVisible(sender, targetUser) || !isValidPayload(payload)) {
+            if (!targetUser || !isValidPayload(payload)) {
                 registerRelayStrike(socket);
                 return;
+            }
+
+            const currentlyVisible = areUsersVisible(sender, targetUser);
+            const hasActiveSession = signalingRegistry.isAuthorized(socket.id, target);
+
+            if (!currentlyVisible && !hasActiveSession) {
+                registerRelayStrike(socket);
+                return;
+            }
+
+            if (eventName === 'offer' && currentlyVisible) {
+                signalingRegistry.registerSession(socket.id, target);
             }
 
             io.to(target).emit(eventName, { ...payload, sender: socket.id });
@@ -281,6 +295,7 @@ io.on('connection', (socket) => {
     socket.on('disconnect', () => {
         console.log('User disconnected:', socket.id);
         removeUser(socket.id);
+        signalingRegistry.removeSocket(socket.id);
         relayLimiter.reset(socket.id);
         joinLimiter.reset(socket.id);
         relayStrikes.delete(socket.id);
@@ -294,4 +309,4 @@ if (require.main === module) {
     });
 }
 
-module.exports = { app, server, users, similarityIndex, turnManager, turnLimiter, handleTurnCredentials, DEFAULT_STUN_SERVERS };
+module.exports = { app, server, users, similarityIndex, turnManager, turnLimiter, handleTurnCredentials, DEFAULT_STUN_SERVERS, signalingRegistry };
