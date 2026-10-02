@@ -382,4 +382,35 @@ describe('TransferEngine', () => {
         engineA.destroy();
         engineB.destroy();
     });
+
+    it('gates audio alerts on soundEnabled setting and toggles via setSoundEnabled', () => {
+        const { engineA } = createEnginePair();
+        expect(engineA.soundEnabled).toBe(false);
+
+        let chimeCount = 0;
+        const originalMethod = engineA.playTransferComplete;
+        engineA.playTransferComplete = () => {
+            if (engineA.soundEnabled) {
+                chimeCount += 1;
+            }
+        };
+
+        // When sound is disabled (default), no chime
+        engineA.playTransferComplete();
+        expect(chimeCount).toBe(0);
+
+        // When sound is enabled, chime triggers
+        engineA.setSoundEnabled(true);
+        expect(engineA.soundEnabled).toBe(true);
+        engineA.playTransferComplete();
+        expect(chimeCount).toBe(1);
+
+        // When sound is toggled off, chime is suppressed again
+        engineA.setSoundEnabled(false);
+        expect(engineA.soundEnabled).toBe(false);
+        engineA.playTransferComplete();
+        expect(chimeCount).toBe(1);
+
+        engineA.destroy();
+    });
 });

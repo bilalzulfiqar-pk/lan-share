@@ -37,6 +37,7 @@
   - [Option A: Local Development (npm)](#option-a-local-development-npm)
   - [Option B: Docker Compose](#option-b-docker-compose)
 - [Browser & Storage Engine Compatibility](#browser--storage-engine-compatibility)
+- [Mobile & Browser Notifications](#mobile--browser-notifications)
 - [Tech Stack](#tech-stack)
 - [Deployment](#deployment)
 - [Testing & Quality Assurance](#testing--quality-assurance)
@@ -233,6 +234,19 @@ LAN Share dynamically selects the best storage sink supported by the user's brow
 | **Screen Wake Lock** | ✅ Supported | ✅ Supported | ✅ Supported | ⚠️ Fallback audio beacon |
 | **Native Share Sheet** | ❌ (Direct file save) | ✅ "Save to Photos / Files" | ✅ "Save to Downloads" | ❌ (Direct file save) |
 | **PWA Installation** | ✅ Supported | ✅ Add to Home Screen | ✅ Supported | ⚠️ Limited |
+| **Smart Hybrid Alerts** | ✅ Native OS Banners | ✅ Sound Chime (PWA Banner) | ✅ Service Worker Banners | ✅ Native OS Banners |
+
+---
+
+## Mobile & Browser Notifications
+
+LAN Share includes a unified alert system controlled by the bell icon in the top header. When toggled off, the app remains 100% silent (no chimes, blips, or popups). When enabled, alerts adapt intelligently to the user's platform:
+
+- **Foreground (Screen Active):** Subtle two-tone Web Audio blips for incoming chat messages and offers, plus a 4-note ascending chord when file transfers finish. Visual popup cards are suppressed while looking at the active screen to avoid interface clutter.
+- **Android Phones & Tablets (Chrome / Edge / Samsung Internet):** When minimized or running in a background tab on `https://lan-share.vercel.app/`, notifications are dispatched via `ServiceWorkerRegistration.showNotification()`. Tapping the notification in Android's notification shade instantly focuses the active transfer session.
+- **Desktop (Windows, macOS, Linux):** Native OS notifications appear in Windows Action Center or macOS Notification Center when transfers settle while the browser is minimized.
+- **iOS & iPadOS (Safari):** Standard Safari browser tabs disable the Web Notification API, so LAN Share automatically enters **Sound Alert Mode** to notify you audibly. If installed to your Home Screen as a PWA (iOS 16.4+), native web push notification banners are supported.
+- **Screen Wake Lock Safeguard:** During active file transfers, LAN Share holds a `navigator.wakeLock` to prevent mobile devices from sleeping or pausing Wi-Fi transfers prematurely.
 
 ---
 

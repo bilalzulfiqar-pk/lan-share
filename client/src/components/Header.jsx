@@ -1,4 +1,5 @@
 import React from 'react';
+import { isIosDevice, areNotificationsSupported } from '../lib/notifications';
 
 export function Header({
   isConnected,
@@ -117,19 +118,34 @@ export function Header({
             </svg>
           </button>
 
-          <button
-            className={`btn-icon ${notifyEnabled ? 'is-active-icon' : ''}`}
-            onClick={handleNotifyToggle}
-            title={notifyEnabled ? 'Notifications on - click to mute' : 'Get notified about files and messages'}
-            aria-label={notifyEnabled ? 'Disable notifications' : 'Enable notifications'}
-            aria-pressed={notifyEnabled}
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-              <path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9" />
-              <path d="M10.3 21a1.94 1.94 0 0 0 3.4 0" />
-              {!notifyEnabled && <line x1="4" y1="4" x2="20" y2="20" />}
-            </svg>
-          </button>
+          {(() => {
+            const isIos = isIosDevice();
+            const notifyTitle = notifyEnabled
+              ? (isIos && !areNotificationsSupported()
+                  ? 'Sound alerts active (Add to Home Screen for banner alerts) - click to mute'
+                  : 'Alerts active - click to mute')
+              : 'Alerts muted - click to enable sounds and notifications';
+
+            const notifyAriaLabel = notifyEnabled
+              ? 'Mute sound alerts and notifications'
+              : 'Enable sound alerts and notifications';
+
+            return (
+              <button
+                className={`btn-icon ${notifyEnabled ? 'is-active-icon' : ''}`}
+                onClick={handleNotifyToggle}
+                title={notifyTitle}
+                aria-label={notifyAriaLabel}
+                aria-pressed={notifyEnabled}
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9" />
+                  <path d="M10.3 21a1.94 1.94 0 0 0 3.4 0" />
+                  {!notifyEnabled && <line x1="4" y1="4" x2="20" y2="20" />}
+                </svg>
+              </button>
+            );
+          })()}
 
           <button
             className="btn-icon"

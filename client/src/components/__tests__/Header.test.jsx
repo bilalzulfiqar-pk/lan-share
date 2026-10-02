@@ -54,4 +54,22 @@ describe('Header component rendering', () => {
         expect(html).toContain('Offline');
         expect(html).toContain('status-dot offline');
     });
+
+    it('renders muted alert tooltip and aria attributes when notifyEnabled is false', () => {
+        const html = renderToStaticMarkup(<Header {...defaultProps} notifyEnabled={false} />);
+
+        expect(html).toContain('title="Alerts muted - click to enable sounds and notifications"');
+        expect(html).toContain('aria-label="Enable sound alerts and notifications"');
+        expect(html).toContain('aria-pressed="false"');
+        expect(html).not.toContain('is-active-icon');
+    });
+
+    it('renders active alert tooltip and aria attributes when notifyEnabled is true', () => {
+        const html = renderToStaticMarkup(<Header {...defaultProps} notifyEnabled={true} />);
+
+        expect(html).toContain('title="Alerts active - click to mute"');
+        expect(html).toContain('aria-label="Mute sound alerts and notifications"');
+        expect(html).toContain('aria-pressed="true"');
+        expect(html).toContain('is-active-icon');
+    });
 });

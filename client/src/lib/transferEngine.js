@@ -130,12 +130,14 @@ export class TransferEngine {
         turnApiUrl = '/api/turn-credentials',
         turnCredentials = null,
         strictLocalMode = false,
+        soundEnabled = false,
         fetchTurnCredentials = true
     } = {}) {
         this.socket = socket;
         this.myId = myId;
         this.getPeerName = getPeerName || (() => 'Unknown');
         this.onEvent = onEvent || (() => {});
+        this.soundEnabled = Boolean(soundEnabled);
 
         this.sessions = new Map();   // peerId -> PeerSession
         this.outgoing = new Map();   // fileId -> { peerId, file, meta, cancelled, channel, settled }
@@ -221,6 +223,16 @@ export class TransferEngine {
             if (this.strictLocalMode && session.connectionType === 'relay-turn') {
                 this.checkRelayCapForSession(session);
             }
+        }
+    }
+
+    setSoundEnabled(enabled) {
+        this.soundEnabled = Boolean(enabled);
+    }
+
+    playTransferComplete() {
+        if (this.soundEnabled) {
+            playTransferCompleteChime();
         }
     }
 
@@ -1104,7 +1116,7 @@ export class TransferEngine {
             entry.uploading = false;
             this.outgoing.delete(fileId);
             this.markTransferInactive(fileId);
-            playTransferCompleteChime();
+            this.playTransferComplete();
             this.emit({ type: 'notify', title: 'Transfer Complete', body: `Sent ${file.name}` });
 
             this.historyUpdate(fileId, {
@@ -1416,7 +1428,7 @@ export class TransferEngine {
 
             this.receives.delete(fileId);
             this.markTransferInactive(fileId);
-            playTransferCompleteChime();
+            this.playTransferComplete();
             this.emit({ type: 'notify', title: 'Transfer Complete', body: `Received ${state.name}` });
 
             this.historyUpdate(fileId, {
@@ -1442,7 +1454,7 @@ export class TransferEngine {
             }
 
             this.markTransferInactive(fileId);
-            playTransferCompleteChime();
+            this.playTransferComplete();
             this.emit({ type: 'notify', title: 'Transfer Complete', body: `Received ${state.name}` });
 
             try {
@@ -1510,7 +1522,7 @@ export class TransferEngine {
         this.downloadUrls.set(fileId, url);
 
         this.markTransferInactive(fileId);
-        playTransferCompleteChime();
+        this.playTransferComplete();
         this.emit({ type: 'notify', title: 'Transfer Complete', body: `Received ${state.name}` });
 
         this.historyUpdate(fileId, {

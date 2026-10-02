@@ -5,7 +5,7 @@ const ERROR_AUTO_CLEAR_MS = 6000;
 
 // Thin React binding around TransferEngine. All connection and transfer logic
 // lives in the engine; this hook only mirrors engine events into state.
-export function useWebRTC(socket, myId, { getPeerName, onChat, onNotify, strictLocalMode: initialStrictLocalMode = false } = {}) {
+export function useWebRTC(socket, myId, { getPeerName, onChat, onNotify, strictLocalMode: initialStrictLocalMode = false, soundEnabled = false } = {}) {
     const [history, setHistory] = useState([]);
     const [peerStatus, setPeerStatus] = useState({});
     const [connectionTypes, setConnectionTypes] = useState({});
@@ -41,6 +41,13 @@ export function useWebRTC(socket, myId, { getPeerName, onChat, onNotify, strictL
         }
     }, [strictLocalMode]);
 
+    // Keep soundEnabled updated in engine
+    useEffect(() => {
+        if (engineRef.current) {
+            engineRef.current.setSoundEnabled(soundEnabled);
+        }
+    }, [soundEnabled]);
+
     useEffect(() => {
         if (!socket) return undefined;
 
@@ -48,6 +55,7 @@ export function useWebRTC(socket, myId, { getPeerName, onChat, onNotify, strictL
             socket,
             myId: myIdRef.current,
             strictLocalMode: strictLocalModeRef.current,
+            soundEnabled,
             getPeerName: (peerId) => getPeerNameRef.current?.(peerId) || 'Unknown',
             onEvent: (event) => {
                 switch (event.type) {

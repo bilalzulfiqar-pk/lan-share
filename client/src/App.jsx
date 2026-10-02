@@ -216,7 +216,8 @@ function App() {
     getPeerName,
     onChat: handleIncomingChat,
     onNotify: (event) => announceEvent(event.title, event.body),
-    strictLocalMode
+    strictLocalMode,
+    soundEnabled: notifyEnabled
   });
 
   const openChatWithPeer = useCallback((peerId) => {
