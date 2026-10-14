@@ -158,6 +158,7 @@ class PeerSession {
         this.iceRestartsAttempted = 0;
         this.tearingDown = false;
         this.createdControlChannel = false;
+        this.receivesResumed = false;
         this.connectionType = 'unknown';
     }
 }
@@ -302,7 +303,7 @@ export class TransferEngine {
     }
 
     getConnectionType(peerId) {
-        return this.sessions.get(peerId)?.connectionType || 'direct-lan';
+        return this.sessions.get(peerId)?.connectionType || 'unknown';
     }
 
     updateMyId(newMyId) {
@@ -1480,7 +1481,6 @@ export class TransferEngine {
             return;
         }
 
-        state.resuming = false;
         if (state.graceTimer) {
             clearTimeout(state.graceTimer);
             state.graceTimer = null;
