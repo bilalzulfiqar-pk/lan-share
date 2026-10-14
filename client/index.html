@@ -7,6 +7,23 @@
     <link rel="apple-touch-icon" href="/icon-192.png" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="theme-color" content="#eef1f6" />
+    <script>
+      (function () {
+        try {
+          var saved = localStorage.getItem('lan-share-theme');
+          var theme = saved;
+          if (!theme || theme === 'light' || theme === 'dark') {
+            var prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+            theme = prefersDark ? 'ocean-dark' : 'ocean-light';
+          }
+          document.documentElement.setAttribute('data-theme', theme);
+          var isDark = theme.indexOf('-dark') !== -1;
+          var themeColor = isDark ? '#0b1220' : '#eef1f6';
+          var meta = document.querySelector('meta[name="theme-color"]');
+          if (meta) meta.setAttribute('content', themeColor);
+        } catch (e) {}
+      })();
+    </script>
 
     <!-- Standard SEO Meta Tags -->
     <title>LAN Share - Fast, Private P2P Local File Transfer</title>
@@ -99,16 +116,51 @@
       *, *::before, *::after {
         box-sizing: border-box;
       }
+      :root {
+        --bg-app: #eef1f6;
+        --text-primary: #0b1220;
+        --text-secondary: #475569;
+        --text-tertiary: #94a3b8;
+        --primary: #2454d6;
+        --loader-track: rgba(36, 84, 214, 0.14);
+        --loader-shadow: rgba(37, 99, 235, 0.35);
+      }
+      [data-theme$='-dark'],
+      [data-theme='ocean-dark'] {
+        --bg-app: #0b1220;
+        --text-primary: #f1f5f9;
+        --text-secondary: #94a3b8;
+        --text-tertiary: #64748b;
+        --primary: #60a5fa;
+        --loader-track: rgba(96, 165, 250, 0.16);
+        --loader-shadow: rgba(96, 165, 250, 0.35);
+      }
       html, body {
         margin: 0;
         padding: 0;
-        background-color: #eef1f6;
-        color: #0b1220;
+        background-color: var(--bg-app);
+        color: var(--text-primary);
         font-family: "Inter Variable", "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
         -webkit-font-smoothing: antialiased;
         -moz-osx-font-smoothing: grayscale;
         overflow-x: hidden;
         scrollbar-gutter: stable;
+      }
+      ::-webkit-scrollbar {
+        width: 5px;
+        height: 5px;
+      }
+      ::-webkit-scrollbar-track {
+        background: transparent;
+      }
+      ::-webkit-scrollbar-thumb {
+        background: rgba(148, 163, 184, 0.45);
+        border-radius: 100px;
+      }
+      @-moz-document url-prefix() {
+        html {
+          scrollbar-width: thin;
+        }
       }
       .app-container {
         max-width: 1200px;
@@ -374,6 +426,128 @@
           padding: 0.6rem 0.7rem;
         }
       }
+      /* "Signal Pulse" Utility Loader */
+      .app-boot-loader {
+        min-height: 100dvh;
+        width: 100%;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        padding: 2rem 1rem;
+        box-sizing: border-box;
+        text-align: center;
+        user-select: none;
+        font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      }
+      .loader-logo-squircle {
+        position: relative;
+        width: 56px;
+        height: 56px;
+        border-radius: 14px;
+        background: linear-gradient(180deg, #2563EB 0%, #1D4ED8 100%);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.22), 0 8px 20px -4px rgba(37, 99, 235, 0.35);
+      }
+      .loader-logo-squircle svg {
+        width: 36px;
+        height: 36px;
+      }
+      .arc-inner, .arc-middle, .arc-outer {
+        animation: signalWave 1.4s ease-in-out infinite;
+        opacity: 0.25;
+      }
+      .arc-inner {
+        animation-delay: 0s;
+      }
+      .arc-middle {
+        animation-delay: 0.2s;
+      }
+      .arc-outer {
+        animation-delay: 0.4s;
+      }
+      @keyframes signalWave {
+        0%, 100% {
+          opacity: 0.25;
+        }
+        40% {
+          opacity: 1;
+        }
+      }
+      .loader-title {
+        font-size: 1.125rem;
+        font-weight: 600;
+        letter-spacing: -0.02em;
+        line-height: 24px;
+        height: 24px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: var(--text-primary);
+        margin: 16px 0 0 0;
+      }
+      .loader-subtitle {
+        font-size: 0.65rem;
+        font-weight: 500;
+        letter-spacing: 0.18em;
+        text-transform: uppercase;
+        line-height: 14px;
+        height: 14px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: var(--text-secondary);
+        opacity: 0.55;
+        margin: 6px 0 0 0;
+      }
+      .loader-progress-track {
+        width: 144px;
+        height: 4px;
+        border-radius: 999px;
+        background: var(--loader-track);
+        overflow: hidden;
+        position: relative;
+        margin-top: 22px;
+      }
+      .loader-progress-bar {
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        width: 44%;
+        border-radius: 999px;
+        background: linear-gradient(90deg, transparent, #2563eb 30%, #60a5fa 70%, transparent);
+        animation: progressGlide 1.6s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+      }
+      @keyframes progressGlide {
+        0% {
+          left: -44%;
+        }
+        100% {
+          left: 100%;
+        }
+      }
+      .sr-only {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        padding: 0;
+        margin: -1px;
+        overflow: hidden;
+        clip: rect(0, 0, 0, 0);
+        white-space: nowrap;
+        border: 0;
+      }
+      @media (prefers-reduced-motion: reduce) {
+        .loader-progress-bar,
+        .arc-inner,
+        .arc-middle,
+        .arc-outer {
+          animation: none !important;
+          opacity: 1 !important;
+        }
+      }
     </style>
   </head>
   <body>
@@ -384,95 +558,112 @@
       </div>
     </noscript>
     <div id="root">
-      <div class="app-container">
-        <header class="app-header">
-          <div class="logo-section">
-            <div class="logo-wrapper" aria-hidden="true">
-              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M5 12.55a11 11 0 0 1 14.08 0"></path>
-                <path d="M1.42 9a16 16 0 0 1 21.16 0"></path>
-                <path d="M8.59 16.11a6 6 0 0 1 6.82 0"></path>
-              </svg>
-            </div>
-            <div class="title-group">
-              <h1>LAN Share</h1>
-              <p class="mini-heading">Fast · Local · Secure</p>
-            </div>
-          </div>
-          <div class="server-indicator">
-            <div class="status-dot"></div>
-            <span>Connecting...</span>
-          </div>
-          <div class="status-section">
-            <span class="pre-badge">Local P2P</span>
-          </div>
-        </header>
+      <div class="app-boot-loader" aria-hidden="true">
+        <div class="loader-logo-squircle">
+          <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <path class="arc-inner" d="M8.59 16.11a6 6 0 0 1 6.82 0"></path>
+            <path class="arc-middle" d="M5 12.55a11 11 0 0 1 14.08 0"></path>
+            <path class="arc-outer" d="M1.42 9a16 16 0 0 1 21.16 0"></path>
+          </svg>
+        </div>
+        <div class="loader-title">LAN Share</div>
+        <div class="loader-subtitle">Fast · Local · Secure</div>
+        <div class="loader-progress-track">
+          <div class="loader-progress-bar"></div>
+        </div>
+      </div>
 
-        <main class="main-layout">
-          <section class="radar-section" aria-label="Peer Discovery Radar">
-            <div class="guide-text">
-              <h2>Look for devices nearby</h2>
-              <p>Devices on your local network will pop up on the radar.</p>
+      <div class="sr-only">
+        <div class="app-container">
+          <header class="app-header">
+            <div class="logo-section">
+              <div class="logo-wrapper" aria-hidden="true">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M5 12.55a11 11 0 0 1 14.08 0"></path>
+                  <path d="M1.42 9a16 16 0 0 1 21.16 0"></path>
+                  <path d="M8.59 16.11a6 6 0 0 1 6.82 0"></path>
+                </svg>
+              </div>
+              <div class="title-group">
+                <h1>LAN Share</h1>
+                <p class="mini-heading">Fast · Local · Secure</p>
+              </div>
             </div>
-            <div class="radar-placeholder-ring" aria-hidden="true">
-              <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#2454d6" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M5 12.55a11 11 0 0 1 14.08 0"></path>
-                <path d="M1.42 9a16 16 0 0 1 21.16 0"></path>
-                <path d="M8.59 16.11a6 6 0 0 1 6.82 0"></path>
-                <circle cx="12" cy="20" r="1"></circle>
-              </svg>
+            <div class="server-indicator">
+              <div class="status-dot"></div>
+              <span>Connecting...</span>
             </div>
-          </section>
+            <div class="status-section">
+              <span class="pre-badge">Local P2P</span>
+            </div>
+          </header>
 
-          <section class="history-section" aria-label="Transfer History">
-            <div class="section-header">
-              <h2 class="section-title">Transfer history</h2>
-              <span class="section-count">0 items</span>
-            </div>
-          </section>
+          <main class="main-layout">
+            <section class="radar-section" aria-label="Peer Discovery Radar">
+              <div class="guide-text">
+                <h2>Look for devices nearby</h2>
+                <p>Devices on your local network will pop up on the radar.</p>
+              </div>
+              <div class="radar-placeholder-ring" aria-hidden="true">
+                <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#2454d6" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M5 12.55a11 11 0 0 1 14.08 0"></path>
+                  <path d="M1.42 9a16 16 0 0 1 21.16 0"></path>
+                  <path d="M8.59 16.11a6 6 0 0 1 6.82 0"></path>
+                  <circle cx="12" cy="20" r="1"></circle>
+                </svg>
+              </div>
+            </section>
 
-          <section class="seo-semantic-details" aria-label="Architecture & Privacy Guarantees">
-            <article class="seo-card">
-              <h2>Direct Peer-to-Peer Transfers via WebRTC</h2>
-              <p>LAN Share connects browsers directly across your local Wi-Fi or Ethernet network using high-performance WebRTC DataChannels. Files and messages stream straight from sender to receiver without staging or routing through external cloud servers.</p>
-            </article>
+            <section class="history-section" aria-label="Transfer History">
+              <div class="section-header">
+                <h2 class="section-title">Transfer history</h2>
+                <span class="section-count">0 items</span>
+              </div>
+            </section>
 
-            <article class="seo-card">
-              <h2>Streaming SHA-256 File Integrity Verification</h2>
-              <p>Transfers are protected with on-the-fly streaming SHA-256 cryptographic verification. The receiver computes checksums chunk-by-chunk in real time, validating byte-level integrity against the sender hash upon completion.</p>
-            </article>
+            <section class="seo-semantic-details" aria-label="Architecture & Privacy Guarantees">
+              <article class="seo-card">
+                <h2>Direct Peer-to-Peer Transfers via WebRTC</h2>
+                <p>LAN Share connects browsers directly across your local Wi-Fi or Ethernet network using high-performance WebRTC DataChannels. Files and messages stream straight from sender to receiver without staging or routing through external cloud servers.</p>
+              </article>
 
-            <article class="seo-card">
-              <h2>Zero-Cloud Local Network Privacy</h2>
-              <p>All transfers remain strictly local within your local area network (LAN). Lightweight WebSocket signaling orchestrates initial peer discovery and ICE candidate exchange, after which all media and payload streams flow directly over encrypted DTLS/SCTP channels.</p>
-            </article>
-          </section>
+              <article class="seo-card">
+                <h2>Streaming SHA-256 File Integrity Verification</h2>
+                <p>Transfers are protected with on-the-fly streaming SHA-256 cryptographic verification. The receiver computes checksums chunk-by-chunk in real time, validating byte-level integrity against the sender hash upon completion.</p>
+              </article>
 
-          <section class="faq-card" aria-label="Frequently Asked Questions & Direct Answers">
-            <h2>Frequently Asked Questions &amp; Direct Answers</h2>
-            <div class="faq-item">
-              <h3>How does LAN Share transfer files without cloud uploads?</h3>
-              <p>LAN Share establishes direct browser-to-browser peer-to-peer WebRTC DataChannels using DTLS (Datagram Transport Layer Security) and SCTP over your local network. A lightweight Node.js/Socket.IO signaling server clusters devices by local subnet and STUN IP solely to relay ~2 KB of WebRTC handshake metadata (SDP offer/answer and ICE candidates). Once connected, all file data streams directly between devices across the local Wi-Fi or LAN. File contents never touch, transit, or get stored on any cloud server or intermediate database.</p>
-            </div>
-            <div class="faq-item">
-              <h3>What is the file size limit on LAN Share?</h3>
-              <p>LAN Share has no arbitrary file size limit. On desktop Chromium browsers (Google Chrome, Microsoft Edge), files stream directly to storage via the File System Access API (window.showSaveFilePicker), enabling multi-gigabyte transfers (e.g., 10 GB, 50 GB+) with minimal RAM consumption (&lt; 50 MB). In browsers without File System Access API support (Apple Safari, Mozilla Firefox, Android browsers), received chunks assemble in memory up to ~2 GB to prevent browser memory exhaustion.</p>
-            </div>
-            <div class="faq-item">
-              <h3>Is LAN Share secure?</h3>
-              <p>Yes. All peer-to-peer data channels and chat messages are encrypted in transit using standard WebRTC DTLS encryption. File transfers remain entirely within your local network. LAN Share requires no user accounts, collects zero telemetry, uses no tracking cookies, and logs no file metadata. Additionally, bit-for-bit file integrity is cryptographically validated using chunked streaming SHA-256 checksums calculated independently on both the sender and receiver.</p>
-            </div>
-            <div class="faq-item">
-              <h3>How does LAN Share handle router AP or Client Isolation?</h3>
-              <p>On networks with router AP or Client Isolation enabled (such as hotel, airport, or university Wi-Fi) where direct peer UDP traffic is blocked, LAN Share's built-in 20-second connection watchdog flags the timeout and displays diagnostic guidance recommending a mobile hotspot or a configured TURN relay (VITE_TURN_URL).</p>
-            </div>
-          </section>
-        </main>
+              <article class="seo-card">
+                <h2>Zero-Cloud Local Network Privacy</h2>
+                <p>All transfers remain strictly local within your local area network (LAN). Lightweight WebSocket signaling orchestrates initial peer discovery and ICE candidate exchange, after which all media and payload streams flow directly over encrypted DTLS/SCTP channels.</p>
+              </article>
+            </section>
 
-        <footer class="app-footer">
-          <p style="margin: 0 0 0.5rem 0;">LAN Share is free and open-source software licensed under the <a href="https://github.com/bilalzulfiqar-pk/lan-share/blob/main/LICENSE">MIT License</a>.</p>
-          <p style="margin: 0;">Authored and maintained by <a href="https://github.com/bilalzulfiqar-pk">Bilal Zulfiqar</a> · <a href="https://lan-share.vercel.app">https://lan-share.vercel.app</a></p>
-        </footer>
+            <section class="faq-card" aria-label="Frequently Asked Questions & Direct Answers">
+              <h2>Frequently Asked Questions &amp; Direct Answers</h2>
+              <div class="faq-item">
+                <h3>How does LAN Share transfer files without cloud uploads?</h3>
+                <p>LAN Share establishes direct browser-to-browser peer-to-peer WebRTC DataChannels using DTLS (Datagram Transport Layer Security) and SCTP over your local network. A lightweight Node.js/Socket.IO signaling server clusters devices by local subnet and STUN IP solely to relay ~2 KB of WebRTC handshake metadata (SDP offer/answer and ICE candidates). Once connected, all file data streams directly between devices across the local Wi-Fi or LAN. File contents never touch, transit, or get stored on any cloud server or intermediate database.</p>
+              </div>
+              <div class="faq-item">
+                <h3>What is the file size limit on LAN Share?</h3>
+                <p>LAN Share has no arbitrary file size limit. On desktop Chromium browsers (Google Chrome, Microsoft Edge), files stream directly to storage via the File System Access API (window.showSaveFilePicker), enabling multi-gigabyte transfers (e.g., 10 GB, 50 GB+) with minimal RAM consumption (&lt; 50 MB). In browsers without File System Access API support (Apple Safari, Mozilla Firefox, Android browsers), received chunks assemble in memory up to ~2 GB to prevent browser memory exhaustion.</p>
+              </div>
+              <div class="faq-item">
+                <h3>Is LAN Share secure?</h3>
+                <p>Yes. All peer-to-peer data channels and chat messages are encrypted in transit using standard WebRTC DTLS encryption. File transfers remain entirely within your local network. LAN Share requires no user accounts, collects zero telemetry, uses no tracking cookies, and logs no file metadata. Additionally, bit-for-bit file integrity is cryptographically validated using chunked streaming SHA-256 checksums calculated independently on both the sender and receiver.</p>
+              </div>
+              <div class="faq-item">
+                <h3>How does LAN Share handle router AP or Client Isolation?</h3>
+                <p>On networks with router AP or Client Isolation enabled (such as hotel, airport, or university Wi-Fi) where direct peer UDP traffic is blocked, LAN Share's built-in 20-second connection watchdog flags the timeout and displays diagnostic guidance recommending a mobile hotspot or a configured TURN relay (VITE_TURN_URL).</p>
+              </div>
+            </section>
+          </main>
+
+          <footer class="app-footer">
+            <p style="margin: 0 0 0.5rem 0;">LAN Share is free and open-source software licensed under the <a href="https://github.com/bilalzulfiqar-pk/lan-share/blob/main/LICENSE">MIT License</a>.</p>
+            <p style="margin: 0;">Authored and maintained by <a href="https://github.com/bilalzulfiqar-pk">Bilal Zulfiqar</a> · <a href="https://lan-share.vercel.app">https://lan-share.vercel.app</a></p>
+          </footer>
+        </div>
       </div>
     </div>
     <script type="module" src="/src/main.jsx"></script>

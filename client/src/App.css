@@ -763,6 +763,15 @@ button {
    Layout
    ========================================================= */
 
+@keyframes appFadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
 .app-container {
   max-width: 1200px;
   margin: 0 auto;
@@ -772,6 +781,13 @@ button {
   min-height: 100vh;
   gap: 1.5rem;
   overflow-x: hidden;
+  animation: appFadeIn 180ms ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .app-container {
+    animation: none !important;
+  }
 }
 
 /* =========================================================
