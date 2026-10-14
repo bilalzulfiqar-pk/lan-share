@@ -44,7 +44,9 @@ const io = new Server(server, {
         origin: "*", // Allow all origins for local network access
         methods: ["GET", "POST"]
     },
-    maxHttpBufferSize: 64 * 1024
+    maxHttpBufferSize: 64 * 1024,
+    pingInterval: 10000,
+    pingTimeout: 5000
 });
 
 // Store connected users: socketId -> { id, name, deviceId, deviceType, publicIp, networkFingerprints, roomCode }
@@ -55,6 +57,14 @@ const relayLimiter = createRateLimiter({ capacity: 40, refillPerSecond: 20 });
 const joinLimiter = createRateLimiter({ capacity: 10, refillPerSecond: 5 });
 const relayStrikes = new Map();
 const signalingRegistry = new SignalingSessionRegistry();
+
+// Periodically prune expired signaling sessions
+const registryPruneTimer = setInterval(() => {
+    signalingRegistry.prune();
+}, 60000);
+if (registryPruneTimer && typeof registryPruneTimer.unref === 'function') {
+    registryPruneTimer.unref();
+}
 
 function emitDebugState(user, visiblePeers = null) {
     if (!user) {

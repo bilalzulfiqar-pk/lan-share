@@ -8,7 +8,7 @@ const CancelIcon = () => (
   </svg>
 );
 
-export function FileItem({ item, onRequest, onSave, onCancel, getPeerName, onOpenHotspotGuide, peers, isPeerOnline }) {
+function FileItemComponent({ item, onRequest, onSave, onCancel, getPeerName, onOpenHotspotGuide, peers, isPeerOnline }) {
   const isSender = item.direction === 'out';
   const peerName = item.peerName || (getPeerName ? getPeerName(item.peerId) : 'Unknown');
 
@@ -260,6 +260,8 @@ export function FileItem({ item, onRequest, onSave, onCancel, getPeerName, onOpe
     </div>
   );
 }
+
+export const FileItem = React.memo(FileItemComponent);
 
 const ImageIcon = () => (
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">

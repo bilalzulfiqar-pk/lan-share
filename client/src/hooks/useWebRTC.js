@@ -18,11 +18,13 @@ export function useWebRTC(socket, myId, { getPeerName, onChat, onNotify, strictL
     const onNotifyRef = useRef(onNotify);
     const myIdRef = useRef(myId);
     const strictLocalModeRef = useRef(strictLocalMode);
+    const soundEnabledRef = useRef(soundEnabled);
 
     useEffect(() => {
         getPeerNameRef.current = getPeerName;
         onChatRef.current = onChat;
         onNotifyRef.current = onNotify;
+        soundEnabledRef.current = soundEnabled;
     });
 
     // Keep myId updated in the engine without tearing down active WebRTC sessions
@@ -32,6 +34,11 @@ export function useWebRTC(socket, myId, { getPeerName, onChat, onNotify, strictL
             engineRef.current.updateMyId(myId);
         }
     }, [myId]);
+
+    // Sync strictLocalMode prop when updated by parent
+    useEffect(() => {
+        setStrictLocalMode(initialStrictLocalMode);
+    }, [initialStrictLocalMode]);
 
     // Keep strictLocalMode updated in engine
     useEffect(() => {
@@ -55,7 +62,7 @@ export function useWebRTC(socket, myId, { getPeerName, onChat, onNotify, strictL
             socket,
             myId: myIdRef.current,
             strictLocalMode: strictLocalModeRef.current,
-            soundEnabled,
+            soundEnabled: soundEnabledRef.current,
             getPeerName: (peerId) => getPeerNameRef.current?.(peerId) || 'Unknown',
             onEvent: (event) => {
                 switch (event.type) {
@@ -96,6 +103,15 @@ export function useWebRTC(socket, myId, { getPeerName, onChat, onNotify, strictL
 
     useEffect(() => {
         if (!error) return undefined;
+        // Don't auto-dismiss actionable AP Isolation / Hotspot errors
+        const isActionable = typeof error === 'string' && (
+            error.includes('Isolation') ||
+            error.includes('hotspot') ||
+            error.includes('150 MB') ||
+            error.includes('cloud relay')
+        );
+        if (isActionable) return undefined;
+
         const timer = window.setTimeout(() => setError(null), ERROR_AUTO_CLEAR_MS);
         return () => window.clearTimeout(timer);
     }, [error]);

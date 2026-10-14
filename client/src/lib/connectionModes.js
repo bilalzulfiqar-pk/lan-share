@@ -38,5 +38,15 @@ export const MODE_CONFIG = {
         description: 'Files are routed through a secure, encrypted cloud relay (Metered.ca TURN). Speeds depend on your internet connection (Max 150 MB per file).',
         why: 'Your Wi-Fi network (e.g., university, hotel, or office network) has Access Point (AP) Isolation or high-security firewalls enabled, blocking direct local communication.',
         tip: '💡 Tip: Need to send files larger than 150 MB? Turn on a mobile hotspot on your phone and connect both devices to transfer unlimited files directly at full 50+ MB/s Wi-Fi speed!'
+    },
+    'unknown': {
+        modeKey: 'unknown',
+        label: 'Detecting Route…',
+        badgeClass: 'mode-unknown',
+        dotColor: 'status-dot-gray',
+        title: 'Detecting Connection…',
+        description: 'Evaluating local network and WebRTC ICE candidate pairs to establish the most direct connection.',
+        why: 'Connection negotiation in progress.',
+        tip: null
     }
 };

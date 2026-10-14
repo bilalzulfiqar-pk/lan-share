@@ -31,14 +31,22 @@ function createDeviceId() {
 }
 
 function getOrCreateDeviceId() {
-    const existingDeviceId = localStorage.getItem(DEVICE_ID_STORAGE_KEY);
-    if (existingDeviceId) {
-        return existingDeviceId;
+    try {
+        if (typeof localStorage !== 'undefined') {
+            const existingDeviceId = localStorage.getItem(DEVICE_ID_STORAGE_KEY);
+            if (existingDeviceId) {
+                return existingDeviceId;
+            }
+
+            const newDeviceId = createDeviceId();
+            localStorage.setItem(DEVICE_ID_STORAGE_KEY, newDeviceId);
+            return newDeviceId;
+        }
+    } catch {
+        // Fallback for Safari private browsing or disabled storage
     }
 
-    const newDeviceId = createDeviceId();
-    localStorage.setItem(DEVICE_ID_STORAGE_KEY, newDeviceId);
-    return newDeviceId;
+    return createDeviceId();
 }
 
 function extractPrivateIpv4(candidateValue) {
@@ -308,7 +316,21 @@ export function useSignaling(displayName) {
         // eslint-disable-next-line react-hooks/set-state-in-effect
         setServerUrl(url);
 
+        // Immediate non-blocking /health probe to spin up sleeping Render free-tier instances
+        if (typeof fetch === 'function' && url.startsWith('http')) {
+            const healthUrl = url.replace(/\/+$/, '') + '/health';
+            try {
+                fetch(healthUrl, { mode: 'no-cors' }).catch(() => {});
+            } catch {
+                // Ignore background fetch failure
+            }
+        }
+
         const newSocket = io(url);
+
+        const onUpgrade = (transport) => {
+            setTransportName(transport.name);
+        };
 
         newSocket.on('connect', () => {
             console.log('Connected to signaling server', newSocket.id);
@@ -317,9 +339,8 @@ export function useSignaling(displayName) {
             setMyId(newSocket.id);
             setTransportName(newSocket.io.engine.transport.name);
 
-            newSocket.io.engine.on('upgrade', (transport) => {
-                setTransportName(transport.name);
-            });
+            newSocket.io.engine.off('upgrade', onUpgrade);
+            newSocket.io.engine.on('upgrade', onUpgrade);
         });
 
         newSocket.on('disconnect', () => {
@@ -349,6 +370,14 @@ export function useSignaling(displayName) {
         setSocket(newSocket);
 
         return () => {
+            try {
+                newSocket.io?.engine?.off('upgrade', onUpgrade);
+            } catch {
+                // ignore
+            }
+            newSocket.off('connect');
+            newSocket.off('disconnect');
+            newSocket.off('users-update');
             newSocket.off('debug-state');
             newSocket.disconnect();
         };

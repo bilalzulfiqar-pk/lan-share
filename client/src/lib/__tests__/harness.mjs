@@ -222,12 +222,14 @@ export function createSocketBus() {
 }
 
 export function createMockFile(name, size, type = 'application/octet-stream', seed = 0x2a, readDelayMs = 1) {
-    const bytes = new Uint8Array(size);
-    for (let i = 0; i < size; i += 1) {
-        bytes[i] = (i + seed) % 251;
+    let buffer;
+    if (size <= 4 * 1024 * 1024) {
+        const bytes = new Uint8Array(size);
+        for (let i = 0; i < size; i += 1) {
+            bytes[i] = (i + seed) % 251;
+        }
+        buffer = bytes.buffer;
     }
-
-    const buffer = bytes.buffer;
 
     return {
         name,
@@ -236,7 +238,17 @@ export function createMockFile(name, size, type = 'application/octet-stream', se
         slice(start, end) {
             const from = Math.min(start, size);
             const to = Math.min(end, size);
-            const sliced = buffer.slice(from, to);
+            const len = Math.max(0, to - from);
+            let sliced;
+            if (buffer) {
+                sliced = buffer.slice(from, to);
+            } else {
+                const bytes = new Uint8Array(len);
+                for (let i = 0; i < len; i += 1) {
+                    bytes[i] = (from + i + seed) % 251;
+                }
+                sliced = bytes.buffer;
+            }
             if (readDelayMs <= 0) {
                 return { arrayBuffer: async () => sliced };
             }

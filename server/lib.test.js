@@ -280,10 +280,11 @@ describe('relay payload validation', () => {
         expect(isValidSessionDescription(null, 'offer')).toBe(false);
     });
 
-    it('accepts well-formed ICE candidates', () => {
+    it('accepts well-formed ICE candidates and RFC 8838 end-of-candidates', () => {
         expect(isValidIceCandidate({ candidate: 'candidate:1 1 UDP 2122187007 192.168.1.5 52324 typ host' })).toBe(true);
-        expect(isValidIceCandidate({ candidate: '' })).toBe(false);
+        expect(isValidIceCandidate({ candidate: '' })).toBe(true); // RFC 8838 end-of-candidates
         expect(isValidIceCandidate({})).toBe(false);
+        expect(isValidIceCandidate({ candidate: null })).toBe(false);
         expect(isValidIceCandidate({ candidate: 'x'.repeat(2000) })).toBe(false);
     });
 });
@@ -322,6 +323,20 @@ describe('createRateLimiter', () => {
 
         limiter.reset('a');
         expect(limiter.tryConsume('a')).toBe(true);
+    });
+
+    it('enforces hard-cap eviction when buckets exceed maxEntries', () => {
+        const limiter = createRateLimiter({ capacity: 10, refillPerSecond: 1, maxEntries: 4 });
+        limiter.tryConsume('key-1');
+        limiter.tryConsume('key-2');
+        limiter.tryConsume('key-3');
+        limiter.tryConsume('key-4');
+
+        // 5th distinct key exceeds maxEntries (4), triggering prune and hard-cap eviction
+        limiter.tryConsume('key-5');
+
+        // New key succeeds
+        expect(limiter.tryConsume('key-5')).toBe(true);
     });
 });
 
@@ -428,5 +443,16 @@ describe('SignalingSessionRegistry', () => {
         registry.registerSession('peerA', 'peerB');
         registry.removeSocket('peerA');
         expect(registry.isAuthorized('peerA', 'peerB')).toBe(false);
+    });
+
+    it('prunes expired sessions when prune is called or map exceeds threshold', () => {
+        let now = 1000;
+        const registry = new SignalingSessionRegistry({ ttlMs: 500, nowFn: () => now });
+        registry.registerSession('peerA', 'peerB');
+        expect(registry.sessions.size).toBe(1);
+
+        now = 1600;
+        registry.prune();
+        expect(registry.sessions.size).toBe(0);
     });
 });

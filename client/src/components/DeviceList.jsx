@@ -49,7 +49,7 @@ const detectDeviceShape = (device) => {
   return 'monitor';
 };
 
-export const DeviceList = ({ devices, onToogle, selectedDevice, unreadCounts = {}, onDropFiles }) => {
+export const DeviceList = React.memo(({ devices, onToogle, selectedDevice, unreadCounts = {}, onDropFiles }) => {
   const [dropTargetId, setDropTargetId] = useState(null);
   const reduceMotion = useReducedMotion();
 
@@ -133,4 +133,4 @@ export const DeviceList = ({ devices, onToogle, selectedDevice, unreadCounts = {
       )}
     </div>
   );
-};
+});

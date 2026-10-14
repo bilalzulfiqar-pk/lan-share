@@ -38,30 +38,71 @@ class TransferAbortedError extends Error {
 
 function waitForBufferDrain(channel, targetBytes) {
     return new Promise((resolve) => {
-        if (channel.bufferedAmount <= targetBytes || channel.readyState !== 'open') {
+        if (!channel || channel.bufferedAmount <= targetBytes || channel.readyState !== 'open') {
             resolve();
             return;
         }
 
+        const prevThreshold = channel.bufferedAmountLowThreshold;
+        try {
+            channel.bufferedAmountLowThreshold = targetBytes;
+        } catch {
+            // ignore
+        }
+
         let settled = false;
-        const finish = () => {
+        let pollTimer = null;
+
+        const cleanup = () => {
             if (settled) return;
             settled = true;
-            channel.removeEventListener('bufferedamountlow', finish);
-            clearInterval(pollTimer);
+            channel.removeEventListener('bufferedamountlow', onLow);
+            channel.removeEventListener('close', cleanup);
+            channel.removeEventListener('error', cleanup);
+            if (pollTimer) clearInterval(pollTimer);
+            try {
+                channel.bufferedAmountLowThreshold = prevThreshold;
+            } catch {
+                // ignore
+            }
             resolve();
         };
 
-        channel.addEventListener('bufferedamountlow', finish);
-        // Fallback poll: 'bufferedamountlow' is not guaranteed to fire if the
-        // threshold was passed while paused, and timers still tick (throttled)
-        // in background tabs, unlike requestAnimationFrame.
-        const pollTimer = setInterval(() => {
+        const onLow = () => {
             if (channel.bufferedAmount <= targetBytes || channel.readyState !== 'open') {
-                finish();
+                cleanup();
             }
-        }, 250);
+        };
+
+        channel.addEventListener('bufferedamountlow', onLow);
+        channel.addEventListener('close', cleanup);
+        channel.addEventListener('error', cleanup);
+
+        pollTimer = setInterval(() => {
+            if (channel.bufferedAmount <= targetBytes || channel.readyState !== 'open') {
+                cleanup();
+            }
+        }, 100);
     });
+}
+
+export async function sweepOrphanedOpfsFiles(activeFileIds = new Set()) {
+    if (typeof navigator === 'undefined' || !navigator.storage?.getDirectory) return;
+    try {
+        const root = await navigator.storage.getDirectory();
+        if (typeof root.values === 'function') {
+            for await (const entry of root.values()) {
+                if (entry && entry.kind === 'file' && entry.name.startsWith('transfer-') && entry.name.endsWith('.tmp')) {
+                    const fileId = entry.name.slice('transfer-'.length, -'.tmp'.length);
+                    if (!activeFileIds.has(fileId)) {
+                        await root.removeEntry(entry.name).catch(() => {});
+                    }
+                }
+            }
+        }
+    } catch {
+        // Ignore if OPFS iteration is not supported
+    }
 }
 
 function createProgressTracker(onProgress) {
@@ -117,7 +158,7 @@ class PeerSession {
         this.iceRestartsAttempted = 0;
         this.tearingDown = false;
         this.createdControlChannel = false;
-        this.connectionType = 'direct-lan';
+        this.connectionType = 'unknown';
     }
 }
 
@@ -145,16 +186,21 @@ export class TransferEngine {
         this.receives = new Map();   // fileId -> receive state
         this.downloadUrls = new Map(); // fileId -> object URL
         this.activeTransferIds = new Set(); // fileId -> active upload or download
+        this.earlyCandidates = new Map(); // peerId -> candidate[]
         this.destroyed = false;
 
         this.turnApiUrl = resolveTurnApiUrl(turnApiUrl, socket);
         this.turnCredentials = turnCredentials;
         this.strictLocalMode = Boolean(strictLocalMode);
+        this.fetchTurnCredentials = fetchTurnCredentials;
         this.turnPromise = null;
 
         if (fetchTurnCredentials && !turnCredentials && (typeof window !== 'undefined' || this.turnApiUrl.startsWith('http'))) {
             this.loadTurnCredentials().catch(() => {});
         }
+
+        // Run startup OPFS sweep for any stale temporary files from previous interrupted sessions
+        sweepOrphanedOpfsFiles().catch(() => {});
 
         this.attachSocketHandlers();
     }
@@ -180,7 +226,6 @@ export class TransferEngine {
         }
     }
 
-
     async loadTurnCredentials() {
         if (this.turnPromise) return this.turnPromise;
         this.turnPromise = (async () => {
@@ -195,9 +240,19 @@ export class TransferEngine {
             } catch (err) {
                 console.warn('[engine] Could not load TURN credentials from server:', err);
             }
+            // Allow retry if initial attempt failed (e.g. Render cold start)
+            this.turnPromise = null;
             return null;
         })();
         return this.turnPromise;
+    }
+
+    refreshTurnCredentials() {
+        if (!this.turnCredentials && this.fetchTurnCredentials) {
+            this.turnPromise = null;
+            return this.loadTurnCredentials().catch(() => {});
+        }
+        return Promise.resolve(this.turnCredentials);
     }
 
     setTurnCredentials(credentials) {
@@ -212,9 +267,8 @@ export class TransferEngine {
                 }
             }
 
-            // If the session is actively connecting and not yet connected,
-            // trigger an ICE restart so newly added TURN relay servers gather candidates!
-            if (!session.channelReady && session.pc?.connectionState !== 'connected' && !session.tearingDown) {
+            // Only attempt ICE restart if polite and in stable signalingState (avoids InvalidStateError crash on answerer)
+            if (!session.channelReady && session.pc?.connectionState !== 'connected' && session.pc?.signalingState === 'stable' && !session.tearingDown) {
                 this.attemptIceRestart(session).catch(() => {});
             }
         }
@@ -342,12 +396,22 @@ export class TransferEngine {
     };
 
     handleIceCandidate = async ({ candidate, sender: peerId }) => {
-        const session = this.sessions.get(peerId);
-        if (!session || session.tearingDown || !candidate) return;
+        if (!peerId || !candidate) return;
 
         if (this.strictLocalMode && isRelayCandidate(candidate)) {
             return;
         }
+
+        const session = this.sessions.get(peerId);
+        if (!session) {
+            if (!this.earlyCandidates.has(peerId)) {
+                this.earlyCandidates.set(peerId, []);
+            }
+            this.earlyCandidates.get(peerId).push(candidate);
+            return;
+        }
+
+        if (session.tearingDown) return;
 
         if (!session.remoteDescriptionSet) {
             session.queuedCandidates.push(candidate);
@@ -389,6 +453,13 @@ export class TransferEngine {
 
         session.pc = pc;
         this.sessions.set(peerId, session);
+
+        // Flush early candidates that arrived before the session was created
+        const early = this.earlyCandidates.get(peerId);
+        if (early && early.length > 0) {
+            session.queuedCandidates.push(...early);
+            this.earlyCandidates.delete(peerId);
+        }
 
         pc.onicecandidate = (event) => {
             if (event.candidate) {
@@ -440,6 +511,7 @@ export class TransferEngine {
 
         try {
             session.makingOffer = true;
+            session.remoteDescriptionSet = false; // Reset remote description for new negotiation cycle
             await session.pc.setLocalDescription(await session.pc.createOffer(options));
             this.socket.emit('offer', { target: session.peerId, offer: session.pc.localDescription, sender: this.myId });
         } catch (error) {
@@ -454,6 +526,7 @@ export class TransferEngine {
             return false;
         }
 
+        session.receivesResumed = false;
         session.iceRestartsAttempted += 1;
         console.log(`Attempting ICE restart with ${session.peerId}`);
         this.peerStatus(session.peerId, 'CONNECTING');
@@ -479,13 +552,17 @@ export class TransferEngine {
             this.detectConnectionType(session);
             if (session.channelReady) {
                 this.peerStatus(session.peerId, 'CONNECTED');
-                this.resumeActiveReceivesForSession(session);
+                if (!session.receivesResumed) {
+                    session.receivesResumed = true;
+                    this.resumeActiveReceivesForSession(session);
+                }
             }
             return;
         }
 
 
         if (state === 'disconnected') {
+            session.receivesResumed = false;
             // Often transient (Wi-Fi hiccup, ICE consent refresh). Give the
             // connection a brief grace window before triggering ICE restart.
             if (!session.disconnectGraceTimer) {
@@ -504,6 +581,7 @@ export class TransferEngine {
         }
 
         if (state === 'failed') {
+            session.receivesResumed = false;
             this.clearDisconnectGrace(session);
             this.attemptIceRestart(session).then((restarted) => {
                 if (!restarted) {
@@ -514,26 +592,35 @@ export class TransferEngine {
     }
 
     async detectConnectionType(session) {
-        if (!session || !session.pc) return 'direct-lan';
+        if (!session || !session.pc) return 'unknown';
         try {
             if (typeof session.pc.getStats === 'function') {
                 const stats = await session.pc.getStats();
                 const type = this.parseConnectionType(stats);
-                if (type) {
+                if (type && type !== 'unknown') {
+                    const prevType = session.connectionType;
                     session.connectionType = type;
                     this.emit({ type: 'connection-type', peerId: session.peerId, connectionType: type });
                     this.checkRelayCapForSession(session);
+
+                    if (type === 'relay-turn' && prevType !== 'relay-turn') {
+                        this.emit({
+                            type: 'notify',
+                            title: 'Cloud Relay Active',
+                            body: 'Direct Wi-Fi is blocked by AP Isolation. Transferring via encrypted cloud relay (150 MB max per file).'
+                        });
+                    }
                     return type;
                 }
             }
         } catch (err) {
             console.warn('[engine] Failed to getStats for connection type:', err);
         }
-        return session.connectionType || 'direct-lan';
+        return session.connectionType || 'unknown';
     }
 
     parseConnectionType(stats) {
-        if (!stats) return 'direct-lan';
+        if (!stats) return 'unknown';
 
         let selectedPair = null;
         const reports = typeof stats.values === 'function'
@@ -546,23 +633,43 @@ export class TransferEngine {
             return reports.find((r) => r && r.id === id);
         };
 
+        // 1. Authoritative check: transport.selectedCandidatePairId
         for (const report of reports) {
-            if (report && report.type === 'candidate-pair') {
-                if (report.selected || (report.nominated && (report.state === 'succeeded' || report.state === 'in-progress'))) {
+            if (report && report.type === 'transport' && report.selectedCandidatePairId) {
+                const pair = findReport(report.selectedCandidatePairId);
+                if (pair) {
+                    selectedPair = pair;
+                    break;
+                }
+            }
+        }
+
+        // 2. Candidate pair with selected: true
+        if (!selectedPair) {
+            for (const report of reports) {
+                if (report && report.type === 'candidate-pair' && report.selected) {
                     selectedPair = report;
                     break;
                 }
             }
         }
 
+        // 3. Nominated pair with state === 'succeeded'
         if (!selectedPair) {
             for (const report of reports) {
-                if (report && report.type === 'transport' && report.selectedCandidatePairId) {
-                    const pair = findReport(report.selectedCandidatePairId);
-                    if (pair) {
-                        selectedPair = pair;
-                        break;
-                    }
+                if (report && report.type === 'candidate-pair' && report.nominated && report.state === 'succeeded') {
+                    selectedPair = report;
+                    break;
+                }
+            }
+        }
+
+        // 4. Fallback: nominated pair in progress
+        if (!selectedPair) {
+            for (const report of reports) {
+                if (report && report.type === 'candidate-pair' && report.nominated && report.state === 'in-progress') {
+                    selectedPair = report;
+                    break;
                 }
             }
         }
@@ -585,18 +692,7 @@ export class TransferEngine {
             }
         }
 
-        for (const report of reports) {
-            if (report && (report.type === 'local-candidate' || report.type === 'remote-candidate')) {
-                if (report.candidateType === 'relay' && (report.selected || report.nominated)) {
-                    return 'relay-turn';
-                }
-                if ((report.candidateType === 'srflx' || report.candidateType === 'prflx') && (report.selected || report.nominated)) {
-                    return 'direct-stun';
-                }
-            }
-        }
-
-        return 'direct-lan';
+        return 'unknown';
     }
 
     getRelayBlockError(isStrict = this.strictLocalMode) {
@@ -885,7 +981,10 @@ export class TransferEngine {
             }
         }
 
-        this.resumeActiveReceivesForSession(session);
+        if (!session.receivesResumed) {
+            session.receivesResumed = true;
+            this.resumeActiveReceivesForSession(session);
+        }
     }
 
 
@@ -1018,6 +1117,8 @@ export class TransferEngine {
         entry.cancelled = false;
         entry.settled = false;
         entry.uploading = true;
+        entry.uploadSessionId = (entry.uploadSessionId || 0) + 1;
+        const currentSessionId = entry.uploadSessionId;
         this.markTransferActive(fileId);
 
         const initialProgress = entry.file.size > 0 ? Math.floor((safeOffset / entry.file.size) * 100) : 0;
@@ -1029,7 +1130,7 @@ export class TransferEngine {
         entry.channel = channel;
 
         channel.onopen = () => {
-            this.runUpload(session, fileId, entry, channel, safeOffset).catch((error) => {
+            this.runUpload(session, fileId, entry, channel, safeOffset, currentSessionId).catch((error) => {
                 console.error('Upload loop failed:', error);
             });
         };
@@ -1039,6 +1140,7 @@ export class TransferEngine {
         }
 
         channel.onclose = () => {
+            if (entry.uploadSessionId !== currentSessionId) return;
             if (!entry.settled && !entry.cancelled) {
                 entry.channel = null;
                 entry.uploading = false;
@@ -1048,6 +1150,7 @@ export class TransferEngine {
                 }
                 entry.graceTimer = setTimeout(() => {
                     entry.graceTimer = null;
+                    if (entry.uploadSessionId !== currentSessionId) return;
                     if (!entry.settled && !entry.cancelled) {
                         this.markTransferInactive(fileId);
                         this.historyUpdate(fileId, { status: 'error', error: 'Transfer interrupted.', speed: null, eta: null });
@@ -1058,7 +1161,7 @@ export class TransferEngine {
         };
     }
 
-    async runUpload(session, fileId, entry, channel, fromOffset = 0) {
+    async runUpload(session, fileId, entry, channel, fromOffset = 0, currentSessionId = entry.uploadSessionId) {
         const file = entry.file;
         const totalSize = file.size;
         const chunkSize = negotiateChunkSize(session.pc?.sctp?.maxMessageSize);
@@ -1123,6 +1226,8 @@ export class TransferEngine {
             }));
             await waitForBufferDrain(channel, 0);
 
+            if (entry.uploadSessionId !== currentSessionId) return;
+
             progress.finish();
             entry.settled = true;
             entry.uploading = false;
@@ -1150,6 +1255,9 @@ export class TransferEngine {
                 }
             }, 500);
         } catch (error) {
+            if (entry.uploadSessionId !== currentSessionId) {
+                return;
+            }
             entry.uploading = false;
             try {
                 channel.close();
@@ -1262,6 +1370,8 @@ export class TransferEngine {
             received: 0,
             mode: 'memory',
             stream: null,          // FileSystemWritableFileStream when streaming
+            streamPendingChunks: [],
+            streamPendingBytes: 0,
             opfsFileHandle: null,
             writeChain: Promise.resolve(),
             buffers: [],
@@ -1323,6 +1433,38 @@ export class TransferEngine {
         this.sendOnControl(session, { type: MSG.FILE_REQUEST, fileId, fromOffset: 0 });
     }
 
+    flushStreamChunks(state) {
+        if (!state.stream || !state.streamPendingChunks || state.streamPendingChunks.length === 0) {
+            return state.writeChain;
+        }
+        const chunks = state.streamPendingChunks;
+        const totalBytes = state.streamPendingBytes;
+        state.streamPendingChunks = [];
+        state.streamPendingBytes = 0;
+
+        let merged;
+        if (chunks.length === 1) {
+            merged = chunks[0];
+        } else {
+            merged = new Uint8Array(totalBytes);
+            let offset = 0;
+            for (const c of chunks) {
+                merged.set(new Uint8Array(c), offset);
+                offset += c.byteLength;
+            }
+        }
+
+        const fileId = state.id;
+        state.writeChain = state.writeChain.then(() => state.stream?.write(merged)).catch((error) => {
+            if (!state.finalized) {
+                state.finalized = true;
+                this.discardReceive(fileId, state);
+                this.historyUpdate(fileId, { status: FILE_STATUS.FAILED, error: `Could not write to disk: ${error.message}` });
+            }
+        });
+        return state.writeChain;
+    }
+
     attachFileReceiveChannel(session, channel, fileId) {
         const state = this.receives.get(fileId);
         channel.binaryType = 'arraybuffer';
@@ -1338,6 +1480,7 @@ export class TransferEngine {
             return;
         }
 
+        state.resuming = false;
         if (state.graceTimer) {
             clearTimeout(state.graceTimer);
             state.graceTimer = null;
@@ -1364,6 +1507,7 @@ export class TransferEngine {
                     return;
                 }
                 if (msg.type === MSG.FILE_END) {
+                    this.flushStreamChunks(state);
                     this.finalizeReceive(fileId, state, msg).catch((error) => {
                         console.error('Finalize failed:', error);
                     });
@@ -1376,13 +1520,16 @@ export class TransferEngine {
             state.hasher?.update(new Uint8Array(chunk));
 
             if ((state.mode === 'fs-access' || state.mode === 'opfs') && state.stream) {
-                state.writeChain = state.writeChain.then(() => state.stream.write(chunk)).catch((error) => {
-                    if (!state.finalized) {
-                        state.finalized = true;
-                        this.discardReceive(fileId, state);
-                        this.historyUpdate(fileId, { status: FILE_STATUS.FAILED, error: `Could not write to disk: ${error.message}` });
-                    }
-                });
+                if (!state.streamPendingChunks) {
+                    state.streamPendingChunks = [];
+                    state.streamPendingBytes = 0;
+                }
+                state.streamPendingChunks.push(chunk);
+                state.streamPendingBytes += chunk.byteLength;
+
+                if (state.streamPendingBytes >= 512 * 1024) {
+                    this.flushStreamChunks(state);
+                }
             } else {
                 state.buffers.push(chunk);
             }
@@ -1391,6 +1538,7 @@ export class TransferEngine {
         };
 
         channel.onclose = () => {
+            this.flushStreamChunks(state);
             if (!state.finalized) {
                 if (state.graceTimer) {
                     clearTimeout(state.graceTimer);
@@ -1417,6 +1565,8 @@ export class TransferEngine {
         }
         if (state.finalized) return;
         state.finalized = true;
+
+        this.flushStreamChunks(state);
 
         if (state.received < state.size) {
             this.discardReceive(fileId, state);
@@ -1557,6 +1707,8 @@ export class TransferEngine {
             clearTimeout(state.graceTimer);
             state.graceTimer = null;
         }
+        state.streamPendingChunks = [];
+        state.streamPendingBytes = 0;
         let abortPromise = Promise.resolve();
         if ((state.mode === 'fs-access' || state.mode === 'opfs') && state.stream) {
             try {

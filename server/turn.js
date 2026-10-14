@@ -4,8 +4,15 @@ const DEFAULT_STUN_SERVERS = [
             'stun:stun.l.google.com:19302',
             'stun:stun1.l.google.com:19302'
         ]
+    },
+    {
+        urls: [
+            'stun:stun.cloudflare.com:3478'
+        ]
     }
 ];
+
+const DEFAULT_NEGATIVE_TTL_MS = 60 * 1000; // 1 minute negative cache backoff on Metered failure
 
 class TurnCredentialManager {
     constructor({
@@ -13,13 +20,15 @@ class TurnCredentialManager {
         appName = null,
         fetchFn = null,
         nowFn = () => Date.now(),
-        ttlMs = 60 * 60 * 1000 // 1 hour in-memory cache
+        ttlMs = 60 * 60 * 1000, // 1 hour in-memory cache
+        negativeTtlMs = DEFAULT_NEGATIVE_TTL_MS
     } = {}) {
         this.apiKey = apiKey;
         this.appName = appName;
         this.fetchFn = fetchFn;
         this.nowFn = nowFn;
         this.ttlMs = ttlMs;
+        this.negativeTtlMs = negativeTtlMs;
         this.cachedData = null;
         this.expiresAt = 0;
         this.pendingFetchPromise = null;
@@ -73,9 +82,12 @@ class TurnCredentialManager {
                 if (!res.ok) {
                     console.error(`[TURN] Metered API error: HTTP ${res.status}`);
                     if (this.cachedData) {
+                        this.expiresAt = this.nowFn() + this.negativeTtlMs;
                         return this.cachedData;
                     }
-                    return { iceServers: DEFAULT_STUN_SERVERS };
+                    this.cachedData = { iceServers: DEFAULT_STUN_SERVERS };
+                    this.expiresAt = this.nowFn() + this.negativeTtlMs;
+                    return this.cachedData;
                 }
 
                 const data = await res.json();
@@ -93,9 +105,12 @@ class TurnCredentialManager {
             } catch (err) {
                 console.error('[TURN] Failed to fetch Metered credentials:', err.message || err);
                 if (this.cachedData) {
+                    this.expiresAt = this.nowFn() + this.negativeTtlMs;
                     return this.cachedData;
                 }
-                return { iceServers: DEFAULT_STUN_SERVERS };
+                this.cachedData = { iceServers: DEFAULT_STUN_SERVERS };
+                this.expiresAt = this.nowFn() + this.negativeTtlMs;
+                return this.cachedData;
             } finally {
                 if (timeoutId) {
                     clearTimeout(timeoutId);
@@ -117,7 +132,7 @@ class TurnCredentialManager {
 function createTurnCredentialsHandler({ manager, limiter, getClientIp = (headers, addr) => addr || '127.0.0.1' }) {
     return async function handleTurnCredentials(req, res) {
         const headers = req?.headers || {};
-        const clientIp = getClientIp(headers, req?.socket?.remoteAddress);
+        const clientIp = req?.ip ? String(req.ip).replace(/^::ffff:/, '') : getClientIp(headers, req?.socket?.remoteAddress);
         if (limiter && !limiter.tryConsume(clientIp)) {
             return res.status(429).json({ error: 'Too many requests for TURN credentials. Please wait.' });
         }

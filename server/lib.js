@@ -248,7 +248,6 @@ function isValidIceCandidate(value) {
         value &&
         typeof value === 'object' &&
         typeof value.candidate === 'string' &&
-        value.candidate.length > 0 &&
         value.candidate.length <= 1024
     );
 }
@@ -261,6 +260,17 @@ function createRateLimiter({ capacity = 40, refillPerSecond = 20, maxEntries = 5
         for (const [key, bucket] of buckets) {
             if (now - bucket.last > 5 * 60 * 1000) {
                 buckets.delete(key);
+            }
+        }
+
+        // Hard-cap eviction: if still above capacity after TTL purge, drop oldest 25% of entries
+        if (buckets.size > maxEntries) {
+            const excess = buckets.size - Math.floor(maxEntries * 0.75);
+            let dropped = 0;
+            for (const key of buckets.keys()) {
+                buckets.delete(key);
+                dropped += 1;
+                if (dropped >= excess) break;
             }
         }
     }
@@ -405,8 +415,19 @@ class SignalingSessionRegistry {
 
     registerSession(peerA, peerB) {
         if (!peerA || !peerB || peerA === peerB) return;
+        if (this.sessions.size > 200) {
+            this.prune();
+        }
         const key = this._pairKey(peerA, peerB);
         this.sessions.set(key, this.nowFn() + this.ttlMs);
+    }
+
+    prune(now = this.nowFn()) {
+        for (const [key, expiresAt] of this.sessions) {
+            if (now > expiresAt) {
+                this.sessions.delete(key);
+            }
+        }
     }
 
     isAuthorized(peerA, peerB) {

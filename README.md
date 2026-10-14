@@ -6,7 +6,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Live Demo](https://img.shields.io/badge/Live%20Demo-lan--share.vercel.app-brightgreen.svg)](https://lan-share.vercel.app/)
-[![Tests Passing](https://img.shields.io/badge/Tests-290%20passed-success.svg)](docs/QA-CHECKLIST.md)
+[![Tests Passing](https://img.shields.io/badge/Tests-328%20passed-success.svg)](docs/QA-CHECKLIST.md)
 [![React 19](https://img.shields.io/badge/React-19-61dafb.svg)](https://react.dev/)
 [![Vite 7](https://img.shields.io/badge/Vite-7-646cff.svg)](https://vitejs.dev/)
 [![WebRTC](https://img.shields.io/badge/WebRTC-DataChannels-333333.svg)](https://webrtc.org/)
@@ -279,15 +279,27 @@ LAN Share includes a unified alert system controlled by the bell icon in the top
 
 ### Signaling Server (Render / Railway / Fly.io / VPS)
 * **Root Directory:** `server/`
+* **Runtime:** Node.js 20+
 * **Build Command:** `npm install`
-* **Start Command:** `npm start`
-* **Health Check Endpoint:** `GET /health` returns `{"ok": true}`.
+* **Start Command:** `npm start` (or `node index.js`)
+* **Health Check Path:** `GET /health` (returns `{"ok": true}`)
+* **Auto-Wake Integration:** The client frontend automatically triggers a non-blocking `/health` wake-up probe on startup to minimize cold-start latency when running on free Render instances.
+
+### Free Metered.ca TURN Relay Configuration (50 GB/month)
+To punch through restrictive corporate firewalls and AP/Client Isolation on hotel or university Wi-Fi:
+1. Sign up for a free account at [Metered.ca OpenRelay](https://www.metered.ca/tools/openrelay/).
+2. Create an application to get your **App Name** and **API Key**.
+3. Set the environment variables on your signaling server:
+   * `METERED_APP_NAME`: Your Metered application name.
+   * `METERED_API_KEY`: Your Metered REST API key.
+4. The signaling server automatically handles TTL caching (1-hour in-memory cache), request coalescing, negative caching on upstream rate limits, and fallback to Google & Cloudflare public STUN servers.
 
 ### Environment Variables
 
 | Variable | Scope | Required | Description |
 | :--- | :---: | :---: | :--- |
 | `PORT` | Server | Optional | Port for the signaling service (default: `3001`). |
+| `METERED_APP_NAME` | Server | Optional | Metered.ca application name for TURN relay. |
 | `METERED_API_KEY` | Server | Optional | Metered.ca REST API key for caching ephemeral TURN credentials. |
 | `VITE_SERVER_URL` | Client | Optional | Signaling server URL (default: `http://localhost:3001` or relative origin). |
 | `VITE_SITE_URL` | Client | Optional | Canonical site URL for SEO meta and QR sharing (default: `https://lan-share.vercel.app`). |
@@ -296,7 +308,7 @@ LAN Share includes a unified alert system controlled by the bell icon in the top
 
 ## Testing & Quality Assurance
 
-LAN Share is backed by **290 automated tests** (239 client + 51 server) verifying socket clustering, WebRTC state machines, OPFS streaming fallbacks, TURN relay protection, connection mode diagnostics, and protocol serialization:
+LAN Share is backed by **328 automated tests** (264 client + 64 server) verifying socket clustering, WebRTC state machines, OPFS streaming fallbacks, TURN relay protection, connection mode diagnostics, and protocol serialization:
 
 ```bash
 # Run server test suite (clustering, rooms, TURN credential caching)
@@ -323,11 +335,11 @@ lan-share/
 │       ├── components/         # Radar, Chat, RoomModal, HotspotGuideModal, ConnectionModeBadge
 │       ├── hooks/              # useSignaling (Socket.IO), useWebRTC (engine hook)
 │       └── lib/                # TransferEngine, protocol, opfs, crypto, connectionModes, wakeLock
-│           └── __tests__/      # Vitest client suites (OPFS, resumption, relay, components - 239 tests)
+│           └── __tests__/      # Vitest client suites (OPFS, resumption, relay, components - 264 tests)
 ├── server/                     # Node.js + Express + Socket.IO signaling service
 │   ├── index.js                # Server entry point, TURN endpoint, socket events
 │   ├── lib.js                  # Subnet clustering, room registry, SimilarityIndex
-│   └── *.test.js               # Vitest server suites (rooms, TURN, similarity - 51 tests)
+│   └── *.test.js               # Vitest server suites (rooms, TURN, similarity - 64 tests)
 ├── docs/                       # Project documentation & guides
 │   ├── assets/                 # Vector banner & architecture diagrams
 │   ├── QA-CHECKLIST.md         # Multi-device QA checklist

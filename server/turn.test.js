@@ -181,6 +181,38 @@ describe('Server TurnCredentialManager', () => {
         // Returns stale cached data rather than throwing or losing connectivity
         expect(res2.iceServers).toEqual(cachedServers);
     });
+
+    it('sets negative cache TTL on Metered API failure to avoid hammering upstream', async () => {
+        let currentTime = 1000000;
+        const fetchFn = vi.fn().mockResolvedValue({
+            ok: false,
+            status: 429,
+            statusText: 'Too Many Requests'
+        });
+
+        const manager = new TurnCredentialManager({
+            apiKey: 'key',
+            appName: 'app',
+            fetchFn,
+            nowFn: () => currentTime,
+            negativeTtlMs: 60 * 1000
+        });
+
+        const res1 = await manager.getCredentials();
+        expect(fetchFn).toHaveBeenCalledTimes(1);
+        expect(res1).toEqual({ iceServers: DEFAULT_STUN_SERVERS });
+
+        // Call again 30 seconds later (within negative cache TTL of 60s)
+        currentTime += 30 * 1000;
+        const res2 = await manager.getCredentials();
+        expect(fetchFn).toHaveBeenCalledTimes(1); // Cached! No upstream fetch!
+        expect(res2).toEqual({ iceServers: DEFAULT_STUN_SERVERS });
+
+        // Advance past 60s
+        currentTime += 35 * 1000;
+        await manager.getCredentials();
+        expect(fetchFn).toHaveBeenCalledTimes(2); // Refetched after negative cache expires
+    });
 });
 
 describe('GET /api/turn-credentials endpoint and rate limiting', () => {

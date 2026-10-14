@@ -46,6 +46,15 @@ export class WakeLockManager {
         this.requesting = true;
         try {
             const sentinel = await navigator.wakeLock.request('screen');
+            if (this.activeCount <= 0) {
+                try {
+                    await sentinel.release();
+                } catch {
+                    // ignore
+                }
+                this.sentinel = null;
+                return false;
+            }
             this.sentinel = sentinel;
             sentinel.addEventListener('release', () => {
                 if (this.sentinel === sentinel) {

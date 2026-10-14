@@ -3846,6 +3846,17 @@ button {
   border-color: rgba(245, 158, 11, 0.52);
 }
 
+.conn-mode-badge.mode-unknown {
+  background: rgba(148, 163, 184, 0.12);
+  color: #94a3b8;
+  border: 1px solid rgba(148, 163, 184, 0.3);
+}
+
+.conn-mode-badge.mode-unknown:hover {
+  background: rgba(148, 163, 184, 0.18);
+  border-color: rgba(148, 163, 184, 0.45);
+}
+
 .conn-mode-dot {
   width: 6.5px;
   height: 6.5px;
@@ -3867,6 +3878,11 @@ button {
 .conn-mode-dot.status-dot-amber {
   background-color: #f59e0b;
   box-shadow: 0 0 6px rgba(245, 158, 11, 0.6);
+}
+
+.conn-mode-dot.status-dot-gray {
+  background-color: #94a3b8;
+  box-shadow: 0 0 6px rgba(148, 163, 184, 0.6);
 }
 
 .conn-mode-info-btn {

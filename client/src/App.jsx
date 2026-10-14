@@ -534,6 +534,19 @@ function App() {
     }
   };
 
+  const handleOpenHotspotGuide = useCallback(() => {
+    setShowHotspotModal(true);
+  }, []);
+
+  const handleSaveFile = useCallback((fileId) => {
+    const item = history.find((entry) => entry.id === fileId);
+    saveReceivedFile(fileId, item?.fileName);
+  }, [history, saveReceivedFile]);
+
+  const handleDropFiles = useCallback((peerId, files) => {
+    sendFilesOffer(peerId, files);
+  }, [sendFilesOffer]);
+
   return (
     <div className="app-container">
       <Header
@@ -892,7 +905,7 @@ function App() {
             onToogle={handleDeviceToggle}
             selectedDevice={activeSelectedDevice}
             unreadCounts={unreadBySocketId}
-            onDropFiles={(peerId, files) => sendFilesOffer(peerId, files)}
+            onDropFiles={handleDropFiles}
           />
 
           <AnimatePresence>
@@ -978,13 +991,10 @@ function App() {
           <HistoryPanel
             history={history}
             onRequest={requestFile}
-            onSave={(fileId) => {
-              const item = history.find((entry) => entry.id === fileId);
-              saveReceivedFile(fileId, item?.fileName);
-            }}
+            onSave={handleSaveFile}
             onCancel={cancelTransfer}
             getPeerName={getPeerName}
-            onOpenHotspotGuide={() => setShowHotspotModal(true)}
+            onOpenHotspotGuide={handleOpenHotspotGuide}
             peers={peers}
           />
         </div>
