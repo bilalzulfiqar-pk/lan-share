@@ -65,9 +65,38 @@
 
 ---
 
-## Connection Lifecycle & Architecture
+## Architecture & How It Works
 
 LAN Share strictly isolates signaling discovery from actual file payloads. File data **never touches any intermediate cloud server**.
+
+```mermaid
+flowchart LR
+    subgraph Cloud ["☁️ Cloud Signaling (Render)"]
+        Server["Signaling Server<br/>• Local Subnet Fingerprinting<br/>• 6-Digit Room & QR Pairing<br/>(Handshake Only — Zero File Data)"]
+    end
+
+    subgraph LocalNet ["🏠 Your Local Network / Wi-Fi / Hotspot"]
+        direction LR
+        DevA["💻 Sender<br/>Laptop / Desktop"]
+        DevB["📱 Receiver<br/>Phone / Tablet"]
+        
+        DevA == "Direct P2P Encrypted Stream<br/>(Full LAN Speed: 30–80+ MB/s)<br/>• 64 KiB Chunks & Backpressure<br/>• Desktop Disk / Mobile OPFS" ==> DevB
+    end
+
+    DevA -. "1. Subnet Radar / Room Code (~2 KB)" .-> Server
+    Server -. "2. Exchange WebRTC Session (~2 KB)" .-> DevB
+    DevA -. "3. Direct ICE Candidates (~1 KB)" .- DevB
+```
+
+1. **Local Network Discovery (~2 KB):** Devices discover each other automatically on your local Wi-Fi subnet radar, or connect across guest networks/VLANs via 6-digit room codes (`#room=123456`) or camera QR scans.
+2. **Zero Cloud Uploads:** The signaling server solely relays lightweight (~2 KB) cryptographic session descriptions (SDP) and ICE candidates. File contents never touch, transit, or get stored on any cloud server or database.
+3. **Maximum Direct LAN Speed:** Once paired, browsers establish a direct DTLS-encrypted WebRTC `RTCDataChannel`, streaming payloads directly at physical router speed (30–80+ MB/s).
+
+<br />
+
+<details>
+<summary><b>🔍 Deep-Dive: Complete WebRTC Lifecycle & Storage Architecture Diagram (Click to Expand)</b></summary>
+<br />
 
 ```mermaid
 sequenceDiagram
@@ -115,6 +144,8 @@ sequenceDiagram
     B->>B: Verify hash match (100% bit-for-bit integrity)
     B-->>B: Native Share Sheet (Save to Photos/Files) or Anchor Download
 ```
+
+</details>
 
 ### Connection Stages Breakdown
 
