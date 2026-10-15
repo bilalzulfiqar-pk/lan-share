@@ -68,6 +68,25 @@ function FileItemComponent({ item, onRequest, onSave, onCancel, getPeerName, onO
     idle: 'Idle',
   };
 
+  const CONCISE_STATUS_COPY = {
+    connecting: 'Connecting…',
+    offered: 'Offered to peer',
+    available: 'Available',
+    waiting: 'Requesting…',
+    sending: 'Sending...',
+    uploading: 'Sending...',
+    receiving: 'Receiving…',
+    downloading: 'Receiving…',
+    sent: 'Sent & verified',
+    completed: 'Sent & verified',
+    ready: 'Ready to save',
+    saved: 'Saved',
+    blocked: 'Failed',
+    failed: item.error || 'Failed',
+    cancelled: 'Cancelled',
+    idle: 'Idle',
+  };
+
   const formatSize = (bytes) => {
     if (!bytes && bytes !== 0) return '';
     if (bytes === 0) return '0 B';
@@ -113,142 +132,180 @@ function FileItemComponent({ item, onRequest, onSave, onCancel, getPeerName, onO
 
   const isActive = item.status === 'uploading' || item.status === 'downloading';
 
+  const hasCancelBtn =
+    item.status === 'idle' ||
+    item.status === 'connecting' ||
+    item.status === 'offered' ||
+    item.status === 'waiting' ||
+    item.status === 'uploading' ||
+    item.status === 'downloading';
+
+  const isFailedWithPeerOffline =
+    !isSender &&
+    (item.status === 'failed' || item.status === 'error' || item.status === 'blocked') &&
+    !isHotspotCandidate &&
+    isPeerDisconnected;
+
+  const hasVerifiedBadge = !isSender && item.status === 'completed' && item.verified;
+
+  const primaryCta = (() => {
+    if (!isSender && (item.status === 'idle' || item.status === 'offered')) {
+      return (
+        <button
+          type="button"
+          className="btn btn-sm btn-primary btn-auto"
+          onClick={() => onRequest(item.id)}
+        >
+          Download
+        </button>
+      );
+    }
+
+    if (!isSender && (item.status === 'failed' || item.status === 'error' || item.status === 'blocked') && !isHotspotCandidate) {
+      if (isPeerDisconnected) {
+        return null;
+      }
+      return (
+        <button
+          type="button"
+          className="btn btn-sm btn-primary btn-auto"
+          onClick={() => onRequest(item.id)}
+          data-testid="restart-transfer-btn"
+        >
+          Restart Transfer
+        </button>
+      );
+    }
+
+    if (!isSender && item.status === 'completed' && item.downloadUrl) {
+      return (
+        <button
+          type="button"
+          className="btn btn-sm btn-primary btn-auto"
+          onClick={() => onSave(item.id)}
+        >
+          Save
+        </button>
+      );
+    }
+
+    return null;
+  })();
+
   return (
     <div className={`file-item ${isActive ? 'is-active' : ''}`}>
-      <div className="file-icon" aria-hidden="true">
-        {getIcon(item.fileType)}
+      <div className="file-item-main">
+        <div className="file-icon" aria-hidden="true">
+          {getIcon(item.fileType)}
+        </div>
+
+        <div className="file-details">
+          <span className="file-name" title={item.fileName}>{item.fileName}</span>
+          <div className="file-meta">
+            <span className="file-size">{formatSize(item.fileSize)}</span>
+            <span className={`transfer-status ${statusClass}`} title={item.error || undefined}>
+              <span className="status-pill-dot" aria-hidden="true" />
+              <span className="status-text">
+                <span className="status-copy-full">{STATUS_COPY[statusKey]}</span>
+                <span className="status-copy-short">{CONCISE_STATUS_COPY[statusKey] || STATUS_COPY[statusKey]}</span>
+              </span>
+            </span>
+          </div>
+        </div>
+
+        {hasCancelBtn && (
+          <div className="file-dismiss-action">
+            <button
+              type="button"
+              className="btn-icon icon-btn-danger"
+              onClick={() => onCancel(item.id)}
+              title="Cancel transfer"
+              aria-label="Cancel transfer"
+            >
+              <CancelIcon />
+            </button>
+          </div>
+        )}
       </div>
 
-      <div className="file-details">
-        <span className="file-name" title={item.fileName}>{item.fileName}</span>
-        <div className="file-meta">
-          <span className="file-size">{formatSize(item.fileSize)}</span>
-          <span className="meta-sep" aria-hidden="true">·</span>
-          <span className={`transfer-status ${statusClass}`} title={item.error || undefined}>
-            <span className="status-pill-dot" aria-hidden="true" />
-            {STATUS_COPY[statusKey]}
-          </span>
-          <span className="meta-sep" aria-hidden="true">·</span>
+      {item.error && (item.status === 'blocked' || item.status === 'failed' || item.status === 'error') && (
+        <div className="file-error-text" title={item.error}>
+          {item.error}
+        </div>
+      )}
+
+      {isHotspotCandidate && (
+        <div className="file-hotspot-container">
+          <button
+            type="button"
+            className="file-hotspot-btn"
+            onClick={onOpenHotspotGuide}
+            data-testid="file-hotspot-guide-btn"
+          >
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <circle cx="12" cy="12" r="10" />
+              <line x1="12" y1="16" x2="12" y2="12" />
+              <line x1="12" y1="8" x2="12.01" y2="8" />
+            </svg>
+            View Mobile Hotspot Guide
+          </button>
+        </div>
+      )}
+
+      {isActive && (
+        <div
+          className="progress-bar-container"
+          role="progressbar"
+          aria-valuemin={0}
+          aria-valuemax={100}
+          aria-valuenow={item.progress ?? 0}
+          aria-label={`${isSender ? 'Sending' : 'Receiving'} ${item.fileName}`}
+        >
+          <div
+            className="progress-bar-fill"
+            style={{ width: `${item.progress ?? 0}%` }}
+          />
+        </div>
+      )}
+
+      {isActive && item.speed != null && item.speed > 0 && (
+        <div className="transfer-rate">
+          <span>{formatSize(item.speed)}/s</span>
+          {formatEta(item.eta) && (
+            <>
+              <span className="meta-sep" aria-hidden="true">·</span>
+              <span>{formatEta(item.eta)} left</span>
+            </>
+          )}
+        </div>
+      )}
+
+      <div className="file-footer">
+        <div className="file-badges">
           <span className="file-peer-info">
             {isSender ? `To: ${peerName}` : `From: ${peerName}`}
           </span>
-        </div>
 
-        {item.error && (item.status === 'blocked' || item.status === 'failed' || item.status === 'error') && (
-          <div className="file-error-text" title={item.error}>
-            {item.error}
-          </div>
-        )}
-
-        {isHotspotCandidate && (
-          <div className="file-hotspot-container">
-            <button
-              type="button"
-              className="file-hotspot-btn"
-              onClick={onOpenHotspotGuide}
-              data-testid="file-hotspot-guide-btn"
-            >
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                <circle cx="12" cy="12" r="10" />
-                <line x1="12" y1="16" x2="12" y2="12" />
-                <line x1="12" y1="8" x2="12.01" y2="8" />
+          {hasVerifiedBadge && (
+            <span className="verified-badge" title="SHA-256 integrity check passed">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <polyline points="20 6 9 17 4 12" />
               </svg>
-              View Mobile Hotspot Guide
-            </button>
-          </div>
-        )}
+              Verified
+            </span>
+          )}
 
-        {isActive && (
-          <div
-            className="progress-bar-container"
-            role="progressbar"
-            aria-valuemin={0}
-            aria-valuemax={100}
-            aria-valuenow={item.progress ?? 0}
-            aria-label={`${isSender ? 'Sending' : 'Receiving'} ${item.fileName}`}
-          >
-            <div
-              className="progress-bar-fill"
-              style={{ width: `${item.progress ?? 0}%` }}
-            />
-          </div>
-        )}
-
-        {isActive && item.speed != null && item.speed > 0 && (
-          <div className="transfer-rate">
-            <span>{formatSize(item.speed)}/s</span>
-            {formatEta(item.eta) && (
-              <>
-                <span className="meta-sep" aria-hidden="true">·</span>
-                <span>{formatEta(item.eta)} left</span>
-              </>
-            )}
-          </div>
-        )}
-
-        {!isSender && item.status === 'completed' && item.verified && (
-          <span className="verified-badge" title="SHA-256 integrity check passed">
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-              <polyline points="20 6 9 17 4 12" />
-            </svg>
-            Verified
-          </span>
-        )}
-      </div>
-
-      <div className="file-actions">
-        {!isSender && (item.status === 'idle' || item.status === 'offered') && (
-          <button
-            type="button"
-            className="btn btn-sm btn-primary btn-auto"
-            onClick={() => onRequest(item.id)}
-          >
-            Download
-          </button>
-        )}
-
-        {!isSender && (item.status === 'failed' || item.status === 'error' || item.status === 'blocked') && !isHotspotCandidate && (
-          isPeerDisconnected ? (
+          {isFailedWithPeerOffline && (
             <span className="peer-offline-badge" data-testid="peer-offline-badge">
               Peer Offline
             </span>
-          ) : (
-            <button
-              type="button"
-              className="btn btn-sm btn-primary btn-auto"
-              onClick={() => onRequest(item.id)}
-              data-testid="restart-transfer-btn"
-            >
-              Restart Transfer
-            </button>
-          )
-        )}
+          )}
+        </div>
 
-        {!isSender && item.status === 'completed' && item.downloadUrl && (
-          <button
-            type="button"
-            className="btn btn-sm btn-primary btn-auto"
-            onClick={() => onSave(item.id)}
-          >
-            Save
-          </button>
-        )}
-
-        {(item.status === 'idle' ||
-          item.status === 'connecting' ||
-          item.status === 'offered' ||
-          item.status === 'waiting' ||
-          item.status === 'uploading' ||
-          item.status === 'downloading') && (
-          <button
-            type="button"
-            className="btn-icon icon-btn-danger"
-            onClick={() => onCancel(item.id)}
-            title="Cancel transfer"
-            aria-label="Cancel transfer"
-          >
-            <CancelIcon />
-          </button>
+        {primaryCta && (
+          <div className="file-actions">
+            {primaryCta}
+          </div>
         )}
       </div>
     </div>
