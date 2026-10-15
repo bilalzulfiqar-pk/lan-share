@@ -490,17 +490,68 @@ describe('Simulated Network Scenarios (TEST-01 to TEST-04)', () => {
         });
 
         expect(sessionB.connectionType).toBe('direct-lan');
+        expect(sessionB.peerConfirmedDirectLan).toBe(true);
         const connEvent = eventsB.find((e) => e.type === 'connection-type');
         expect(connEvent).toBeDefined();
         expect(connEvent.connectionType).toBe('direct-lan');
 
         // 2. ROUTE_SYNC control message also synchronizes direct-lan
         sessionB.connectionType = 'direct-stun';
+        sessionB.peerConfirmedDirectLan = false;
         engineB.handleControlMessage(sessionB, {
             type: 'ROUTE_SYNC',
             mode: 'direct-lan'
         });
         expect(sessionB.connectionType).toBe('direct-lan');
+        expect(sessionB.peerConfirmedDirectLan).toBe(true);
+
+        // 3. Periodic local detection reporting srflx preserves direct-lan
+        const mockSrflxStats = [
+            {
+                type: 'transport',
+                selectedCandidatePairId: 'pair-stun'
+            },
+            {
+                id: 'pair-stun',
+                type: 'candidate-pair',
+                state: 'succeeded',
+                nominated: true,
+                localCandidateId: 'cand-srflx-loc',
+                remoteCandidateId: 'cand-srflx-rem'
+            },
+            { id: 'cand-srflx-loc', candidateType: 'srflx' },
+            { id: 'cand-srflx-rem', candidateType: 'srflx' }
+        ];
+        sessionB.pc.getStats = vi.fn(async () => mockSrflxStats);
+
+        const detectedType = await engineB.detectConnectionType(sessionB);
+        expect(detectedType).toBe('direct-lan');
+        expect(sessionB.connectionType).toBe('direct-lan');
+        expect(engineB.getConnectionType('alice')).toBe('direct-lan');
+
+        // 4. Switching to relay-turn resets peerConfirmedDirectLan and updates mode
+        const mockRelayStats = [
+            {
+                type: 'transport',
+                selectedCandidatePairId: 'pair-relay'
+            },
+            {
+                id: 'pair-relay',
+                type: 'candidate-pair',
+                state: 'succeeded',
+                nominated: true,
+                localCandidateId: 'cand-relay-loc',
+                remoteCandidateId: 'cand-relay-rem'
+            },
+            { id: 'cand-relay-loc', candidateType: 'relay' },
+            { id: 'cand-relay-rem', candidateType: 'relay' }
+        ];
+        sessionB.pc.getStats = vi.fn(async () => mockRelayStats);
+
+        const relayType = await engineB.detectConnectionType(sessionB);
+        expect(relayType).toBe('relay-turn');
+        expect(sessionB.connectionType).toBe('relay-turn');
+        expect(sessionB.peerConfirmedDirectLan).toBe(false);
     });
 });
 

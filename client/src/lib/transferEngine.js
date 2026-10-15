@@ -163,6 +163,7 @@ class PeerSession {
         this.createdControlChannel = false;
         this.receivesResumed = false;
         this.connectionType = 'unknown';
+        this.peerConfirmedDirectLan = false;
         this.pendingIceRestart = false;
         this.iceTransportListening = false;
     }
@@ -671,6 +672,7 @@ export class TransferEngine {
 
         session.pendingIceRestart = false;
         session.receivesResumed = false;
+        session.peerConfirmedDirectLan = false;
         session.iceRestartsAttempted += 1;
         console.log(`Attempting ICE restart with ${session.peerId}`);
         this.peerStatus(session.peerId, 'CONNECTING');
@@ -746,25 +748,32 @@ export class TransferEngine {
                 const stats = await session.pc.getStats();
                 const type = this.parseConnectionType(stats);
                 if (type && type !== 'unknown') {
+                    let effectiveType = type;
+                    if (session.peerConfirmedDirectLan && type === 'direct-stun') {
+                        effectiveType = 'direct-lan';
+                    } else if (type === 'relay-turn') {
+                        session.peerConfirmedDirectLan = false;
+                    }
+
                     const prevType = session.connectionType;
-                    session.connectionType = type;
-                    this.emit({ type: 'connection-type', peerId: session.peerId, connectionType: type });
+                    session.connectionType = effectiveType;
+                    this.emit({ type: 'connection-type', peerId: session.peerId, connectionType: effectiveType });
                     this.checkRelayCapForSession(session);
 
                     // Sync active transfer history items with the newly confirmed/upgraded connection type
                     for (const [id, entry] of this.outgoing.entries()) {
                         if (entry.peerId === session.peerId) {
-                            this.historyUpdate(id, { connectionType: type });
+                            this.historyUpdate(id, { connectionType: effectiveType });
                         }
                     }
                     for (const [id, rec] of this.receives.entries()) {
                         if (rec.peerId === session.peerId) {
-                            this.historyUpdate(id, { connectionType: type });
+                            this.historyUpdate(id, { connectionType: effectiveType });
                         }
                     }
                     for (const [id, meta] of this.offered.entries()) {
                         if (meta.peerId === session.peerId) {
-                            this.historyUpdate(id, { connectionType: type });
+                            this.historyUpdate(id, { connectionType: effectiveType });
                         }
                     }
 
@@ -772,14 +781,14 @@ export class TransferEngine {
                         this.sendOnControl(session, { type: MSG.ROUTE_SYNC, mode: 'direct-lan' });
                     }
 
-                    if (type === 'relay-turn' && prevType !== 'relay-turn') {
+                    if (effectiveType === 'relay-turn' && prevType !== 'relay-turn') {
                         this.emit({
                             type: 'notify',
                             title: 'Cloud Relay Active',
                             body: 'Direct Wi-Fi is blocked by AP Isolation. Transferring via encrypted cloud relay (150 MB max per file).'
                         });
                     }
-                    return type;
+                    return effectiveType;
                 }
             }
         } catch (err) {
@@ -1031,6 +1040,7 @@ export class TransferEngine {
             // already closed
         }
 
+        session.peerConfirmedDirectLan = false;
         this.sessions.delete(peerId);
         this.peerStatus(peerId, 'DISCONNECTED');
 
@@ -1101,8 +1111,24 @@ export class TransferEngine {
 
             case MSG.ROUTE_SYNC:
                 if (msg.mode === 'direct-lan' && session.connectionType !== 'relay-turn') {
+                    session.peerConfirmedDirectLan = true;
                     session.connectionType = 'direct-lan';
                     this.emit({ type: 'connection-type', peerId: session.peerId, connectionType: 'direct-lan' });
+                    for (const [id, entry] of this.outgoing.entries()) {
+                        if (entry.peerId === session.peerId) {
+                            this.historyUpdate(id, { connectionType: 'direct-lan' });
+                        }
+                    }
+                    for (const [id, rec] of this.receives.entries()) {
+                        if (rec.peerId === session.peerId) {
+                            this.historyUpdate(id, { connectionType: 'direct-lan' });
+                        }
+                    }
+                    for (const [id, meta] of this.offered.entries()) {
+                        if (meta.peerId === session.peerId) {
+                            this.historyUpdate(id, { connectionType: 'direct-lan' });
+                        }
+                    }
                 }
                 break;
 
@@ -1492,6 +1518,7 @@ export class TransferEngine {
 
     handleFilesOffer(session, files, senderConnectionType) {
         if (senderConnectionType === 'direct-lan' && session.connectionType !== 'relay-turn') {
+            session.peerConfirmedDirectLan = true;
             session.connectionType = 'direct-lan';
             this.emit({ type: 'connection-type', peerId: session.peerId, connectionType: 'direct-lan' });
         }
