@@ -25,5 +25,5 @@ server/
 ├── lib.js        # SimilarityIndex, subnet extraction, candidate clustering
 ├── lib.test.js   # Vitest unit test suite (similarity index, clustering)
 ├── rooms.test.js # Vitest test suite (room namespaces and isolation)
-└── turn.test.js  # Vitest test suite (Metered TURN credentials caching & fallback - 51 tests total)
+└── turn.test.js  # Vitest test suite (Metered TURN credentials caching & fallback - 64 tests total)
 ```
