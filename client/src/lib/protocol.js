@@ -10,6 +10,7 @@ export const MSG = {
     HANDSHAKE_SYN: 'HANDSHAKE_SYN',
     HANDSHAKE_ACK: 'HANDSHAKE_ACK',
     CHAT_MESSAGE: 'CHAT_MESSAGE',
+    ROUTE_SYNC: 'ROUTE_SYNC',
 };
 
 export const FILE_STATUS = Object.freeze({

@@ -464,4 +464,43 @@ describe('Simulated Network Scenarios (TEST-01 to TEST-04)', () => {
             vi.useRealTimers();
         }
     });
+
+    it('Scenario G: Peer route synchronization synchronizes direct-lan across peers', async () => {
+        engineA = new TransferEngine({
+            myId: 'alice',
+            socket: socketA,
+            onEvent: (event) => eventsA.push(event),
+            fetchTurnCredentials: false
+        });
+        engineB = new TransferEngine({
+            myId: 'bob',
+            socket: socketB,
+            onEvent: (event) => eventsB.push(event),
+            fetchTurnCredentials: false
+        });
+
+        const sessionB = engineB.getOrCreateSession('alice');
+        sessionB.connectionType = 'direct-stun';
+
+        // 1. Peer A offers files with senderConnectionType direct-lan
+        engineB.handleControlMessage(sessionB, {
+            type: 'FILES_OFFER',
+            files: [{ id: 'f-sync-1', name: 'photo.jpg', size: 1024, type: 'image/jpeg' }],
+            senderConnectionType: 'direct-lan'
+        });
+
+        expect(sessionB.connectionType).toBe('direct-lan');
+        const connEvent = eventsB.find((e) => e.type === 'connection-type');
+        expect(connEvent).toBeDefined();
+        expect(connEvent.connectionType).toBe('direct-lan');
+
+        // 2. ROUTE_SYNC control message also synchronizes direct-lan
+        sessionB.connectionType = 'direct-stun';
+        engineB.handleControlMessage(sessionB, {
+            type: 'ROUTE_SYNC',
+            mode: 'direct-lan'
+        });
+        expect(sessionB.connectionType).toBe('direct-lan');
+    });
 });
+

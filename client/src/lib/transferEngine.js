@@ -768,6 +768,10 @@ export class TransferEngine {
                         }
                     }
 
+                    if (type === 'direct-lan') {
+                        this.sendOnControl(session, { type: MSG.ROUTE_SYNC, mode: 'direct-lan' });
+                    }
+
                     if (type === 'relay-turn' && prevType !== 'relay-turn') {
                         this.emit({
                             type: 'notify',
@@ -1092,7 +1096,14 @@ export class TransferEngine {
                 break;
 
             case MSG.FILES_OFFER:
-                this.handleFilesOffer(session, msg.files || []);
+                this.handleFilesOffer(session, msg.files || [], msg.senderConnectionType);
+                break;
+
+            case MSG.ROUTE_SYNC:
+                if (msg.mode === 'direct-lan' && session.connectionType !== 'relay-turn') {
+                    session.connectionType = 'direct-lan';
+                    this.emit({ type: 'connection-type', peerId: session.peerId, connectionType: 'direct-lan' });
+                }
                 break;
 
             case MSG.FILE_REQUEST:
@@ -1161,7 +1172,11 @@ export class TransferEngine {
             });
             session.pendingOfferFiles = [];
             if (files.length > 0) {
-                this.sendOnControl(session, { type: MSG.FILES_OFFER, files });
+                this.sendOnControl(session, {
+                    type: MSG.FILES_OFFER,
+                    files,
+                    senderConnectionType: session.connectionType && session.connectionType !== 'unknown' ? session.connectionType : undefined
+                });
                 for (const file of files) {
                     this.historyUpdate(file.id, { status: FILE_STATUS.OFFERED });
                 }
@@ -1253,7 +1268,11 @@ export class TransferEngine {
         this.historyAdd(newItems);
 
         if (session.channelReady) {
-            this.sendOnControl(session, { type: MSG.FILES_OFFER, files: offeredFiles });
+            this.sendOnControl(session, {
+                type: MSG.FILES_OFFER,
+                files: offeredFiles,
+                senderConnectionType: session.connectionType && session.connectionType !== 'unknown' ? session.connectionType : undefined
+            });
         } else {
             session.pendingOfferFiles.push(...offeredFiles);
         }
@@ -1471,7 +1490,11 @@ export class TransferEngine {
     // Incoming files
     // ------------------------------------------------------------------
 
-    handleFilesOffer(session, files) {
+    handleFilesOffer(session, files, senderConnectionType) {
+        if (senderConnectionType === 'direct-lan' && session.connectionType !== 'relay-turn') {
+            session.connectionType = 'direct-lan';
+            this.emit({ type: 'connection-type', peerId: session.peerId, connectionType: 'direct-lan' });
+        }
         const peerName = this.getPeerName(session.peerId);
         const streamCapable = canStreamSave() || canOpfsSave();
         const newItems = [];

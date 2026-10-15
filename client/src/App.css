@@ -45,8 +45,8 @@
   --z-radar-blip: 5;
   --z-radar-blip-hover: 10;
   --z-popup: 20;
+  --z-server-popup: 40;
   --z-nav: 50;
-  --z-server-popup: 60;
   --z-sidebar-backdrop: 70;
   --z-sidebar: 80;
   --z-modal-backdrop: 90;
@@ -900,7 +900,7 @@ button {
   border-radius: var(--radius-md);
   box-shadow: var(--shadow-lg);
   padding: 0.35rem;
-  z-index: calc(var(--z-nav) + 10);
+  z-index: calc(var(--z-server-popup) + 5);
   display: flex;
   flex-direction: column;
   gap: 2px;
@@ -1375,6 +1375,10 @@ button {
   gap: 1rem;
   padding-bottom: 0.9rem;
   border-bottom: var(--border-hairline);
+}
+
+.debug-sidebar-header .btn-icon {
+  flex-shrink: 0;
 }
 
 .debug-sidebar-header-meta {
@@ -1946,6 +1950,7 @@ button {
   position: absolute;
   bottom: -0.5rem;
   left: 50%;
+  transform: translateX(-50%);
   z-index: var(--z-popup);
   background: var(--glass-strong);
   backdrop-filter: blur(16px);
@@ -2502,30 +2507,28 @@ button {
   }
 
   .file-item {
-    grid-template-columns: auto 1fr;
-    grid-template-rows: auto auto;
-    gap: 0.5rem 0.85rem;
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    gap: 0.65rem 0.85rem;
     align-items: center;
-    padding: 0.85rem 0.9rem;
+    padding: 0.85rem 0.95rem;
   }
 
   .file-icon {
-    grid-row: 1;
-    grid-column: 1;
+    width: 40px;
+    height: 40px;
   }
 
   .file-details {
-    grid-row: 1;
-    grid-column: 2;
+    min-width: 0;
   }
 
   .file-actions {
-    width: 100%;
-    grid-row: 2;
-    grid-column: 1 / -1;
+    display: flex;
+    align-items: center;
     justify-content: flex-end;
-    padding-top: 0.55rem;
-    border-top: var(--border-hairline);
+    gap: 0.4rem;
+    flex-shrink: 0;
   }
 
   .file-name {
@@ -2658,13 +2661,21 @@ button {
   .file-selection-popup {
     min-width: 0;
     width: min(92%, 320px);
+    left: 50%;
+    transform: translateX(-50%);
     padding: 1rem 1.1rem 0.9rem;
   }
 
   .server-status-popup {
-    top: 96px;
+    top: 132px;
     width: 95%;
     padding: 0.85rem 0.95rem;
+  }
+
+  .debug-grid {
+    grid-template-columns: 110px 1fr;
+    gap: 0.35rem 0.6rem;
+    font-size: 0.76rem;
   }
 }
 
@@ -2722,6 +2733,10 @@ button {
   gap: 1rem;
   padding: 1.1rem 1.25rem 0.9rem;
   border-bottom: var(--border-hairline);
+}
+
+.chat-header .btn-icon {
+  flex-shrink: 0;
 }
 
 .chat-header-meta {
@@ -3109,6 +3124,10 @@ button {
   gap: 0.75rem;
 }
 
+.qr-card-header .btn-icon {
+  flex-shrink: 0;
+}
+
 .qr-card-header h3 {
   margin: 0;
   font-size: 1rem;
@@ -3338,10 +3357,16 @@ button {
   gap: 0.75rem;
 }
 
+.room-card-header .btn-icon {
+  flex-shrink: 0;
+}
+
 .room-header-title-group {
   display: flex;
   flex-direction: column;
   gap: 0.35rem;
+  min-width: 0;
+  flex: 1;
 }
 
 .room-header-badge-row {

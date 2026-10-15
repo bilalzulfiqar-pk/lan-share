@@ -287,7 +287,7 @@ describe('FileItem component honest state rendering', () => {
         expect(html).toContain('data-testid="peer-offline-badge"');
     });
 
-    it('renders ConnectionModeBadge with informative labels and details when connectionType is provided', () => {
+    it('renders clean file metadata without transport badges on individual file cards', () => {
         const lanItem = {
             id: 'f14',
             fileName: 'clip.mp4',
@@ -301,32 +301,12 @@ describe('FileItem component honest state rendering', () => {
         const lanHtml = renderToStaticMarkup(
             <FileItem item={lanItem} getPeerName={() => 'Alice'} />
         );
-        expect(lanHtml).toContain('Local Wi-Fi Transfer');
-        expect(lanHtml).toContain('mode-direct-lan');
-        expect(lanHtml).toContain('Files flow directly through your local Wi-Fi router');
-
-        const stunItem = {
-            ...lanItem,
-            id: 'f15',
-            connectionType: 'direct-stun'
-        };
-        const stunHtml = renderToStaticMarkup(
-            <FileItem item={stunItem} getPeerName={() => 'Alice'} />
-        );
-        expect(stunHtml).toContain('Direct Internet Transfer');
-        expect(stunHtml).toContain('mode-direct-stun');
-
-        const relayItem = {
-            ...lanItem,
-            id: 'f16',
-            connectionType: 'relay-turn'
-        };
-        const relayHtml = renderToStaticMarkup(
-            <FileItem item={relayItem} getPeerName={() => 'Alice'} />
-        );
-        expect(relayHtml).toContain('Cloud Relay Transfer');
-        expect(relayHtml).toContain('mode-relay-turn');
-        expect(relayHtml).toContain('(Max 150 MB per file)');
+        expect(lanHtml).toContain('clip.mp4');
+        expect(lanHtml).toContain('10 MB');
+        expect(lanHtml).toContain('To: Alice');
+        // FileItem deliberately omits transport badge to avoid asymmetric transport confusion
+        expect(lanHtml).not.toContain('mode-direct-lan');
+        expect(lanHtml).not.toContain('Local Wi-Fi Transfer');
     });
 });
 

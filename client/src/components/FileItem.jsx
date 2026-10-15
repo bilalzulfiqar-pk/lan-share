@@ -1,5 +1,4 @@
 import React from 'react';
-import { ConnectionModeBadge } from './ConnectionModeBadge';
 
 const CancelIcon = () => (
   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -129,12 +128,7 @@ function FileItemComponent({ item, onRequest, onSave, onCancel, getPeerName, onO
             <span className="status-pill-dot" aria-hidden="true" />
             {STATUS_COPY[statusKey]}
           </span>
-          {item.connectionType && (
-            <>
-              <span className="meta-sep" aria-hidden="true">·</span>
-              <ConnectionModeBadge mode={item.connectionType} />
-            </>
-          )}
+          <span className="meta-sep" aria-hidden="true">·</span>
           <span className="file-peer-info">
             {isSender ? `To: ${peerName}` : `From: ${peerName}`}
           </span>
