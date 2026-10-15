@@ -17,7 +17,7 @@
 
 <br />
 
-<img src="docs/assets/banner.svg" alt="LAN Share — Fast · Local · Secure" width="100%" style="border-radius: 12px;" />
+<img src="docs/assets/banner.svg" alt="LAN Share - Fast · Local · Secure" width="100%" style="border-radius: 12px;" />
 
 </div>
 
@@ -72,7 +72,7 @@ LAN Share strictly isolates signaling discovery from actual file payloads. File 
 ```mermaid
 flowchart LR
     subgraph Cloud ["☁️ Cloud Signaling (Render)"]
-        Server["Signaling Server<br/>• Local Subnet Fingerprinting<br/>• 6-Digit Room & QR Pairing<br/>(Handshake Only — Zero File Data)"]
+        Server["Signaling Server<br/>• Local Subnet Fingerprinting<br/>• 6-Digit Room & QR Pairing<br/>(Handshake Only - Zero File Data)"]
     end
 
     subgraph LocalNet ["🏠 Your Local Network / Wi-Fi / Hotspot"]
@@ -80,7 +80,7 @@ flowchart LR
         DevA["💻 Sender<br/>Laptop / Desktop"]
         DevB["📱 Receiver<br/>Phone / Tablet"]
         
-        DevA == "Direct P2P Encrypted Stream<br/>(Full LAN Speed: 30–80+ MB/s)<br/>• 64 KiB Chunks & Backpressure<br/>• Desktop Disk / Mobile OPFS" ==> DevB
+        DevA == "Direct P2P Encrypted Stream<br/>(Full LAN Speed: 30-80+ MB/s)<br/>• 64 KiB Chunks & Backpressure<br/>• Desktop Disk / Mobile OPFS" ==> DevB
     end
 
     DevA -. "1. Subnet Radar / Room Code (~2 KB)" .-> Server
@@ -206,7 +206,7 @@ When transferring large files (> 150 MB) on a network with strict AP Isolation o
 │                                                             │
 │ 1. Turn on "Personal Hotspot" on your smartphone.           │
 │ 2. Connect your laptop / receiver to that hotspot Wi-Fi.    │
-│ 3. Reload LAN Share — transfer at 50+ MB/s with ZERO        │
+│ 3. Reload LAN Share - transfer at 50+ MB/s with ZERO        │
 │    mobile cellular data consumption!                        │
 └─────────────────────────────────────────────────────────────┘
 ```
@@ -295,7 +295,7 @@ LAN Share includes a unified alert system controlled by the bell icon in the top
   - **Clustering:** Inverted index (`SimilarityIndex`) for subnet clustering + Room namespaces
   - **Relay Provider:** [Metered.ca OpenRelay](https://www.metered.ca/) REST API integration
 - **Testing & Quality:**
-  - **Test Runner:** [Vitest](https://vitest.dev/) (290 automated unit, integration, and child-process tests: 239 client + 51 server)
+  - **Test Runner:** [Vitest](https://vitest.dev/) (328 automated unit, integration, and child-process tests: 264 client + 64 server)
   - **Linter:** ESLint with React Hooks & Refresh rules
 
 ---
@@ -383,8 +383,8 @@ lan-share/
 
 ## Documentation
 
-* [Manual QA Checklist](docs/QA-CHECKLIST.md) — Step-by-step physical device testing procedures.
-* [Changelog](docs/CHANGELOG.md) — Comprehensive log of features, optimizations, and bug fixes.
+* [Manual QA Checklist](docs/QA-CHECKLIST.md) - Step-by-step physical device testing procedures.
+* [Changelog](docs/CHANGELOG.md) - Comprehensive log of features, optimizations, and bug fixes.
 
 ---
 

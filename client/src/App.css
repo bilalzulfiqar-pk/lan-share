@@ -1,5 +1,5 @@
 /* =========================================================
-   LAN Share — Design Tokens
+   LAN Share - Design Tokens
    Single accent (blue), light/dark themes, reduced-motion aware.
    ========================================================= */
 
@@ -49,10 +49,12 @@
   --z-server-popup: 60;
   --z-sidebar-backdrop: 70;
   --z-sidebar: 80;
+  --z-modal-backdrop: 90;
+  --z-modal: 100;
 }
 
 /* =========================================================
-   Ocean — blue accent
+   Ocean - blue accent
    ========================================================= */
 [data-theme="ocean-light"] {
   --bg-app: #eef1f6;
@@ -145,7 +147,7 @@
 }
 
 /* =========================================================
-   Forest — emerald accent
+   Forest - emerald accent
    ========================================================= */
 [data-theme="forest-light"] {
   --bg-app: #eef5f0;
@@ -237,7 +239,7 @@
 }
 
 /* =========================================================
-   Rose — rose/pink accent
+   Rose - rose/pink accent
    ========================================================= */
 [data-theme="rose-light"] {
   --bg-app: #fdf2f4;
@@ -330,7 +332,7 @@
 }
 
 /* =========================================================
-   Neon — cyberpunk magenta
+   Neon - cyberpunk magenta
    ========================================================= */
 [data-theme="neon-light"] {
   --bg-app: #fdf4ff;
@@ -459,7 +461,7 @@ body {
   line-height: 1.5;
   letter-spacing: -0.005em;
 
-  /* Targeted transitions only — no `transition: all` */
+  /* Targeted transitions only - no `transition: all` */
   transition:
     background-color var(--dur-slow) var(--ease-soft),
     color var(--dur-slow) var(--ease-soft);
@@ -605,7 +607,7 @@ button {
   width: auto;
 }
 
-/* Hover effects are desktop-only — on touch there is no cursor, and running
+/* Hover effects are desktop-only - on touch there is no cursor, and running
    box-shadow/glow/lift on taps causes repaint jank. Mobile gets the snappy
    :active press instead (below). */
 @media (hover: hover) and (pointer: fine) {
@@ -637,7 +639,7 @@ button {
 }
 
 /* Full-width action buttons (Select files, chat Send) drop the outer glow
-   ring — that accent is reserved for the small Download/Save buttons. The
+   ring - that accent is reserved for the small Download/Save buttons. The
    subtle elevation shadow stays so hover still reads as a lift.
    Hover effects are desktop-only (touch uses :active below). */
 @media (hover: hover) and (pointer: fine) {
@@ -648,7 +650,7 @@ button {
   }
 }
 
-/* Snappy press on all devices — mobile has no hover, so the tap should feel
+/* Snappy press on all devices - mobile has no hover, so the tap should feel
    instant; desktop keeps its rich 350ms hover but the press is quick too. */
 .btn-primary:active,
 .chat-send-button:active:not(:disabled) {
@@ -1004,7 +1006,7 @@ button {
   flex-direction: column;
   overflow: hidden;
   z-index: var(--z-sidebar-backdrop);
-  /* Native compositor open/close — same approach as the side panels.
+  /* Native compositor open/close - same approach as the side panels.
      Hidden when closed (off-screen from interaction + tab order), visible
      instantly on open, hidden only after the close transition. */
   transform: scale(0.94);
@@ -1353,7 +1355,7 @@ button {
   display: flex;
   flex-direction: column;
   gap: 1rem;
-  /* Native compositor slide — see .chat-panel. */
+  /* Native compositor slide - see .chat-panel. */
   transform: translate3d(100%, 0, 0);
   visibility: hidden;
   transition: transform 0.38s var(--ease-soft), visibility 0s linear 0.38s;
@@ -2343,7 +2345,7 @@ button {
 }
 
 [data-theme$="-dark"] ::-webkit-scrollbar-thumb {
-  /* background-color (not the background shorthand) — the shorthand resets
+  /* background-color (not the background shorthand) - the shorthand resets
      background-clip to border-box, which would paint the thumb at full track
      width instead of the clipped visible width. */
   background-color: rgba(148, 163, 184, 0.18);
@@ -2358,7 +2360,7 @@ button {
 }
 
 /* Firefox only (no ::-webkit-scrollbar support). IMPORTANT: standard
-   scrollbar-width/color must NOT be set globally — in Edge/Chromium they
+   scrollbar-width/color must NOT be set globally - in Edge/Chromium they
    disable the ::-webkit-scrollbar styling below and fall back to the native
    Windows scrollbar WITH up/down arrow buttons. Scoped to Firefox instead. */
 @-moz-document url-prefix() {
@@ -2372,7 +2374,7 @@ button {
   }
 }
 
-/* No up/down arrow buttons anywhere — a clean, modern scrollbar.
+/* No up/down arrow buttons anywhere - a clean, modern scrollbar.
    !important beats any scoped ::-webkit-scrollbar rules below. */
 ::-webkit-scrollbar-button {
   display: none !important;
@@ -2955,7 +2957,7 @@ button {
   white-space: nowrap;
 }
 
-/* The send button reacts as a block — resting fill is the deep brand color,
+/* The send button reacts as a block - resting fill is the deep brand color,
    hover shifts towards the accent with a soft float (no ring, no icon lift),
    and pressing gives a subtle scale-in for feedback.
    Hover effects are desktop-only (touch uses :active below). */
@@ -3075,7 +3077,7 @@ button {
   background: rgba(11, 18, 32, 0.45);
   backdrop-filter: blur(4px);
   -webkit-backdrop-filter: blur(4px);
-  z-index: var(--z-sidebar-backdrop);
+  z-index: var(--z-modal, 100);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -3094,7 +3096,7 @@ button {
   flex-direction: column;
   gap: 0.85rem;
   /* Keep the card on a stable compositor layer even after the entrance
-     animation finishes (framer removes its temporary will-change) — without
+     animation finishes (framer removes its temporary will-change) - without
      this, a sub-pixel centered card can snap ~1px when the layer is
      de-promoted at the end of the open animation. */
   will-change: transform;
@@ -3723,6 +3725,11 @@ button {
   border: var(--border-hairline);
   font-size: 0.76rem;
   line-height: 1.45;
+}
+
+.hotspot-repeater-tip {
+  margin-top: 0.5rem;
+  border-left: 2px solid var(--primary);
 }
 
 .btn-hotspot-guide {

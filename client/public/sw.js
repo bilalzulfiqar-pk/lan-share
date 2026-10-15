@@ -1,4 +1,4 @@
-/* LAN Share service worker — kept intentionally minimal.
+/* LAN Share service worker - kept intentionally minimal.
    Its only job is to make the app installable; all requests go to the
    network so updates apply immediately and nothing goes stale. */
 

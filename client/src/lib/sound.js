@@ -1,4 +1,4 @@
-// Subtle two-tone blip synthesized with WebAudio — no audio assets needed.
+// Subtle two-tone blip synthesized with WebAudio - no audio assets needed.
 
 let audioContext = null;
 
@@ -49,7 +49,7 @@ export function playNotificationBlip() {
         playTone(context, 660, now, 0.09, 0.045);
         playTone(context, 990, now + 0.09, 0.12, 0.04);
     } catch {
-        // audio unavailable — notifications remain silent
+        // audio unavailable - notifications remain silent
     }
 }
 
@@ -65,7 +65,7 @@ export function playTransferCompleteChime() {
         playTone(context, 783.99, now + 0.14, 0.10, 0.05);
         playTone(context, 1046.50, now + 0.22, 0.25, 0.055);
     } catch {
-        // audio unavailable — remain silent
+        // audio unavailable - remain silent
     }
 }
 
@@ -88,7 +88,7 @@ export function startAudioBeacon() {
             promise.catch(() => {});
         }
     } catch {
-        // audio playback disallowed without user gesture — fallback silently
+        // audio playback disallowed without user gesture - fallback silently
     }
 }
 

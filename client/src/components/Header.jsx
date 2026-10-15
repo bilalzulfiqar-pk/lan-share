@@ -76,7 +76,7 @@ export function Header({
           type="button"
           className={`room-header-btn ${roomCode ? 'is-in-room' : ''}`}
           onClick={onOpenRoomModal}
-          title={roomCode ? `In Room ${roomCode} — click to manage or view QR` : 'Join or create a private room to pair across networks'}
+          title={roomCode ? `In Room ${roomCode} - click to manage or view QR` : 'Join or create a private room to pair across networks'}
           aria-label={roomCode ? `Current room: ${roomCode}` : 'Room pairing'}
           aria-haspopup="dialog"
           data-testid="header-room-btn"

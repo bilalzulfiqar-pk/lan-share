@@ -267,4 +267,201 @@ describe('Simulated Network Scenarios (TEST-01 to TEST-04)', () => {
         expect(blockedItem.status).toBe(FILE_STATUS.BLOCKED);
         expect(blockedItem.error).toBe(STRICT_LOCAL_RELAY_BLOCKED_ERROR);
     });
+
+    // TEST-05: prflx candidate pair with private LAN IPs resolves to direct-lan
+    it('TEST-05: prflx candidate pair with RFC 1918 private IPs classifies as direct-lan', async () => {
+        engineA = new TransferEngine({
+            socket: socketA,
+            myId: 'alice',
+            getPeerName: () => 'Bob',
+            onEvent: (event) => eventsA.push(event),
+            fetchTurnCredentials: false
+        });
+
+        const mockPrflxStats = new Map([
+            ['transport-0', {
+                type: 'transport',
+                selectedCandidatePairId: 'pair-prflx'
+            }],
+            ['pair-prflx', {
+                id: 'pair-prflx',
+                type: 'candidate-pair',
+                state: 'succeeded',
+                nominated: true,
+                localCandidateId: 'cand-loc',
+                remoteCandidateId: 'cand-rem'
+            }],
+            ['cand-loc', {
+                id: 'cand-loc',
+                type: 'local-candidate',
+                candidateType: 'host',
+                address: 'laptop.local'
+            }],
+            ['cand-rem', {
+                id: 'cand-rem',
+                type: 'remote-candidate',
+                candidateType: 'prflx',
+                address: '192.168.1.105'
+            }]
+        ]);
+
+        const sessionA = engineA.getOrCreateSession('bob');
+        sessionA.pc.getStats = vi.fn(async () => mockPrflxStats);
+
+        const connType = await engineA.detectConnectionType(sessionA);
+        expect(connType).toBe('direct-lan');
+        expect(sessionA.connectionType).toBe('direct-lan');
+
+        // Both prflx candidates on private subnet
+        const mockBothPrflxStats = new Map([
+            ['transport-0', {
+                type: 'transport',
+                selectedCandidatePairId: 'pair-both-prflx'
+            }],
+            ['pair-both-prflx', {
+                id: 'pair-both-prflx',
+                type: 'candidate-pair',
+                state: 'succeeded',
+                nominated: true,
+                localCandidateId: 'cand-loc-prflx',
+                remoteCandidateId: 'cand-rem-prflx'
+            }],
+            ['cand-loc-prflx', {
+                id: 'cand-loc-prflx',
+                candidateType: 'prflx',
+                address: '192.168.1.20'
+            }],
+            ['cand-rem-prflx', {
+                id: 'cand-rem-prflx',
+                candidateType: 'prflx',
+                address: '192.168.1.50'
+            }]
+        ]);
+
+        sessionA.pc.getStats = vi.fn(async () => mockBothPrflxStats);
+        const bothType = await engineA.detectConnectionType(sessionA);
+        expect(bothType).toBe('direct-lan');
+
+        // WAN IP with prflx/srflx must still resolve to direct-stun
+        const mockWanStats = new Map([
+            ['transport-0', {
+                type: 'transport',
+                selectedCandidatePairId: 'pair-wan'
+            }],
+            ['pair-wan', {
+                id: 'pair-wan',
+                type: 'candidate-pair',
+                state: 'succeeded',
+                nominated: true,
+                localCandidateId: 'cand-wan-loc',
+                remoteCandidateId: 'cand-wan-rem'
+            }],
+            ['cand-wan-loc', {
+                id: 'cand-wan-loc',
+                candidateType: 'host',
+                address: 'laptop.local'
+            }],
+            ['cand-wan-rem', {
+                id: 'cand-wan-rem',
+                candidateType: 'srflx',
+                address: '103.148.128.82'
+            }]
+        ]);
+        sessionA.pc.getStats = vi.fn(async () => mockWanStats);
+        const wanType = await engineA.detectConnectionType(sessionA);
+        expect(wanType).toBe('direct-stun');
+    });
+
+    // TEST-06: Simultaneous offer collision (glare) resolves cleanly via polite/impolite rollback
+    it('TEST-06: Glare resolution handles simultaneous offers with polite peer rollback without deadlock', async () => {
+        // 'alice' < 'bob' -> alice is polite, bob is impolite
+        engineA = new TransferEngine({
+            socket: socketA,
+            myId: 'alice',
+            getPeerName: () => 'Bob',
+            onEvent: (event) => eventsA.push(event),
+            fetchTurnCredentials: false
+        });
+
+        engineB = new TransferEngine({
+            socket: socketB,
+            myId: 'bob',
+            getPeerName: () => 'Alice',
+            onEvent: (event) => eventsB.push(event),
+            fetchTurnCredentials: false
+        });
+
+        const sessionA = engineA.getOrCreateSession('bob');
+        const sessionB = engineB.getOrCreateSession('alice');
+
+        expect(sessionA.polite).toBe(true);
+        expect(sessionB.polite).toBe(false);
+
+        // Both peers initiate an offer simultaneously (glare state)
+        sessionA.pc.signalingState = 'have-local-offer';
+        sessionB.pc.signalingState = 'have-local-offer';
+
+        const setLocalDescSpyA = vi.spyOn(sessionA.pc, 'setLocalDescription');
+        const setRemoteDescSpyA = vi.spyOn(sessionA.pc, 'setRemoteDescription');
+
+        // Offer from impolite peer Bob arrives at polite peer Alice
+        await engineA.handleOffer({
+            offer: { type: 'offer', sdp: 'offer-from-bob' },
+            sender: 'bob'
+        });
+
+        // Polite peer Alice must execute rollback on local description
+        expect(setLocalDescSpyA).toHaveBeenCalledWith({ type: 'rollback' });
+        // And then apply remote offer from Bob
+        expect(setRemoteDescSpyA).toHaveBeenCalledWith(expect.objectContaining({ type: 'offer' }));
+
+        // Offer from polite peer Alice arrives at impolite peer Bob (while Bob still has offer in flight)
+        const setRemoteDescSpyB = vi.spyOn(sessionB.pc, 'setRemoteDescription');
+        sessionB.pc.signalingState = 'have-local-offer';
+
+        await engineB.handleOffer({
+            offer: { type: 'offer', sdp: 'offer-from-alice' },
+            sender: 'alice'
+        });
+
+        // Impolite peer Bob must IGNORE the colliding offer
+        expect(sessionB.ignoreOffer).toBe(true);
+        expect(setRemoteDescSpyB).not.toHaveBeenCalled();
+    });
+
+    // TEST-07: Automatic ICE restart firing after 3 seconds in disconnected state
+    it('TEST-07: Automatically triggers ICE restart after 3 seconds in disconnected state', async () => {
+        vi.useFakeTimers();
+        try {
+            engineA = new TransferEngine({
+                socket: socketA,
+                myId: 'alice',
+                getPeerName: () => 'Bob',
+                onEvent: (event) => eventsA.push(event),
+                fetchTurnCredentials: false
+            });
+
+            const sessionA = engineA.getOrCreateSession('bob');
+            sessionA.channelReady = true;
+            sessionA.pc.connectionState = 'connected';
+            sessionA.pc.iceConnectionState = 'connected';
+
+            const iceRestartSpy = vi.spyOn(engineA, 'attemptIceRestart');
+
+            // Peer drops to disconnected
+            sessionA.pc.connectionState = 'disconnected';
+            sessionA.pc.iceConnectionState = 'disconnected';
+            engineA.handleConnectionStateChange(sessionA, 'disconnected');
+
+            // At 1.5s, no restart yet (within 3s grace window)
+            vi.advanceTimersByTime(1500);
+            expect(iceRestartSpy).not.toHaveBeenCalled();
+
+            // At 3s, automatic ICE restart should fire
+            vi.advanceTimersByTime(1600);
+            expect(iceRestartSpy).toHaveBeenCalledTimes(1);
+        } finally {
+            vi.useRealTimers();
+        }
+    });
 });

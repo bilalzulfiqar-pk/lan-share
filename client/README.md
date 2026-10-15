@@ -1,4 +1,4 @@
-# LAN Share — client
+# LAN Share - client
 
 React 19 + Vite SPA. See the [root README](../README.md) for architecture,
 deployment, and the full feature list.

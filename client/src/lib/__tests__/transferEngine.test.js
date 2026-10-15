@@ -106,7 +106,7 @@ describe('TransferEngine', () => {
         );
         const [id1, id2] = items.map((item) => item.id);
 
-        // Request both immediately — the old engine corrupted data here.
+        // Request both immediately - the old engine corrupted data here.
         await engineB.requestFile(id1);
         await engineB.requestFile(id2);
 

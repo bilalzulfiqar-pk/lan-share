@@ -21,8 +21,10 @@ import {
     STRICT_LOCAL_RELAY_BLOCKED_ERROR,
     isRelayCandidate,
     stripRelayFromSdp,
-    resolveTurnApiUrl
+    resolveTurnApiUrl,
+    isPrivateLanAddress
 } from './protocol';
+export { isPrivateLanAddress };
 import { wakeLockManager } from './wakeLock';
 import { playTransferCompleteChime, startAudioBeacon, stopAudioBeacon } from './sound';
 
@@ -155,11 +157,14 @@ class PeerSession {
         this.pendingOfferFiles = [];
         this.connectWatchdog = null;
         this.disconnectGraceTimer = null;
+        this.detectionTimers = [];
         this.iceRestartsAttempted = 0;
         this.tearingDown = false;
         this.createdControlChannel = false;
         this.receivesResumed = false;
         this.connectionType = 'unknown';
+        this.pendingIceRestart = false;
+        this.iceTransportListening = false;
     }
 }
 
@@ -256,13 +261,29 @@ export class TransferEngine {
         return Promise.resolve(this.turnCredentials);
     }
 
+    getIceConfig() {
+        return {
+            iceServers: buildIceServers(this.turnCredentials, { strictLocalMode: this.strictLocalMode })
+        };
+    }
+
+    awaitTurnCredentials(timeoutMs = 1500) {
+        if (this.turnPromise && !this.turnCredentials) {
+            return Promise.race([
+                this.turnPromise,
+                new Promise((resolve) => setTimeout(resolve, timeoutMs))
+            ]).catch(() => {});
+        }
+        return null;
+    }
+
     setTurnCredentials(credentials) {
         this.turnCredentials = credentials;
-        const newIceServers = buildIceServers(this.turnCredentials, { strictLocalMode: this.strictLocalMode });
+        const config = this.getIceConfig();
         for (const session of this.sessions.values()) {
             if (session.pc && typeof session.pc.setConfiguration === 'function') {
                 try {
-                    session.pc.setConfiguration({ iceServers: newIceServers });
+                    session.pc.setConfiguration(config);
                 } catch {
                     // ignore if immutable in current state
                 }
@@ -277,11 +298,11 @@ export class TransferEngine {
 
     setStrictLocalMode(enabled) {
         this.strictLocalMode = Boolean(enabled);
-        const newIceServers = buildIceServers(this.turnCredentials, { strictLocalMode: this.strictLocalMode });
+        const config = this.getIceConfig();
         for (const session of this.sessions.values()) {
             if (session.pc && typeof session.pc.setConfiguration === 'function') {
                 try {
-                    session.pc.setConfiguration({ iceServers: newIceServers });
+                    session.pc.setConfiguration(config);
                 } catch {
                     // ignore if immutable in current state
                 }
@@ -354,6 +375,11 @@ export class TransferEngine {
     handleOffer = async ({ offer, sender: peerId }) => {
         if (!peerId || !offer) return;
 
+        const turnWait = this.awaitTurnCredentials();
+        if (turnWait) {
+            await turnWait;
+        }
+
         if (this.strictLocalMode && offer.sdp) {
             offer = { ...offer, sdp: stripRelayFromSdp(offer.sdp) };
         }
@@ -362,12 +388,18 @@ export class TransferEngine {
 
         if (session.tearingDown) return;
 
+        const isPolite = this.myId < peerId;
+        session.polite = isPolite;
+
         const offerCollision = session.makingOffer || session.pc.signalingState !== 'stable';
-        session.ignoreOffer = !session.polite && offerCollision;
+        session.ignoreOffer = !isPolite && offerCollision;
         if (session.ignoreOffer) return;
 
         try {
-            await session.pc.setRemoteDescription(offer); // implicit rollback when polite
+            if (offerCollision) {
+                await session.pc.setLocalDescription({ type: 'rollback' });
+            }
+            await session.pc.setRemoteDescription(offer);
             session.remoteDescriptionSet = true;
             this.flushQueuedCandidates(session);
 
@@ -382,6 +414,10 @@ export class TransferEngine {
         const session = this.sessions.get(peerId);
         if (!session || session.tearingDown || !answer) return;
 
+        if (session.pc?.signalingState && session.pc.signalingState !== 'have-local-offer') {
+            return;
+        }
+
         if (this.strictLocalMode && answer.sdp) {
             answer = { ...answer, sdp: stripRelayFromSdp(answer.sdp) };
         }
@@ -389,8 +425,14 @@ export class TransferEngine {
         try {
             await session.pc.setRemoteDescription(answer);
             session.remoteDescriptionSet = true;
+            session.ignoreOffer = false;
             this.flushQueuedCandidates(session);
             this.clearConnectWatchdog(session);
+
+            if (session.pendingIceRestart && session.pc.signalingState === 'stable' && !session.tearingDown) {
+                session.pendingIceRestart = false;
+                this.attemptIceRestart(session).catch((err) => console.error('[engine] Pending ICE restart failed:', err));
+            }
         } catch (error) {
             console.error('Failed to handle answer:', error);
         }
@@ -448,12 +490,23 @@ export class TransferEngine {
         // Deterministic, complementary roles for perfect negotiation.
         const polite = this.myId < peerId;
         const session = new PeerSession(peerId, polite);
-        const pc = new RTCPeerConnection({
-            iceServers: buildIceServers(this.turnCredentials, { strictLocalMode: this.strictLocalMode })
-        });
+        const pc = new RTCPeerConnection(this.getIceConfig());
 
         session.pc = pc;
         this.sessions.set(peerId, session);
+
+        // If turn credentials fetch is still in-flight, update configuration as soon as it settles
+        if (this.turnPromise && !this.turnCredentials) {
+            this.turnPromise.then(() => {
+                if (session.pc && typeof session.pc.setConfiguration === 'function' && !session.tearingDown) {
+                    try {
+                        session.pc.setConfiguration(this.getIceConfig());
+                    } catch {
+                        // ignore
+                    }
+                }
+            }).catch(() => {});
+        }
 
         // Flush early candidates that arrived before the session was created
         const early = this.earlyCandidates.get(peerId);
@@ -475,6 +528,31 @@ export class TransferEngine {
             this.handleConnectionStateChange(session, pc.connectionState);
         };
 
+        pc.oniceconnectionstatechange = () => {
+            const iceState = pc.iceConnectionState;
+            if (iceState === 'disconnected') {
+                this.handleConnectionStateChange(session, 'disconnected');
+            } else if (iceState === 'connected' || iceState === 'completed') {
+                if (pc.connectionState === 'connected' || !pc.connectionState) {
+                    this.handleConnectionStateChange(session, 'connected');
+                } else {
+                    this.detectConnectionType(session);
+                }
+            } else if (iceState === 'failed') {
+                this.handleConnectionStateChange(session, 'failed');
+            }
+        };
+
+        pc.onsignalingstatechange = () => {
+            if (pc.signalingState === 'stable') {
+                session.ignoreOffer = false;
+                if (session.pendingIceRestart && !session.tearingDown) {
+                    session.pendingIceRestart = false;
+                    this.attemptIceRestart(session).catch((error) => console.error('[engine] Pending ICE restart failed:', error));
+                }
+            }
+        };
+
         if (!asAnswerer) {
             // The initiator creates the control channel; the answerer receives
             // it through ondatachannel.
@@ -485,12 +563,14 @@ export class TransferEngine {
             this.startConnectWatchdog(session);
             this.peerStatus(peerId, 'CONNECTING');
             this.initiateOffer(session).catch((error) => console.error('Offer failed:', error));
+            this.attachIceTransportListener(session);
         } else {
             this.startConnectWatchdog(session);
             this.peerStatus(peerId, 'CONNECTING');
         }
 
         pc.ondatachannel = (event) => {
+            this.attachIceTransportListener(session);
             const { channel } = event;
             const fileId = parseFileChannelLabel(channel.label);
 
@@ -507,12 +587,39 @@ export class TransferEngine {
         return session;
     }
 
+    attachIceTransportListener(session) {
+        if (!session || !session.pc || session.iceTransportListening || session.tearingDown) return;
+        const iceTransport = session.pc.sctp?.transport?.iceTransport;
+        if (iceTransport) {
+            session.iceTransportListening = true;
+            const handler = () => {
+                this.detectConnectionType(session);
+            };
+            if (typeof iceTransport.addEventListener === 'function') {
+                iceTransport.addEventListener('selectedcandidatepairchange', handler);
+            } else {
+                iceTransport.onselectedcandidatepairchange = handler;
+            }
+        }
+    }
+
     async initiateOffer(session, options = {}) {
         if (session.tearingDown) return;
 
         try {
             session.makingOffer = true;
-            session.remoteDescriptionSet = false; // Reset remote description for new negotiation cycle
+            session.remoteDescriptionSet = false;
+            const turnWait = this.awaitTurnCredentials();
+            if (turnWait) {
+                await turnWait;
+            }
+            if (typeof session.pc?.setConfiguration === 'function') {
+                try {
+                    session.pc.setConfiguration(this.getIceConfig());
+                } catch {
+                    // ignore
+                }
+            }
             await session.pc.setLocalDescription(await session.pc.createOffer(options));
             this.socket.emit('offer', { target: session.peerId, offer: session.pc.localDescription, sender: this.myId });
         } catch (error) {
@@ -522,11 +629,47 @@ export class TransferEngine {
         }
     }
 
+    schedulePeriodicConnectionTypeDetection(session) {
+        this.clearPeriodicDetection(session);
+        session.detectionTimers = [];
+        const delays = [200, 1000, 3000];
+        for (const delay of delays) {
+            const timer = setTimeout(() => {
+                if (!session.tearingDown && session.pc && (session.pc.connectionState === 'connected' || session.pc.iceConnectionState === 'connected' || session.channelReady)) {
+                    this.attachIceTransportListener(session);
+                    this.detectConnectionType(session);
+                }
+            }, delay);
+            session.detectionTimers.push(timer);
+        }
+    }
+
+    clearPeriodicDetection(session) {
+        if (session.detectionTimers) {
+            for (const t of session.detectionTimers) clearTimeout(t);
+            session.detectionTimers = [];
+        }
+    }
+
     async attemptIceRestart(session) {
         if (session.tearingDown || session.iceRestartsAttempted >= 2) {
             return false;
         }
 
+        if (typeof session.pc?.setConfiguration === 'function') {
+            try {
+                session.pc.setConfiguration(this.getIceConfig());
+            } catch {
+                // ignore
+            }
+        }
+
+        if (session.pc?.signalingState !== 'stable') {
+            session.pendingIceRestart = true;
+            return true;
+        }
+
+        session.pendingIceRestart = false;
         session.receivesResumed = false;
         session.iceRestartsAttempted += 1;
         console.log(`Attempting ICE restart with ${session.peerId}`);
@@ -550,7 +693,9 @@ export class TransferEngine {
             this.clearDisconnectGrace(session);
             this.clearConnectWatchdog(session);
             session.iceRestartsAttempted = 0;
+            this.attachIceTransportListener(session);
             this.detectConnectionType(session);
+            this.schedulePeriodicConnectionTypeDetection(session);
             if (session.channelReady) {
                 this.peerStatus(session.peerId, 'CONNECTED');
                 if (!session.receivesResumed) {
@@ -561,22 +706,23 @@ export class TransferEngine {
             return;
         }
 
-
         if (state === 'disconnected') {
             session.receivesResumed = false;
             // Often transient (Wi-Fi hiccup, ICE consent refresh). Give the
-            // connection a brief grace window before triggering ICE restart.
+            // connection a 3-second grace window before triggering ICE restart.
             if (!session.disconnectGraceTimer) {
                 session.disconnectGraceTimer = setTimeout(() => {
                     session.disconnectGraceTimer = null;
-                    if (session.pc?.connectionState === 'disconnected') {
+                    const pc = session.pc;
+                    const isStillDisconnected = pc && (pc.connectionState === 'disconnected' || pc.iceConnectionState === 'disconnected');
+                    if (isStillDisconnected) {
                         this.attemptIceRestart(session).then((restarted) => {
                             if (!restarted) {
                                 this.teardownSession(session, 'Connection lost during transfer.');
                             }
                         });
                     }
-                }, 2000);
+                }, 3000);
             }
             return;
         }
@@ -594,6 +740,7 @@ export class TransferEngine {
 
     async detectConnectionType(session) {
         if (!session || !session.pc) return 'unknown';
+        this.attachIceTransportListener(session);
         try {
             if (typeof session.pc.getStats === 'function') {
                 const stats = await session.pc.getStats();
@@ -603,6 +750,23 @@ export class TransferEngine {
                     session.connectionType = type;
                     this.emit({ type: 'connection-type', peerId: session.peerId, connectionType: type });
                     this.checkRelayCapForSession(session);
+
+                    // Sync active transfer history items with the newly confirmed/upgraded connection type
+                    for (const [id, entry] of this.outgoing.entries()) {
+                        if (entry.peerId === session.peerId) {
+                            this.historyUpdate(id, { connectionType: type });
+                        }
+                    }
+                    for (const [id, rec] of this.receives.entries()) {
+                        if (rec.peerId === session.peerId) {
+                            this.historyUpdate(id, { connectionType: type });
+                        }
+                    }
+                    for (const [id, meta] of this.offered.entries()) {
+                        if (meta.peerId === session.peerId) {
+                            this.historyUpdate(id, { connectionType: type });
+                        }
+                    }
 
                     if (type === 'relay-turn' && prevType !== 'relay-turn') {
                         this.emit({
@@ -682,12 +846,33 @@ export class TransferEngine {
             const localType = local?.candidateType || selectedPair.localCandidateType;
             const remoteType = remote?.candidateType || selectedPair.remoteCandidateType;
 
+            const localAddr = local?.address || local?.ip || selectedPair.localAddress || selectedPair.localIp;
+            const remoteAddr = remote?.address || remote?.ip || selectedPair.remoteAddress || selectedPair.remoteIp;
+
             if (localType === 'relay' || remoteType === 'relay') {
                 return 'relay-turn';
             }
+
+            const isLanCandidate = (cand, fallbackType, fallbackAddr) => {
+                const type = cand?.candidateType || fallbackType;
+                const addr = cand?.address || cand?.ip || fallbackAddr;
+                if (type === 'relay') return false;
+                if (isPrivateLanAddress(addr)) return true;
+                if (type === 'host' && (!addr || isPrivateLanAddress(addr))) return true;
+                return false;
+            };
+
+            const localIsLan = isLanCandidate(local, localType, localAddr);
+            const remoteIsLan = isLanCandidate(remote, remoteType, remoteAddr);
+
+            if (localIsLan && remoteIsLan) {
+                return 'direct-lan';
+            }
+
             if (localType === 'srflx' || remoteType === 'srflx' || localType === 'prflx' || remoteType === 'prflx') {
                 return 'direct-stun';
             }
+
             if (localType === 'host' && remoteType === 'host') {
                 return 'direct-lan';
             }
@@ -802,6 +987,7 @@ export class TransferEngine {
 
         this.clearConnectWatchdog(session);
         this.clearDisconnectGrace(session);
+        this.clearPeriodicDetection(session);
 
         const peerId = session.peerId;
 
@@ -863,7 +1049,7 @@ export class TransferEngine {
         };
 
         // A received channel can, in rare timings, already be open when
-        // ondatachannel delivers it — its onopen would never fire.
+        // ondatachannel delivers it - its onopen would never fire.
         if (channel.readyState === 'open') {
             channel.onopen();
         }
@@ -1004,6 +1190,9 @@ export class TransferEngine {
 
     offerFiles(peerId, files) {
         const session = this.getOrCreateSession(peerId);
+        if (session.pc && (session.pc.connectionState === 'connected' || session.pc.iceConnectionState === 'connected')) {
+            this.detectConnectionType(session);
+        }
         const peerName = this.getPeerName(peerId);
         const newItems = [];
         const offeredFiles = [];
@@ -1055,6 +1244,7 @@ export class TransferEngine {
                 progress: 0,
                 peerId,
                 peerName,
+                connectionType: session.connectionType && session.connectionType !== 'unknown' ? session.connectionType : undefined,
                 speed: null,
                 eta: null
             });
@@ -1320,6 +1510,7 @@ export class TransferEngine {
                 progress: 0,
                 peerId: session.peerId,
                 peerName,
+                connectionType: session.connectionType && session.connectionType !== 'unknown' ? session.connectionType : undefined,
                 speed: null,
                 eta: null
             });
@@ -1343,6 +1534,14 @@ export class TransferEngine {
         if (!session || !session.channelReady) {
             this.historyUpdate(fileId, { status: 'error', error: 'Peer is no longer connected.' });
             return;
+        }
+
+        if (session.pc && (session.pc.connectionState === 'connected' || session.pc.iceConnectionState === 'connected')) {
+            this.detectConnectionType(session);
+        }
+
+        if (session.connectionType && session.connectionType !== 'unknown') {
+            this.historyUpdate(fileId, { connectionType: session.connectionType });
         }
 
         const isRelay = session.connectionType === 'relay-turn';
@@ -1471,7 +1670,7 @@ export class TransferEngine {
         channel.binaryType = 'arraybuffer';
 
         if (!state) {
-            // Transfer was cancelled or never requested; close the channel —
+            // Transfer was cancelled or never requested; close the channel -
             // sender treats the close as interruption.
             try {
                 channel.close();

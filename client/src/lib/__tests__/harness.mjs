@@ -77,13 +77,25 @@ export class MockPeerConnection {
     constructor() {
         this.counterpart = null;
         this.connectionState = 'new';
+        this.iceConnectionState = 'new';
         this.signalingState = 'stable';
         this.sctp = { maxMessageSize: 262144 };
         this.onicecandidate = null;
         this.onconnectionstatechange = null;
+        this.oniceconnectionstatechange = null;
+        this.onsignalingstatechange = null;
         this.ondatachannel = null;
         this._localChannels = [];
         this._undeliveredChannels = [];
+        this._iceRestarted = false;
+    }
+
+    setConfiguration(config) {
+        this.config = config;
+    }
+
+    restartIce() {
+        this._iceRestarted = true;
     }
 
     createDataChannel(label) {
@@ -124,8 +136,16 @@ export class MockPeerConnection {
                 : { type: 'offer', sdp: 'mock-offer-auto' };
         }
 
+        if (description?.type === 'rollback') {
+            this.localDescription = null;
+            this.signalingState = 'stable';
+            this.onsignalingstatechange?.();
+            return;
+        }
+
         this.localDescription = description;
         this.signalingState = description?.type === 'offer' ? 'have-local-offer' : 'stable';
+        this.onsignalingstatechange?.();
     }
 
     async setRemoteDescription(description) {

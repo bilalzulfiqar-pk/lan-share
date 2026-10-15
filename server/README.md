@@ -1,4 +1,4 @@
-# LAN Share — Signaling Server
+# LAN Share - Signaling Server
 
 Lightweight Node.js Express + Socket.IO signaling service for LAN Share. See the [root README](../README.md) for full architecture, security design, and deployment instructions.
 

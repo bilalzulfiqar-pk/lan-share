@@ -113,21 +113,23 @@ describe('Resumption Integrity & Verification (TEST-06)', () => {
 
     it('rejects transfer verification if a chunk is corrupted during resumption', async () => {
         const { engineA, engineB, eventsB } = createEnginePair();
-        const fileSize = 256 * 1024;
-        const file = createMockFile('integrity-test.bin', fileSize, 'application/octet-stream', 0x99, 1);
+        const fileSize = 512 * 1024;
+        const file = createMockFile('integrity-test.bin', fileSize, 'application/octet-stream', 0x99, 8);
 
         const id = await offerAndRequestId(engineA, eventsB, file);
         await engineB.requestFile(id);
 
-        // Wait until at least 1 chunk (64 KiB) is received
+        // Wait until at least 1 chunk (64 KiB) is received while transfer is still in flight
         const receiveState = await waitFor(() => {
             const state = engineB.receives.get(id);
-            return (state && state.received >= 64 * 1024) ? state : null;
-        }, { label: 'initial chunk' });
+            return (state && state.received >= 64 * 1024 && state.received < fileSize) ? state : null;
+        }, { interval: 2, label: 'initial chunk' });
         expect(receiveState.received).toBeGreaterThanOrEqual(64 * 1024);
+        expect(receiveState.received).toBeLessThan(fileSize);
 
         // Drop channel
         const outgoingEntry = engineA.outgoing.get(id);
+        expect(outgoingEntry).toBeDefined();
         outgoingEntry.channel.close();
 
         // Tamper with the sender's file so resumption transmits corrupted bytes

@@ -1,5 +1,5 @@
 /**
- * LAN Share — Tier 5 Adversarial CWV, Layout Geometry & PWA Test Suite
+ * LAN Share - Tier 5 Adversarial CWV, Layout Geometry & PWA Test Suite
  * 
  * White-Box Adversarial Stress Testing covering:
  * - Category 1: Layout Geometry, Inline Critical CSS & Layout Shifts (CLS = 0) Under Extreme Viewports (320px to 4K)

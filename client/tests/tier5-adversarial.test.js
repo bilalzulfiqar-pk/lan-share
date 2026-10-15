@@ -1,5 +1,5 @@
 /**
- * LAN Share — Tier 5 Adversarial Coverage Hardening Test Suite
+ * LAN Share - Tier 5 Adversarial Coverage Hardening Test Suite
  * 
  * White-Box Adversarial Stress Testing covering:
  * - Category 1: Canonical URLs, Query Parameters & Normalization Attacks

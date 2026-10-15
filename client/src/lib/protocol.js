@@ -210,3 +210,38 @@ export function createTransferId() {
     return `t-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
 }
 
+export function isPrivateLanAddress(addr) {
+    if (!addr || typeof addr !== 'string') return false;
+    let clean = addr.trim().toLowerCase();
+    if (clean.startsWith('[') && clean.includes(']')) {
+        clean = clean.slice(1, clean.indexOf(']'));
+    } else if (clean.includes(':') && clean.indexOf(':') === clean.lastIndexOf(':')) {
+        clean = clean.split(':')[0];
+    }
+    if (clean.endsWith('.')) {
+        clean = clean.slice(0, -1);
+    }
+    if (clean.endsWith('.local') || clean === 'localhost' || clean.endsWith('.localhost')) {
+        return true;
+    }
+    // IPv4 RFC 1918 + loopback + link-local
+    if (/^10\.(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(?:\.(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){2}$/.test(clean)) {
+        return true;
+    }
+    if (/^172\.(?:1[6-9]|2\d|3[0-1])(?:\.(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){2}$/.test(clean)) {
+        return true;
+    }
+    if (/^192\.168(?:\.(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){2}$/.test(clean)) {
+        return true;
+    }
+    if (/^127\.(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d){3}$/.test(clean)) return true;
+    if (/^169\.254(?:\.(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){2}$/.test(clean)) return true;
+
+    // IPv6 link-local (fe80::/10), ULA (fc00::/7), loopback (::1)
+    if (clean === '::1') return true;
+    if (/^fe[89ab][0-9a-f]:/i.test(clean)) return true;
+    if (/^f[cd][0-9a-f]{2}:/i.test(clean)) return true;
+
+    return false;
+}
+

@@ -17,7 +17,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 * **Chunk-Offset Transfer Resumption:** Protocol update allowing receivers to request byte ranges (`fromOffset`) to seamlessly resume transfers across momentary Wi-Fi blips without re-uploading from scratch.
 
 ### Changed
-* **Transfer State Machine & Honest Status Flow:** Completely redesigned transfer statuses to eliminate misleading "Waiting for accept" labels. Senders now see `Connecting to device…`, `Offered to peer (ready to download)`, and live telemetry (`Uploading (XX MB/s) — ETA Xs`).
+* **Transfer State Machine & Honest Status Flow:** Completely redesigned transfer statuses to eliminate misleading "Waiting for accept" labels. Senders now see `Connecting to device…`, `Offered to peer (ready to download)`, and live telemetry (`Uploading (XX MB/s) - ETA Xs`).
 * **Disconnect Grace Window:** Replaced instant aborts on channel close with an 8-second grace window that attempts automatic ICE renegotiation before declaring failure.
 * **Test Suite Expansion:** Expanded automated Vitest suites from 181 to 265 passing unit, integration, and child-process signaling tests.
 

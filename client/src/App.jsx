@@ -141,7 +141,7 @@ function App() {
       }
 
       // Only flip the bell on when notifications can actually be delivered.
-      // Dismissing the prompt leaves permission 'default' — the bell stays
+      // Dismissing the prompt leaves permission 'default' - the bell stays
       // off and will ask again next time; a blocked browser stays off too.
       setNotifyEnabled(permission === 'granted');
       return;
@@ -149,7 +149,7 @@ function App() {
     setNotifyEnabled(false);
   }, [notifyEnabled]);
 
-  // { peerId, key } — the history key is pinned when the chat opens so the
+  // { peerId, key } - the history key is pinned when the chat opens so the
   // panel keeps its history even if the peer list momentarily empties during
   // a signaling reconnect.
   const [chatSession, setChatSession] = useState({ peerId: null, key: null });
@@ -273,7 +273,7 @@ function App() {
     try {
       localStorage.setItem(CHAT_STORAGE_KEY, JSON.stringify(chatByDevice));
     } catch {
-      // storage full or unavailable — chat history stays in memory
+      // storage full or unavailable - chat history stays in memory
     }
   }, [chatByDevice]);
 
@@ -462,6 +462,15 @@ function App() {
   }, [peers, selectedDevice]);
 
   const activeSelectedDevice = activePeer ? activePeer.id : null;
+
+  const activeTransferPeerId = useMemo(() => {
+    const activeItem = history.find(
+      (item) => item.status === 'downloading' || item.status === 'uploading' || item.status === 'offered' || item.status === 'connecting'
+    );
+    return activeItem?.peerId || null;
+  }, [history]);
+
+  const debugPeerId = activeSelectedDevice || activeTransferPeerId;
 
   const onFileSelected = (e) => {
     const files = e.target.files;
@@ -696,13 +705,17 @@ function App() {
                   <div className="debug-value">{debugInfo.transportName}</div>
                   <div className="debug-label">WebRTC</div>
                   <div className="debug-value">
-                    {activeSelectedDevice ? (
+                    {debugPeerId ? (
                       <span>
-                        {peerStatus[activeSelectedDevice] || 'IDLE'}
-                        {' · '}
-                        <span className={`conn-type-badge ${connectionTypes[activeSelectedDevice] || 'direct-lan'}`}>
-                          {connectionTypes[activeSelectedDevice] || 'direct-lan'}
-                        </span>
+                        {peerStatus[debugPeerId] || 'IDLE'}
+                        {peerStatus[debugPeerId] === 'CONNECTED' && connectionTypes[debugPeerId] && connectionTypes[debugPeerId] !== 'unknown' ? (
+                          <>
+                            {' · '}
+                            <span className={`conn-type-badge ${connectionTypes[debugPeerId]}`}>
+                              {connectionTypes[debugPeerId]}
+                            </span>
+                          </>
+                        ) : null}
                       </span>
                     ) : (
                       `${Object.values(peerStatus).filter((s) => s !== 'DISCONNECTED').length} active session(s)`
@@ -710,7 +723,9 @@ function App() {
                   </div>
                   <div className="debug-label">Selected</div>
                   <div className="debug-value">
-                    {activeSelectedDevice ? getPeerName(activeSelectedDevice) : 'None selected'}
+                    {activeSelectedDevice
+                      ? getPeerName(activeSelectedDevice)
+                      : (activeTransferPeerId ? `${getPeerName(activeTransferPeerId)} (Transferring)` : 'None selected')}
                   </div>
                 </div>
               </div>
@@ -933,7 +948,11 @@ function App() {
                     <strong>{getPeerName(activeSelectedDevice)}</strong>
                   </div>
                   <ConnectionModeBadge
-                    mode={connectionTypes[activeSelectedDevice] || 'direct-lan'}
+                    mode={
+                      peerStatus[activeSelectedDevice] === 'CONNECTED' && connectionTypes[activeSelectedDevice]
+                        ? connectionTypes[activeSelectedDevice]
+                        : 'unknown'
+                    }
                     className="file-selection-mode-badge"
                   />
                 </div>

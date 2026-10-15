@@ -1,5 +1,5 @@
 /**
- * LAN Share — Comprehensive SEO & GEO E2E Test Suite
+ * LAN Share - Comprehensive SEO & GEO E2E Test Suite
  * 
  * Opaque-box verification across Tiers 1-4 covering all 16 features from PROJECT.md:
  * - Tier 1: Feature Coverage (robots.txt, sitemap.xml, banner.svg, meta tags, OG/Twitter, Schema JSON-LD, semantic HTML, llms.txt)

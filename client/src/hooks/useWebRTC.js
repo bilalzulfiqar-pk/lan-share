@@ -137,7 +137,7 @@ export function useWebRTC(socket, myId, { getPeerName, onChat, onNotify, strictL
     }, []);
 
     const getConnectionType = useCallback((peerId) => {
-        return connectionTypes[peerId] || engineRef.current?.getConnectionType(peerId) || 'direct-lan';
+        return connectionTypes[peerId] || engineRef.current?.getConnectionType(peerId) || 'unknown';
     }, [connectionTypes]);
 
     return {

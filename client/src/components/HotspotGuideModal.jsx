@@ -87,7 +87,7 @@ export function HotspotGuideModal({
                   </div>
                   <p>
                     Enable <strong>Personal Hotspot</strong> / <strong>Mobile Hotspot</strong> on your phone.
-                    <span className="hotspot-highlight"> Cellular data can even be turned OFF</span> — only the phone&apos;s local Wi-Fi router chip is needed!
+                    <span className="hotspot-highlight"> Cellular data can even be turned OFF</span> - only the phone&apos;s local Wi-Fi router chip is needed!
                   </p>
                 </div>
               </div>
@@ -133,6 +133,18 @@ export function HotspotGuideModal({
               </svg>
               <span>
                 <strong>Why is this needed?</strong> University, hotel, and public Wi-Fi networks block direct device-to-device traffic via AP / Client Isolation, forcing traffic onto slow cloud relays with 150 MB caps. A personal mobile hotspot creates an instant unblocked private network.
+              </span>
+            </div>
+
+            <div className="room-tip hotspot-explanation hotspot-repeater-tip" data-testid="hotspot-repeater-tip">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="M5 12.55a11 11 0 0 1 14.08 0" />
+                <path d="M1.42 9a16 16 0 0 1 21.16 0" />
+                <path d="M8.53 16.11a6 6 0 0 1 6.95 0" />
+                <line x1="12" y1="20" x2="12.01" y2="20" />
+              </svg>
+              <span>
+                <strong>Wi-Fi Repeater Mode Tip:</strong> If your phone shares an existing Wi-Fi network via Hotspot, initiating file transfers from your <strong>Laptop</strong> (or switching the phone to Mobile Data before enabling Hotspot - 0 mobile data used for local transfers) establishes the fastest direct route because Windows hides its IP behind .local mDNS.
               </span>
             </div>
 
