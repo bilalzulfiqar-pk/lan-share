@@ -29,5 +29,5 @@ src/
     clipboard.js           # clipboard with insecure-origin fallback
     notifications.js       # browser notification helpers
     sound.js               # WebAudio notification blip
-    __tests__/             # vitest suites (mock WebRTC + real-server integration - 268 tests)
+    __tests__/             # vitest suites (mock WebRTC + real-server integration - 275 tests)
 ```

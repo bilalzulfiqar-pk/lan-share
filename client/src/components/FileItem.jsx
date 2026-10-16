@@ -11,11 +11,12 @@ function FileItemComponent({ item, onRequest, onSave, onCancel, getPeerName, onO
   const isSender = item.direction === 'out';
   const peerName = item.peerName || (getPeerName ? getPeerName(item.peerId) : 'Unknown');
 
+  const errStr = String(item.error?.message || item.error || '').toLowerCase();
   const isPeerDisconnected =
     item.error === 'Peer disconnected.' ||
-    Boolean(item.error && (
-      item.error.toLowerCase().includes('peer disconnected') ||
-      item.error.toLowerCase().includes('no longer connected')
+    Boolean(errStr && (
+      errStr.includes('peer disconnected') ||
+      errStr.includes('no longer connected')
     )) ||
     isPeerOnline === false ||
     (Array.isArray(peers) && Boolean(item.peerId) && !peers.some((p) => p.id === item.peerId));
@@ -89,11 +90,12 @@ function FileItemComponent({ item, onRequest, onSave, onCancel, getPeerName, onO
 
   const formatSize = (bytes) => {
     if (!bytes && bytes !== 0) return '';
-    if (bytes === 0) return '0 B';
+    const safeBytes = Math.max(0, Number(bytes) || 0);
+    if (safeBytes === 0) return '0 B';
     const k = 1024;
     const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
-    const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return `${parseFloat((bytes / Math.pow(k, i)).toFixed(2))} ${sizes[i]}`;
+    const i = Math.floor(Math.log(safeBytes) / Math.log(k));
+    return `${parseFloat((safeBytes / Math.pow(k, i)).toFixed(2))} ${sizes[i]}`;
   };
 
   const formatEta = (seconds) => {

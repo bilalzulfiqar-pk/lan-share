@@ -50,7 +50,7 @@ const io = new Server(server, {
 });
 
 // Store connected users: socketId -> { id, name, deviceId, deviceType, publicIp, networkFingerprints, roomCode }
-const users = {};
+const users = Object.create(null);
 const similarityIndex = new SimilarityIndex();
 
 const relayLimiter = createRateLimiter({ capacity: 40, refillPerSecond: 20 });
@@ -237,7 +237,12 @@ io.on('connection', (socket) => {
     });
 
     socket.on('leave-room', (callback) => {
-        const user = users[socket.id];
+        if (!joinLimiter.tryConsume(socket.id)) {
+            if (typeof callback === 'function') callback({ success: false, error: 'Rate limited' });
+            return;
+        }
+
+        const user = Object.hasOwn(users, socket.id) ? users[socket.id] : null;
         if (!user) {
             if (typeof callback === 'function') callback({ success: false, error: 'User not registered' });
             return;
@@ -263,7 +268,7 @@ io.on('connection', (socket) => {
     // relayed to sockets that actually joined.
     const relay = (eventName, isValidPayload, extractPayload) => {
         socket.on(eventName, (data) => {
-            const sender = users[socket.id];
+            const sender = Object.hasOwn(users, socket.id) ? users[socket.id] : null;
             if (!sender) {
                 return;
             }
@@ -281,7 +286,7 @@ io.on('connection', (socket) => {
                 return;
             }
 
-            const targetUser = target ? users[target] : null;
+            const targetUser = (target && Object.hasOwn(users, target)) ? users[target] : null;
             if (!targetUser) {
                 // Target departed mid-handshake; drop silently without penalizing sender
                 return;
@@ -326,10 +331,8 @@ if (require.main === module) {
     const shutdown = (signal) => {
         console.log(`Received ${signal}. Closing server gracefully...`);
         io.close(() => {
-            server.close(() => {
-                console.log('HTTP and Socket.IO server closed.');
-                process.exit(0);
-            });
+            console.log('HTTP and Socket.IO server closed.');
+            process.exit(0);
         });
         setTimeout(() => {
             console.error('Forced shutdown due to timeout');

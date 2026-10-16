@@ -132,9 +132,12 @@ class TurnCredentialManager {
 function createTurnCredentialsHandler({ manager, limiter, getClientIp = (headers, addr) => addr || '127.0.0.1' }) {
     return async function handleTurnCredentials(req, res) {
         const headers = req?.headers || {};
-        const clientIp = req?.ip ? String(req.ip).replace(/^::ffff:/, '') : getClientIp(headers, req?.socket?.remoteAddress);
+        const clientIp = req?.ip ? String(req.ip).replace(/^::ffff:/i, '') : getClientIp(headers, req?.socket?.remoteAddress);
         if (limiter && !limiter.tryConsume(clientIp)) {
-            return res.status(429).json({ error: 'Too many requests for TURN credentials. Please wait.' });
+            return res.status(429).json({
+                error: 'Too many requests for TURN credentials. Please wait.',
+                iceServers: DEFAULT_STUN_SERVERS
+            });
         }
 
         try {

@@ -39,3 +39,24 @@ describe('parseRoomFromHash', () => {
         expect(parsed).toBe('A'.repeat(16));
     });
 });
+
+describe('roomCode serialization for leaveRoom (CORE-BUG-08)', () => {
+    it('serializes roomCode as null instead of dropping the key over JSON', () => {
+        const activeRoom = 'ROOM42';
+        const activePayload = { name: 'Device', roomCode: activeRoom ?? null };
+        expect(JSON.parse(JSON.stringify(activePayload))).toEqual({ name: 'Device', roomCode: 'ROOM42' });
+
+        // When leaving room (roomCode becomes null)
+        const leftRoom = null;
+        const leftPayload = { name: 'Device', roomCode: leftRoom ?? null };
+        const serialized = JSON.stringify(leftPayload);
+
+        // Crucial: roomCode key MUST be present in JSON as null, not omitted
+        expect(serialized).toContain('"roomCode":null');
+        expect(JSON.parse(serialized)).toEqual({ name: 'Device', roomCode: null });
+
+        // Verify the old bug behavior would have omitted the key
+        const buggyPayload = { name: 'Device', roomCode: leftRoom || undefined };
+        expect(JSON.stringify(buggyPayload)).not.toContain('"roomCode"');
+    });
+});

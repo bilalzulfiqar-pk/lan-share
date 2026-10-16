@@ -102,29 +102,29 @@ function getClientIp(headers, fallbackAddress = '') {
     if (headers && typeof headers === 'object') {
         const cfConnectingIp = headers['cf-connecting-ip'];
         if (typeof cfConnectingIp === 'string' && cfConnectingIp.trim()) {
-            return cfConnectingIp.trim().replace(/^::ffff:/, '');
+            return cfConnectingIp.trim().replace(/^::ffff:/i, '');
         }
 
         const trueClientIp = headers['true-client-ip'];
         if (typeof trueClientIp === 'string' && trueClientIp.trim()) {
-            return trueClientIp.trim().replace(/^::ffff:/, '');
+            return trueClientIp.trim().replace(/^::ffff:/i, '');
         }
 
         const xRealIp = headers['x-real-ip'];
         if (typeof xRealIp === 'string' && xRealIp.trim()) {
-            return xRealIp.trim().replace(/^::ffff:/, '');
+            return xRealIp.trim().replace(/^::ffff:/i, '');
         }
 
         const forwardedFor = headers['x-forwarded-for'];
         if (typeof forwardedFor === 'string' && forwardedFor.trim()) {
             const firstEntry = forwardedFor.split(',')[0].trim();
             if (firstEntry) {
-                return firstEntry.replace(/^::ffff:/, '');
+                return firstEntry.replace(/^::ffff:/i, '');
             }
         }
     }
 
-    return (fallbackAddress || '').replace(/^::ffff:/, '');
+    return (fallbackAddress || '').replace(/^::ffff:/i, '');
 }
 
 function expandIPv6(ip) {
@@ -189,9 +189,12 @@ function detectDeviceType(userAgent) {
 }
 
 function splitFingerprints(networkFingerprints = []) {
+    if (!Array.isArray(networkFingerprints)) {
+        return { lan: [], wan: [] };
+    }
     return {
-        lan: networkFingerprints.filter((fingerprint) => fingerprint.startsWith('lan:')),
-        wan: networkFingerprints.filter((fingerprint) => fingerprint.startsWith('wan:'))
+        lan: networkFingerprints.filter((fingerprint) => typeof fingerprint === 'string' && fingerprint.startsWith('lan:')),
+        wan: networkFingerprints.filter((fingerprint) => typeof fingerprint === 'string' && fingerprint.startsWith('wan:'))
     };
 }
 

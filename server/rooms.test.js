@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import {
     sanitizeRoomCode,
+    normalizeJoinPayload,
     areUsersVisible,
     getVisibleUsersFor,
     SimilarityIndex
@@ -173,5 +174,29 @@ describe('Server Room Logic and Cross-IP Visibility', () => {
         expect(areUsersVisible(userA, userB)).toBe(false);
         expect(areUsersVisible(userA, userC)).toBe(false);
         expect(areUsersVisible(userB, userC)).toBe(false);
+    });
+
+    it('clears existing roomCode when client emits join with roomCode: null (CORE-BUG-08)', () => {
+        // When client sends roomCode: null upon leaving room
+        const payload = {
+            name: 'Alice Device',
+            networkFingerprints: ['lan:ipv4:192.168.1.5'],
+            deviceId: 'dev-123',
+            roomCode: null
+        };
+
+        const normalized = normalizeJoinPayload(payload);
+        // Normalized payload must explicitly have roomCode: null (not undefined)
+        expect(normalized.roomCode).toBeNull();
+
+        // Simulate server/index.js line 181 roomCode determination
+        const existingUser = { roomCode: 'ROOM42' };
+        const payloadRoomCode = normalized.roomCode;
+        const resolvedRoomCode = payloadRoomCode !== undefined
+            ? payloadRoomCode
+            : (existingUser ? existingUser.roomCode : null);
+
+        // Crucial: roomCode is cleared to null, NOT preserving 'ROOM42'
+        expect(resolvedRoomCode).toBeNull();
     });
 });

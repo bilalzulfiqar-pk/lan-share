@@ -343,6 +343,11 @@ export function useSignaling(displayName) {
             newSocket.io.engine.on('upgrade', onUpgrade);
         });
 
+        newSocket.on('connect_error', () => {
+            setIsReconnecting(true);
+            setTransportName('reconnecting');
+        });
+
         newSocket.on('disconnect', () => {
             console.log('Disconnected from signaling server');
             setIsConnected(false);
@@ -376,6 +381,7 @@ export function useSignaling(displayName) {
                 // ignore
             }
             newSocket.off('connect');
+            newSocket.off('connect_error');
             newSocket.off('disconnect');
             newSocket.off('users-update');
             newSocket.off('debug-state');
@@ -397,7 +403,7 @@ export function useSignaling(displayName) {
                 name: displayName,
                 networkFingerprints,
                 deviceId,
-                roomCode: roomCode || undefined
+                roomCode: roomCode ?? null
             });
             return;
         }
@@ -407,7 +413,7 @@ export function useSignaling(displayName) {
                 name: displayName,
                 networkFingerprints,
                 deviceId,
-                roomCode: roomCode || undefined
+                roomCode: roomCode ?? null
             });
         }, 400);
 

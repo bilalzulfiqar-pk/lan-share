@@ -1,10 +1,10 @@
 import React, { useMemo } from 'react';
 import { FileItem } from './FileItem';
 
-function HistoryPanelComponent({ history, onRequest, onSave, onCancel, getPeerName, onOpenHotspotGuide, peers }) {
-  const reversedHistory = useMemo(() => [...history].reverse(), [history]);
+function HistoryPanelComponent({ history = [], onRequest, onSave, onCancel, getPeerName, onOpenHotspotGuide, peers }) {
+  const reversedHistory = useMemo(() => [...(history || [])].reverse(), [history]);
 
-  if (history.length === 0) {
+  if (!history || history.length === 0) {
     return (
       <div className="empty-state">
         <div className="empty-state-icon" aria-hidden="true">

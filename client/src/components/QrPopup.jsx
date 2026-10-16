@@ -10,7 +10,16 @@ const COPIED_FEEDBACK_MS = 1400;
 // code itself stays neutral while the surrounding card follows the theme.
 export function QrPopup({ open, url, onClose, reduceMotion }) {
   const canvasRef = useRef(null);
+  const copyTimerRef = useRef(null);
   const [copied, setCopied] = useState(false);
+
+  useEffect(() => {
+    return () => {
+      if (copyTimerRef.current) {
+        window.clearTimeout(copyTimerRef.current);
+      }
+    };
+  }, []);
 
   useEffect(() => {
     if (!open || !canvasRef.current || !url) return;
@@ -37,7 +46,10 @@ export function QrPopup({ open, url, onClose, reduceMotion }) {
     const succeeded = await copyText(url);
     if (succeeded) {
       setCopied(true);
-      window.setTimeout(() => setCopied(false), COPIED_FEEDBACK_MS);
+      if (copyTimerRef.current) {
+        window.clearTimeout(copyTimerRef.current);
+      }
+      copyTimerRef.current = window.setTimeout(() => setCopied(false), COPIED_FEEDBACK_MS);
     }
   };
 

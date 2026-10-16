@@ -99,7 +99,7 @@ function ChatBubble({ message, copiedId, onCopy, onResetCopy, onCancelReset, isN
   );
 }
 
-export function ChatPanel({ open, peerName, connectionLabel, messages, onSend, onClose, reduceMotion, isPeerOnline = true }) {
+export function ChatPanel({ open, peerName, connectionLabel, messages = [], onSend, onClose, reduceMotion, isPeerOnline = true }) {
   const [draft, setDraft] = useState('');
   const [copiedId, setCopiedId] = useState(null);
   const [activePeer, setActivePeer] = useState(null);
@@ -111,7 +111,7 @@ export function ChatPanel({ open, peerName, connectionLabel, messages, onSend, o
   const currentPeerKey = open ? peerName : null;
   if (currentPeerKey !== activePeer) {
     setActivePeer(currentPeerKey);
-    setInitialIds(open ? new Set(messages.map((m) => m.id)) : new Set());
+    setInitialIds(open ? new Set((messages || []).map((m) => m.id)) : new Set());
   }
 
   useEffect(() => {

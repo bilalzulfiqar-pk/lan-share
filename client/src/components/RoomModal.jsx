@@ -16,6 +16,8 @@ export function RoomModal({
 }) {
   const canvasElementRef = useRef(null);
   const inputRef = useRef(null);
+  const copyLinkTimerRef = useRef(null);
+  const copyCodeTimerRef = useRef(null);
   const [inputCode, setInputCode] = useState('');
   const [copiedLink, setCopiedLink] = useState(false);
   const [copiedCode, setCopiedCode] = useState(false);
@@ -25,6 +27,13 @@ export function RoomModal({
     setPrevRoomCode(roomCode);
     setShowSwitchForm(false);
   }
+
+  useEffect(() => {
+    return () => {
+      if (copyLinkTimerRef.current) window.clearTimeout(copyLinkTimerRef.current);
+      if (copyCodeTimerRef.current) window.clearTimeout(copyCodeTimerRef.current);
+    };
+  }, []);
 
   const basePath = typeof window !== 'undefined' && window.location.pathname !== '/'
     ? window.location.pathname.replace(/\/$/, '')
@@ -59,6 +68,8 @@ export function RoomModal({
 
   const handleClose = useCallback(() => {
     setInputCode('');
+    if (copyLinkTimerRef.current) window.clearTimeout(copyLinkTimerRef.current);
+    if (copyCodeTimerRef.current) window.clearTimeout(copyCodeTimerRef.current);
     setCopiedLink(false);
     setCopiedCode(false);
     setShowSwitchForm(false);
@@ -80,7 +91,8 @@ export function RoomModal({
     const succeeded = await copyText(shareableUrl);
     if (succeeded) {
       setCopiedLink(true);
-      window.setTimeout(() => setCopiedLink(false), COPIED_FEEDBACK_MS);
+      if (copyLinkTimerRef.current) window.clearTimeout(copyLinkTimerRef.current);
+      copyLinkTimerRef.current = window.setTimeout(() => setCopiedLink(false), COPIED_FEEDBACK_MS);
     }
   };
 
@@ -89,7 +101,8 @@ export function RoomModal({
     const succeeded = await copyText(roomCode);
     if (succeeded) {
       setCopiedCode(true);
-      window.setTimeout(() => setCopiedCode(false), COPIED_FEEDBACK_MS);
+      if (copyCodeTimerRef.current) window.clearTimeout(copyCodeTimerRef.current);
+      copyCodeTimerRef.current = window.setTimeout(() => setCopiedCode(false), COPIED_FEEDBACK_MS);
     }
   };
 

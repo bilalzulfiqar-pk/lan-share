@@ -92,7 +92,8 @@ export const DeviceList = React.memo(({ devices, onToogle, selectedDevice, unrea
                 event.dataTransfer.dropEffect = 'copy';
                 setDropTargetId(device.id);
               }}
-              onDragLeave={() => {
+              onDragLeave={(event) => {
+                if (event.currentTarget.contains(event.relatedTarget)) return;
                 setDropTargetId((current) => (current === device.id ? null : current));
               }}
               onDrop={(event) => {

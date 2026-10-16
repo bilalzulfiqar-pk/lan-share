@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { TransferEngine } from '../transferEngine';
+import { TransferEngine, sweepOrphanedOpfsFiles } from '../transferEngine';
 import { canOpfsSave } from '../protocol';
 import {
     installMockWebRTC,
@@ -274,6 +274,24 @@ describe('OPFS Direct-to-Disk Sink', () => {
 
         engineA.destroy();
         engineB.destroy();
+    });
+
+    it('sweepOrphanedOpfsFiles correctly recognizes timestamped attempt files and preserves active transfers (CORE-BUG-03)', async () => {
+        mockRoot.values = vi.fn(async function* () {
+            yield { kind: 'file', name: 'transfer-active1-1729000000000.tmp' };
+            yield { kind: 'file', name: 'transfer-orphan2-1729000000000.tmp' };
+            yield { kind: 'file', name: 'transfer-legacy.tmp' };
+        });
+
+        // active1 is currently downloading
+        const activeIds = new Set(['active1']);
+        await sweepOrphanedOpfsFiles(activeIds);
+
+        // active1 must NOT be removed
+        expect(mockRoot.removeEntry).not.toHaveBeenCalledWith('transfer-active1-1729000000000.tmp');
+        // orphan2 and legacy must be removed
+        expect(mockRoot.removeEntry).toHaveBeenCalledWith('transfer-orphan2-1729000000000.tmp');
+        expect(mockRoot.removeEntry).toHaveBeenCalledWith('transfer-legacy.tmp');
     });
 });
 

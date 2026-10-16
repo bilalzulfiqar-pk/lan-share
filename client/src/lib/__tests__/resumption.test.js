@@ -161,4 +161,51 @@ describe('Resumable Chunk Offsets on Network Hiccups', () => {
         engineB.destroy();
     });
 
+    it('stale onclose from earlier channel attempt does not abort an active resumed transfer (CORE-BUG-02)', async () => {
+        const { engineA, engineB, eventsB } = createEnginePair();
+        const file = createMockFile('stale-channel.bin', 64 * 1024);
+
+        const id = await offerAndRequestId(engineA, eventsB, file);
+        await engineB.requestFile(id);
+
+        const sessionB = engineB.sessions.get('alice');
+        const receiveState = engineB.receives.get(id);
+        expect(receiveState).toBeDefined();
+
+        // Simulate Channel 1 attached
+        const mockChannel1 = {
+            readyState: 'open',
+            binaryType: 'arraybuffer',
+            close: () => {},
+            onmessage: null,
+            onclose: null,
+            onerror: null
+        };
+        engineB.attachFileReceiveChannel(sessionB, mockChannel1, id);
+        expect(receiveState.channel).toBe(mockChannel1);
+
+        // Resumption happens: Channel 2 attached
+        const mockChannel2 = {
+            readyState: 'open',
+            binaryType: 'arraybuffer',
+            close: () => {},
+            onmessage: null,
+            onclose: null,
+            onerror: null
+        };
+        engineB.attachFileReceiveChannel(sessionB, mockChannel2, id);
+        expect(receiveState.channel).toBe(mockChannel2);
+
+        // Old Channel 1 asynchronously closes after reconnection
+        mockChannel1.onclose();
+
+        // Stale Channel 1 should NOT set graceTimer or cancel active transfer
+        expect(receiveState.graceTimer).toBeFalsy();
+        expect(receiveState.finalized).toBe(false);
+        expect(engineB.receives.has(id)).toBe(true);
+
+        engineA.destroy();
+        engineB.destroy();
+    });
+
 });
