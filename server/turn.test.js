@@ -47,7 +47,7 @@ describe('Server TurnCredentialManager', () => {
         const result = await manager.getCredentials();
 
         expect(fetchFn).toHaveBeenCalledTimes(1);
-        expect(fetchFn).toHaveBeenCalledWith('https://test-app.metered.ca/api/v1/turn/credentials?apiKey=test-api-key');
+        expect(fetchFn).toHaveBeenCalledWith('https://test-app.metered.live/api/v1/turn/credentials?apiKey=test-api-key');
         expect(result).toEqual({ iceServers: mockMeteredServers });
     });
 
@@ -320,6 +320,32 @@ describe('GET /api/turn-credentials endpoint and rate limiting', () => {
         });
 
         await manager.getCredentials();
-        expect(fetchFn).toHaveBeenCalledWith('https://my-app.metered.ca/api/v1/turn/credentials?apiKey=secret-key');
+        expect(fetchFn).toHaveBeenCalledWith('https://my-app.metered.live/api/v1/turn/credentials?apiKey=secret-key');
+    });
+
+    it('normalizes appName whether provided as short name, metered.live domain, or metered.ca', async () => {
+        const fetchFn = vi.fn().mockResolvedValue({
+            ok: true,
+            status: 200,
+            json: async () => [{ urls: 'stun:stun.relay.metered.ca:80' }]
+        });
+
+        // Test with full .metered.live domain and https prefix
+        const m1 = new TurnCredentialManager({
+            apiKey: 'key',
+            appName: 'https://demo-app.metered.live/',
+            fetchFn
+        });
+        await m1.getCredentials();
+        expect(fetchFn).toHaveBeenCalledWith('https://demo-app.metered.live/api/v1/turn/credentials?apiKey=key');
+
+        // Test with legacy/accidental .metered.ca domain
+        const m2 = new TurnCredentialManager({
+            apiKey: 'key',
+            appName: 'legacy-app.metered.ca',
+            fetchFn
+        });
+        await m2.getCredentials();
+        expect(fetchFn).toHaveBeenCalledWith('https://legacy-app.metered.live/api/v1/turn/credentials?apiKey=key');
     });
 });

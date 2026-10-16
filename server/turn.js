@@ -69,7 +69,13 @@ class TurnCredentialManager {
         this.pendingFetchPromise = (async () => {
             let timeoutId = null;
             try {
-                const url = `https://${encodeURIComponent(appName)}.metered.ca/api/v1/turn/credentials?apiKey=${encodeURIComponent(apiKey)}`;
+                let host = appName.replace(/^https?:\/\//, '').replace(/\/.*$/, '').trim();
+                if (!host.includes('.')) {
+                    host = `${host}.metered.live`;
+                } else if (host.endsWith('.metered.ca')) {
+                    host = host.replace(/\.metered\.ca$/, '.metered.live');
+                }
+                const url = `https://${host}/api/v1/turn/credentials?apiKey=${encodeURIComponent(apiKey)}`;
                 let res;
                 if (typeof AbortController !== 'undefined' && fetcher === globalThis.fetch) {
                     const controller = new AbortController();
