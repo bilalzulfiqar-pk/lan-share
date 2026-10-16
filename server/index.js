@@ -1,3 +1,9 @@
+const path = require('path');
+if (typeof process.loadEnvFile === 'function') {
+    try { process.loadEnvFile(); } catch (_) {}
+    try { process.loadEnvFile(path.resolve(__dirname, '.env')); } catch (_) {}
+}
+
 const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');

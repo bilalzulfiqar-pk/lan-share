@@ -16,6 +16,8 @@ video/out/
 .env
 .env.*
 !.env.example
+.dev.vars
+.dev.vars.*
 
 # Local development & temporary files
 artifacts/

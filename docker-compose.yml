@@ -7,6 +7,8 @@ services:
       - "3001:3001"
     environment:
       - PORT=3001
+      - METERED_APP_NAME=${METERED_APP_NAME:-}
+      - METERED_API_KEY=${METERED_API_KEY:-}
     restart: unless-stopped
 
   client:

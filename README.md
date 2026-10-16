@@ -338,12 +338,20 @@ LAN Share is designed for zero-cost, lightweight self-hosting across modern clou
   - `VITE_SERVER_URL`: URL of your deployed signaling service (e.g., `https://your-signal-server.onrender.com`).
   - `VITE_SITE_URL`: Canonical URL for OpenGraph and QR sharing (e.g., `https://lan-share.vercel.app`).
 
-### 2. Node.js Signaling Server (Render / Railway / Fly.io / VPS)
+### 2. Node.js Signaling Server (Render / Railway / Fly.io / VPS / Docker)
 - **Root Directory:** `server`
 - **Runtime:** Node.js 20+
 - **Build Command:** `npm install`
 - **Start Command:** `npm start`
 - **Health Check Endpoint:** `GET /health` (returns `{"ok": true}`)
+- **Environment Variables:**
+  - `PORT`: Server port (default: `3001`).
+  - `METERED_APP_NAME`: Your Metered app name (optional, for TURN relay).
+  - `METERED_API_KEY`: Your Metered REST API key (optional, for TURN relay).
+- **Production Deployment Methods:**
+  - **Docker Compose:** Run `docker compose up --build -d` from the root directory. Environment variables in `.env` are automatically forwarded to the container.
+  - **Linux VPS / PM2:** Run `pm2 start server/index.js --name lan-share-signal`. It natively reads `server/.env` via Node's `process.loadEnvFile()`.
+  - **PaaS (Render / Railway / Fly.io):** Deploy the `server` directory and set `METERED_APP_NAME` and `METERED_API_KEY` in your provider's Environment Variables dashboard.
 - **Free Render Wake-Up:** The client automatically issues a non-blocking `/health` ping on load to wake free-tier sleeping instances with responsive UI status banners.
 
 ### 3. Cloudflare Workers + Durable Objects Edge Signaling (Serverless)
@@ -365,13 +373,28 @@ A zero-cost, zero-sleep edge signaling backend deployed to Cloudflare Workers wi
   Set `VITE_SERVER_URL` in your client environment to your Worker URL (e.g., `https://lan-share-signaling.<your-subdomain>.workers.dev`). The client automatically detects `*.workers.dev` and connects via native WebSocket. You can also explicitly configure transport with `VITE_SIGNALING_TRANSPORT=ws` or `VITE_SIGNALING_TRANSPORT=socketio`.
 
 ### 4. Free TURN Relay Setup (Metered.ca)
-To allow small files (<150 MB) to route through AP-isolated networks:
-1. Sign up for a free account at [Metered.ca OpenRelay](https://www.metered.ca/tools/openrelay/).
-2. Create an application to get your **App Name** and **API Key**.
-3. Set the environment variables on your signaling server:
-   - `METERED_APP_NAME`: Your Metered application name.
-   - `METERED_API_KEY`: Your Metered REST API key.
-4. The server automatically handles TTL caching (1-hour in-memory cache), request coalescing, negative caching on upstream rate limits, and fallback to Google & Cloudflare public STUN servers.
+To allow small files (<150 MB) to route through AP-isolated networks (hotel, campus, or airport Wi-Fi):
+1. Sign up for a free account at [Metered.ca](https://www.metered.ca/) (Free 20 GB/month plan).
+2. Under **TURN Server → Credentials**, create a credential and click **Show API Key** to get your **Credential API Key** (`apiKey`).
+3. Locate your **App Name** in the dashboard's top Workspace switcher or on the **Developers** page (the subdomain before `.metered.live`, e.g., `lan-share`).
+4. Set the environment variables depending on your deployment target:
+   - **Node.js Production Server (Docker / VPS / PaaS):**
+     - **Docker Compose:** Add to root `.env` or `docker-compose.yml`:
+       ```env
+       METERED_APP_NAME=lan-share
+       METERED_API_KEY=995f732e7fefd36946703647491cbbab88b6
+       ```
+     - **PaaS (Render / Railway / Fly.io / Heroku):** Add `METERED_APP_NAME` and `METERED_API_KEY` in the service dashboard's **Environment Variables** tab.
+     - **Linux VPS / PM2 / systemd:** Add to `server/.env` (Node 20+ loads it automatically on startup via `process.loadEnvFile()`).
+     - **Local Development:** Add to `server/.env`.
+   - **Cloudflare Workers (Serverless Edge):**
+     ```bash
+     cd worker
+     npx wrangler secret put METERED_APP_NAME
+     npx wrangler secret put METERED_API_KEY
+     npx wrangler deploy
+     ```
+5. **Failover & Safety:** The backend automatically handles TTL caching (1-hour in-memory cache), request coalescing, negative caching on upstream rate limits, and fallback to Google & Cloudflare public STUN servers. Client transfers over relay are capped at 150 MB to prevent quota exhaustion.
 
 ### Environment Variables Reference
 
@@ -388,7 +411,7 @@ To allow small files (<150 MB) to route through AP-isolated networks:
 
 ## Quality Assurance & Automated Testing
 
-LAN Share is backed by **377 automated tests** (292 client + 72 server + 13 worker) verifying socket clustering, WebRTC state machines, OPFS streaming fallbacks, TURN relay protection, connection mode diagnostics, and protocol serialization:
+LAN Share is backed by **378 automated tests** (292 client + 73 server + 13 worker) verifying socket clustering, WebRTC state machines, OPFS streaming fallbacks, TURN relay protection, connection mode diagnostics, and protocol serialization:
 
 ```bash
 # Run server test suite (clustering, rooms, TURN credential caching)
