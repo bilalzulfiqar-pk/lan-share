@@ -1506,10 +1506,33 @@ button {
    Server status popup
    ========================================================= */
 
+@keyframes serverPopupIn {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -10px);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
+}
+
+@keyframes serverPopupOut {
+  from {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
+  to {
+    opacity: 0;
+    transform: translate(-50%, -8px);
+  }
+}
+
 .server-status-popup {
   position: fixed;
-  top: 110px;
+  top: 126px;
   left: 50%;
+  transform: translate(-50%, 0);
   z-index: var(--z-server-popup);
   background: var(--glass-strong);
   backdrop-filter: blur(14px);
@@ -1523,6 +1546,20 @@ button {
   gap: 0.85rem;
   max-width: 92%;
   width: 440px;
+  animation: serverPopupIn 0.28s cubic-bezier(0.16, 1, 0.3, 1) both;
+  will-change: transform, opacity;
+}
+
+.server-status-popup.is-dismissing {
+  animation: serverPopupOut 0.15s cubic-bezier(0.4, 0, 1, 1) both;
+  pointer-events: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .server-status-popup,
+  .server-status-popup.is-dismissing {
+    animation: none;
+  }
 }
 
 .server-status-popup.warning {

@@ -349,6 +349,57 @@ function App() {
   const [showDebugSidebar, setShowDebugSidebar] = useState(false);
   const [copied, setCopied] = useState(false);
   const [dismissedStatusEpisode, setDismissedStatusEpisode] = useState(0);
+  const [dismissingEpisode, setDismissingEpisode] = useState(null);
+  const [statusExiting, setStatusExiting] = useState(false);
+  const [cachedStatusMessage, setCachedStatusMessage] = useState(null);
+  const dismissTimerRef = useRef(null);
+  const prevConnectedRef = useRef(isConnected);
+
+  if (serverStatusMessage && serverStatusMessage.title !== cachedStatusMessage?.title) {
+    setCachedStatusMessage(serverStatusMessage);
+  }
+
+  useEffect(() => {
+    return () => {
+      if (dismissTimerRef.current) {
+        window.clearTimeout(dismissTimerRef.current);
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    const wasDisconnected = !prevConnectedRef.current;
+    prevConnectedRef.current = isConnected;
+
+    if (wasDisconnected && isConnected && cachedStatusMessage && dismissedStatusEpisode !== connectionStartTime) {
+      let exitTimer;
+      const startTimer = window.setTimeout(() => {
+        setStatusExiting(true);
+        exitTimer = window.setTimeout(() => {
+          setStatusExiting(false);
+        }, 150);
+      }, 0);
+
+      return () => {
+        window.clearTimeout(startTimer);
+        if (exitTimer) window.clearTimeout(exitTimer);
+      };
+    }
+  }, [isConnected, cachedStatusMessage, dismissedStatusEpisode, connectionStartTime]);
+
+  const handleDismissServerStatus = useCallback(() => {
+    setDismissingEpisode(connectionStartTime);
+    if (dismissTimerRef.current) window.clearTimeout(dismissTimerRef.current);
+    dismissTimerRef.current = window.setTimeout(() => {
+      setDismissedStatusEpisode(connectionStartTime);
+      setDismissingEpisode(null);
+      dismissTimerRef.current = null;
+    }, 150);
+  }, [connectionStartTime]);
+
+  const isStatusDismissing = statusExiting || (dismissingEpisode === connectionStartTime);
+  const isStatusVisible = (serverStatusMessage && !isConnected && dismissedStatusEpisode !== connectionStartTime) || isStatusDismissing;
+  const activeStatusMessage = serverStatusMessage || cachedStatusMessage;
   const [dismissedError, setDismissedError] = useState(null);
   const [showQrPopup, setShowQrPopup] = useState(false);
   const [showRoomModal, setShowRoomModal] = useState(false);
@@ -785,55 +836,49 @@ function App() {
               </div>
       </aside>
 
-      <AnimatePresence>
-        {serverStatusMessage && !isConnected && dismissedStatusEpisode !== connectionStartTime && (
-          <motion.div
-            className={`server-status-popup ${serverStatusMessage.type}`}
-            initial={{ opacity: 0, y: -10, x: '-50%' }}
-            animate={{ opacity: 1, y: 0, x: '-50%' }}
-            exit={{ opacity: 0, y: -10, x: '-50%' }}
-            transition={reduceMotion ? { duration: 0 } : { duration: 0.3, type: 'spring', stiffness: 400, damping: 32 }}
-            role="status"
-            aria-live="polite"
-          >
-            <div className="server-status-icon">
-              {serverStatusMessage.type === 'warning' ? (
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="server-status-loader" aria-hidden="true">
-                  <path d="M12 2v4" />
-                  <path d="m16.2 7.8 2.9-2.9" />
-                  <path d="M18 12h4" />
-                  <path d="m16.2 16.2 2.9 2.9" />
-                  <path d="M12 18v4" />
-                  <path d="m4.9 19.1 2.9-2.9" />
-                  <path d="M2 12h4" />
-                  <path d="m4.9 4.9 2.9 2.9" />
-                </svg>
-              ) : (
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                  <circle cx="12" cy="12" r="10" />
-                  <line x1="12" y1="8" x2="12" y2="12" />
-                  <line x1="12" y1="16" x2="12.01" y2="16" />
-                </svg>
-              )}
-            </div>
-            <div className="server-status-content">
-              <h3>{serverStatusMessage.title}</h3>
-              <p>{serverStatusMessage.description}</p>
-            </div>
-            <button
-              className="server-status-dismiss"
-              onClick={() => setDismissedStatusEpisode(connectionStartTime)}
-              title="Dismiss"
-              aria-label="Dismiss server status message"
-            >
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                <path d="M18 6 6 18" />
-                <path d="m6 6 12 12" />
+      {isStatusVisible && activeStatusMessage && (
+        <div
+          className={`server-status-popup ${activeStatusMessage.type}${isStatusDismissing ? ' is-dismissing' : ''}`}
+          role="status"
+          aria-live="polite"
+        >
+          <div className="server-status-icon">
+            {activeStatusMessage.type === 'warning' ? (
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="server-status-loader" aria-hidden="true">
+                <path d="M12 2v4" />
+                <path d="m16.2 7.8 2.9-2.9" />
+                <path d="M18 12h4" />
+                <path d="m16.2 16.2 2.9 2.9" />
+                <path d="M12 18v4" />
+                <path d="m4.9 19.1 2.9-2.9" />
+                <path d="M2 12h4" />
+                <path d="m4.9 4.9 2.9 2.9" />
               </svg>
-            </button>
-          </motion.div>
-        )}
-      </AnimatePresence>
+            ) : (
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <circle cx="12" cy="12" r="10" />
+                <line x1="12" y1="8" x2="12" y2="12" />
+                <line x1="12" y1="16" x2="12.01" y2="16" />
+              </svg>
+            )}
+          </div>
+          <div className="server-status-content">
+            <h3>{activeStatusMessage.title}</h3>
+            <p>{activeStatusMessage.description}</p>
+          </div>
+          <button
+            className="server-status-dismiss"
+            onClick={handleDismissServerStatus}
+            title="Dismiss"
+            aria-label="Dismiss server status message"
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M18 6 6 18" />
+              <path d="m6 6 12 12" />
+            </svg>
+          </button>
+        </div>
+      )}
 
       <QrPopup
         open={showQrPopup}
