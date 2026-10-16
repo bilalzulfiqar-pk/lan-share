@@ -99,8 +99,8 @@ LAN Share strictly separates discovery and signaling from file data transmission
 
 ```mermaid
 flowchart LR
-    subgraph Cloud ["☁️ Cloud Signaling Service (Render)"]
-        Server["Signaling Server<br/>• Local Subnet Fingerprinting<br/>• 6-Digit Room & QR Pairing<br/>(Handshake Only - Zero File Data)"]
+    subgraph Cloud ["☁️ Signaling (Discovery Only)"]
+        Server["Signaling Server<br/>(Subnet Radar & 6-Digit Room Pairing · Zero File Data)"]
     end
 
     subgraph LocalNet ["🏠 Your Local Network / Wi-Fi / Hotspot"]
@@ -108,12 +108,11 @@ flowchart LR
         DevA["💻 Sender<br/>Laptop / Desktop"]
         DevB["📱 Receiver<br/>Phone / Tablet"]
         
-        DevA == "Direct Encrypted P2P Stream<br/>(Full LAN Speed: 30-80+ MB/s)<br/>• 64 KiB Chunks & Backpressure<br/>• Desktop Disk / Mobile OPFS" ==> DevB
+        DevA == "Direct Encrypted P2P Stream<br/>(Full LAN Speed: 30–80+ MB/s)" ==> DevB
     end
 
-    DevA -. "1. Subnet Radar / Room Code (~2 KB)" .-> Server
+    DevA -. "1. Subnet / Room Handshake (~2 KB)" .-> Server
     Server -. "2. Exchange WebRTC Session (~2 KB)" .-> DevB
-    DevA -. "3. Direct ICE Candidates (~1 KB)" .- DevB
 ```
 
 1. **Local Network Discovery (~2 KB):** Devices discover each other automatically on your local Wi-Fi subnet radar, or connect across guest networks/VLANs via 6-digit room codes (`#room=123456`) or camera QR scans.

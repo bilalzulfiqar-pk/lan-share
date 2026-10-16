@@ -27,5 +27,4 @@ playwright-report/
 screenshots/
 client/screenshots/
 *.png.tmp
-
 /video
