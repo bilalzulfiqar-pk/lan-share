@@ -6,7 +6,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Live Demo](https://img.shields.io/badge/Live%20Demo-lan--share.vercel.app-brightgreen.svg)](https://lan-share.vercel.app/)
-[![Tests Passing](https://img.shields.io/badge/Tests-345%20Passed-success.svg)](#quality-assurance--automated-testing)
+[![Tests Passing](https://img.shields.io/badge/Tests-348%20Passed-success.svg)](#quality-assurance--automated-testing)
 [![React 19](https://img.shields.io/badge/React-19-61dafb.svg)](https://react.dev/)
 [![Vite 7](https://img.shields.io/badge/Vite-7-646cff.svg)](https://vitejs.dev/)
 [![WebRTC](https://img.shields.io/badge/WebRTC-DataChannels-333333.svg)](https://webrtc.org/)
@@ -93,30 +93,27 @@ Transfers travel over direct WebRTC DataChannels at physical router speeds (30-8
 
 ## Architecture & How It Works
 
-LAN Share strictly separates discovery and signaling from file data transmission. **File payloads never touch or transit the signaling server.**
+LAN Share strictly separates discovery and signaling from file data transmission. **File payloads never touch or pass through the signaling server.**
 
 ### Simple Architecture Diagram
 
 ```mermaid
 flowchart LR
-    subgraph Cloud ["☁️ Signaling (Discovery Only)"]
-        Server["Signaling Server<br/>(Subnet Radar & 6-Digit Room Pairing · Zero File Data)"]
-    end
-
     subgraph LocalNet ["🏠 Your Local Network / Wi-Fi / Hotspot"]
         direction LR
-        DevA["💻 Sender<br/>Laptop / Desktop"]
-        DevB["📱 Receiver<br/>Phone / Tablet"]
-        
-        DevA == "Direct Encrypted P2P Stream<br/>(Full LAN Speed: 30–80+ MB/s)" ==> DevB
+        DevA["💻 Sender"] == "Direct Encrypted P2P Stream<br/>(30-80+ MB/s)" ==> DevB["📱 Receiver"]
     end
 
-    DevA -. "1. Subnet / Room Handshake (~2 KB)" .-> Server
-    Server -. "2. Exchange WebRTC Session (~2 KB)" .-> DevB
+    subgraph Cloud ["☁️ Signaling Server (Discovery Only)"]
+        Server["Subnet Radar<br/>Room Pairing"]
+    end
+
+    DevA -. "1. Handshake (~2 KB)" .-> Server
+    DevB -. "2. Session Info (~2 KB)" .-> Server
 ```
 
 1. **Local Network Discovery (~2 KB):** Devices discover each other automatically on your local Wi-Fi subnet radar, or connect across guest networks/VLANs via 6-digit room codes (`#room=123456`) or camera QR scans.
-2. **Zero Cloud Uploads:** The signaling server solely relays lightweight (~2 KB) cryptographic session descriptions (SDP) and ICE candidates. File contents never touch, transit, or get stored on any cloud server or database.
+2. **Zero Cloud Uploads:** The signaling server solely relays lightweight (~2 KB) cryptographic session descriptions (SDP) and ICE candidates. File contents never touch, pass through, or get stored on any cloud server or database.
 3. **Maximum Direct LAN Speed:** Once paired, browsers establish a direct DTLS-encrypted WebRTC `RTCDataChannel`, streaming payloads directly at physical router speed (30-80+ MB/s).
 
 <br />
@@ -317,13 +314,13 @@ lan-share/
 │   ├── Storage & Streaming:    Origin Private File System (OPFS), File System Access API
 │   ├── Hashing & Security:     hash-wasm (Streaming WebAssembly SHA-256)
 │   ├── Styling & Motion:       Modern CSS Design Tokens, Framer Motion, Inline SVG Icons
-│   └── Testing:                Vitest (272 automated tests)
+│   └── Testing:                Vitest (278 automated tests)
 │
 └── server/                     # Signaling & Discovery Service
     ├── Runtime:                Node.js 20+, Express 5, Socket.IO 4
     ├── Clustering:             SimilarityIndex Subnet Fingerprinting + Room Registry
     ├── Relay Provider:         Metered.ca OpenRelay REST Integration (1h Caching + Negative TTL)
-    └── Testing:                Vitest (69 automated tests)
+    └── Testing:                Vitest (70 automated tests)
 ```
 
 ---
