@@ -131,7 +131,7 @@ function collectFingerprintsFromCandidate(candidate) {
         extractPrivateIpv4(candidate.relatedAddress) ||
         extractPrivateIpv4(candidateValue);
 
-    if (privateAddress && (candidateType === 'host' || !candidateType)) {
+    if (privateAddress && (candidateType === 'host' || candidateType === 'srflx' || !candidateType)) {
         const lanFingerprint = getLanFingerprint(privateAddress);
         if (lanFingerprint) {
             fingerprints.push(lanFingerprint);

@@ -13,7 +13,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 * **Edge Keepalive Pings (`setWebSocketAutoResponse`):** Configured Cloudflare edge auto-response pairs to answer client 25s keepalive pings without waking the Durable Object, preventing NAT drops on home and mobile routers.
 * **Universal Frontend Transport Adapter (`client/src/lib/cloudflareSocket.js`):** Transparent Socket.IO-compatible WebSocket wrapper for `useSignaling.js`. Auto-detects `*.workers.dev` deployments or responds to `VITE_SIGNALING_TRANSPORT=ws|socketio` with exponential backoff auto-reconnection and ACK resolution.
 * **Turn & STUN Edge Caching:** Ported ephemeral Metered.ca TURN credential caching and IP rate limiting to Cloudflare Workers HTTP routes with `Cache-Control: private, no-cache`.
-* **Expanded Automated Test Suite:** Added 13 Worker/DO integration tests and 10 transport adapter unit tests, expanding test coverage to 371 automated tests across server, client, and worker.
+* **Subnet Radar & Direct-LAN Wi-Fi Architecture Fixes:** Restored room-less peer discovery for multi-interface devices (WSL/Docker/VPN) by prioritizing verified STUN WAN identities over secondary virtual adapter mismatches. Added loopback IPv6 (`::1`) clustering to `127.0.0.1`, enabled private LAN extraction from STUN candidate `relatedAddress`, and implemented NAT hair-pinning detection in `TransferEngine` to promote matching WAN reflection pairs to `direct-lan` gigabit speeds.
+* **Expanded Automated Test Suite:** Added comprehensive tests for IPv4-mapped IPv6 LAN recognition, NAT hair-pinning classification, loopback clustering, and virtual adapter radar resilience, expanding coverage to 377 automated tests (292 client + 72 server + 13 worker, 100% passing).
 
 ---
 

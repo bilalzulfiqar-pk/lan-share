@@ -162,12 +162,16 @@ function expandIPv6(ip) {
 
 function normalizeIpForClustering(ip) {
     if (!ip || typeof ip !== 'string') return '';
-    let trimmed = ip.trim().toLowerCase();
-    if (trimmed.startsWith('::ffff:')) {
-        trimmed = trimmed.replace(/^::ffff:/, '');
+    let trimmed = ip.trim().toLowerCase().replace(/^::ffff:/i, '');
+    if (trimmed === '::1' || trimmed === '127.0.0.1' || trimmed === 'localhost') {
+        return '127.0.0.1';
     }
     // IPv4 address
     if (!trimmed.includes(':')) {
+        return trimmed;
+    }
+    // Link-local IPv6 fe80::/10 should not be clustered as a global /64
+    if (/^fe[89ab][0-9a-f]:/i.test(trimmed)) {
         return trimmed;
     }
     const expanded = expandIPv6(trimmed);
@@ -241,15 +245,15 @@ function areUsersVisible(leftUser, rightUser) {
         return true;
     }
 
-    // Both browsers explicitly reported distinct LAN subnets -> definitely not same local network segment.
-    if (bothHaveLan && !sharesLanFingerprint) {
-        return false;
-    }
-
     // Next strongest signal: both browsers independently discovered the same
-    // public network identity through ICE/STUN.
+    // public network identity through ICE/STUN (e.g. behind the same Wi-Fi router NAT).
     if (bothHaveWan && sharesWanFingerprint) {
         return true;
+    }
+
+    // Both browsers explicitly reported distinct LAN subnets without a matching WAN STUN identity -> distinct network segments.
+    if (bothHaveLan && !sharesLanFingerprint) {
+        return false;
     }
 
     // Baseline: devices connect from the same public HTTP IP.
@@ -381,8 +385,12 @@ class SimilarityIndex {
             }
         }
         if (user && user.publicIp) {
+            const cleanIp = String(user.publicIp).trim().toLowerCase().replace(/^::ffff:/i, '');
+            if (cleanIp) {
+                keys.add(`ip:${cleanIp}`);
+            }
             const clusterIp = normalizeIpForClustering(user.publicIp);
-            if (clusterIp) {
+            if (clusterIp && clusterIp !== cleanIp) {
                 keys.add(`ip:${clusterIp}`);
             }
         }

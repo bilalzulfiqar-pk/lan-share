@@ -213,7 +213,7 @@ export function createTransferId() {
 
 export function isPrivateLanAddress(addr) {
     if (!addr || typeof addr !== 'string') return false;
-    let clean = addr.trim().toLowerCase();
+    let clean = addr.trim().toLowerCase().replace(/^::ffff:/i, '');
     if (clean.startsWith('[') && clean.includes(']')) {
         clean = clean.slice(1, clean.indexOf(']'));
     } else if (clean.includes(':') && clean.indexOf(':') === clean.lastIndexOf(':')) {
@@ -235,7 +235,7 @@ export function isPrivateLanAddress(addr) {
     if (/^192\.168(?:\.(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){2}$/.test(clean)) {
         return true;
     }
-    if (/^127\.(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d){3}$/.test(clean)) return true;
+    if (/^127(?:\.(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}$/.test(clean)) return true;
     if (/^169\.254(?:\.(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){2}$/.test(clean)) return true;
 
     // IPv6 link-local (fe80::/10), ULA (fc00::/7), loopback (::1)

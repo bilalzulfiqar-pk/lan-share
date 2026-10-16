@@ -12,7 +12,8 @@ import {
     RELAY_SIZE_LIMIT_ERROR,
     STRICT_LOCAL_RELAY_BLOCKED_ERROR,
     stripRelayFromSdp,
-    resolveTurnApiUrl
+    resolveTurnApiUrl,
+    isPrivateLanAddress
 } from '../protocol';
 
 describe('FILE_STATUS', () => {
@@ -177,6 +178,39 @@ describe('Relay and candidate helpers', () => {
 
         // Fallback for null/empty
         expect(resolveTurnApiUrl(null)).toBe('/api/turn-credentials');
+    });
+});
+
+describe('isPrivateLanAddress', () => {
+    it('identifies RFC 1918 IPv4 private addresses', () => {
+        expect(isPrivateLanAddress('192.168.1.1')).toBe(true);
+        expect(isPrivateLanAddress('10.0.0.1')).toBe(true);
+        expect(isPrivateLanAddress('172.16.0.1')).toBe(true);
+        expect(isPrivateLanAddress('172.31.255.255')).toBe(true);
+        expect(isPrivateLanAddress('127.0.0.1')).toBe(true);
+        expect(isPrivateLanAddress('169.254.1.1')).toBe(true);
+    });
+
+    it('identifies IPv4-mapped IPv6 addresses with and without ports', () => {
+        expect(isPrivateLanAddress('::ffff:192.168.1.5')).toBe(true);
+        expect(isPrivateLanAddress('::ffff:192.168.1.5:58432')).toBe(true);
+        expect(isPrivateLanAddress('::ffff:10.0.0.1')).toBe(true);
+        expect(isPrivateLanAddress('::ffff:127.0.0.1')).toBe(true);
+    });
+
+    it('identifies local hostnames and loopback IPv6', () => {
+        expect(isPrivateLanAddress('my-device.local')).toBe(true);
+        expect(isPrivateLanAddress('localhost')).toBe(true);
+        expect(isPrivateLanAddress('::1')).toBe(true);
+        expect(isPrivateLanAddress('fe80::1')).toBe(true);
+    });
+
+    it('rejects public internet and invalid addresses', () => {
+        expect(isPrivateLanAddress('8.8.8.8')).toBe(false);
+        expect(isPrivateLanAddress('203.0.113.195')).toBe(false);
+        expect(isPrivateLanAddress('::ffff:203.0.113.195')).toBe(false);
+        expect(isPrivateLanAddress('')).toBe(false);
+        expect(isPrivateLanAddress(null)).toBe(false);
     });
 });
 

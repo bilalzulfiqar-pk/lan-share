@@ -514,4 +514,28 @@ describe('IPv6 /64 prefix clustering (BUG-HIGH-08)', () => {
         expect(index.getCandidateIdsFor(userA)).toEqual(['sock-2']);
         expect(index.getCandidateIdsFor(userB)).toEqual(['sock-1']);
     });
+
+    it('clusters localhost and IPv6 loopback addresses to 127.0.0.1', () => {
+        expect(normalizeIpForClustering('::1')).toBe('127.0.0.1');
+        expect(normalizeIpForClustering('127.0.0.1')).toBe('127.0.0.1');
+        expect(normalizeIpForClustering('localhost')).toBe('127.0.0.1');
+        expect(normalizeIpForClustering('::ffff:127.0.0.1')).toBe('127.0.0.1');
+    });
+
+    it('maintains radar visibility when devices share WAN STUN identity even if one device has a virtual adapter on a distinct LAN subnet', () => {
+        const laptopWithWsl = {
+            id: 'laptop-wsl',
+            name: 'Laptop (WSL2)',
+            publicIp: '203.0.113.10',
+            networkFingerprints: ['lan:ipv4:172.28.16', 'wan:ipv4:203.0.113.10']
+        };
+        const phoneOnWifi = {
+            id: 'phone-wifi',
+            name: 'Phone (Wi-Fi)',
+            publicIp: '203.0.113.10',
+            networkFingerprints: ['lan:ipv4:192.168.1', 'wan:ipv4:203.0.113.10']
+        };
+
+        expect(areUsersVisible(laptopWithWsl, phoneOnWifi)).toBe(true);
+    });
 });

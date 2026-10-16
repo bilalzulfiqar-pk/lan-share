@@ -6,7 +6,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Live Demo](https://img.shields.io/badge/Live%20Demo-lan--share.vercel.app-brightgreen.svg)](https://lan-share.vercel.app/)
-[![Tests Passing](https://img.shields.io/badge/Tests-371%20Passed-success.svg)](#quality-assurance--automated-testing)
+[![Tests Passing](https://img.shields.io/badge/Tests-377%20Passed-success.svg)](#quality-assurance--automated-testing)
 [![React 19](https://img.shields.io/badge/React-19-61dafb.svg)](https://react.dev/)
 [![Vite 7](https://img.shields.io/badge/Vite-7-646cff.svg)](https://vitejs.dev/)
 [![WebRTC](https://img.shields.io/badge/WebRTC-DataChannels-333333.svg)](https://webrtc.org/)
@@ -388,7 +388,7 @@ To allow small files (<150 MB) to route through AP-isolated networks:
 
 ## Quality Assurance & Automated Testing
 
-LAN Share is backed by **371 automated tests** (288 client + 70 server + 13 worker) verifying socket clustering, WebRTC state machines, OPFS streaming fallbacks, TURN relay protection, connection mode diagnostics, and protocol serialization:
+LAN Share is backed by **377 automated tests** (292 client + 72 server + 13 worker) verifying socket clustering, WebRTC state machines, OPFS streaming fallbacks, TURN relay protection, connection mode diagnostics, and protocol serialization:
 
 ```bash
 # Run server test suite (clustering, rooms, TURN credential caching)

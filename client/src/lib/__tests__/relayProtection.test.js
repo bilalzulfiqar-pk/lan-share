@@ -80,6 +80,19 @@ describe('WebRTC Connection Type Detection & Strict Local Mode', () => {
         ]);
         expect(engineA.parseConnectionType(mockLanStats)).toBe('direct-lan');
 
+        // 3b. NAT loopback hair-pinning: matching srflx addresses on the same NAT gateway classify as direct-lan
+        const mockHairpinStats = new Map([
+            ['pair-hp', {
+                type: 'candidate-pair',
+                selected: true,
+                localCandidateId: 'local-hp',
+                remoteCandidateId: 'remote-hp'
+            }],
+            ['local-hp', { candidateType: 'srflx', address: '203.0.113.50' }],
+            ['remote-hp', { candidateType: 'srflx', address: '203.0.113.50' }]
+        ]);
+        expect(engineA.parseConnectionType(mockHairpinStats)).toBe('direct-lan');
+
         // 4. Plain array/object reports without .get method
         const arrayStats = [
             { type: 'transport', selectedCandidatePairId: 'pair-arr' },

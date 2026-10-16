@@ -905,6 +905,17 @@ export class TransferEngine {
                 return 'direct-lan';
             }
 
+            // Both peers reflected through STUN behind the exact same public NAT IP -> local Wi-Fi NAT loopback
+            if (
+                localType === 'srflx' &&
+                remoteType === 'srflx' &&
+                localAddr &&
+                remoteAddr &&
+                localAddr === remoteAddr
+            ) {
+                return 'direct-lan';
+            }
+
             if (localType === 'srflx' || remoteType === 'srflx' || localType === 'prflx' || remoteType === 'prflx') {
                 return 'direct-stun';
             }
