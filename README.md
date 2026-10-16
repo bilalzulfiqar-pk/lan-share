@@ -317,13 +317,13 @@ lan-share/
 │   ├── Storage & Streaming:    Origin Private File System (OPFS), File System Access API
 │   ├── Hashing & Security:     hash-wasm (Streaming WebAssembly SHA-256)
 │   ├── Styling & Motion:       Modern CSS Design Tokens, Framer Motion, Inline SVG Icons
-│   └── Testing:                Vitest (268 automated tests)
+│   └── Testing:                Vitest (272 automated tests)
 │
 └── server/                     # Signaling & Discovery Service
     ├── Runtime:                Node.js 20+, Express 5, Socket.IO 4
     ├── Clustering:             SimilarityIndex Subnet Fingerprinting + Room Registry
     ├── Relay Provider:         Metered.ca OpenRelay REST Integration (1h Caching + Negative TTL)
-    └── Testing:                Vitest (64 automated tests)
+    └── Testing:                Vitest (69 automated tests)
 ```
 
 ---
@@ -371,7 +371,7 @@ To allow small files (<150 MB) to route through AP-isolated networks:
 
 ## Quality Assurance & Automated Testing
 
-LAN Share is backed by **332 automated tests** (268 client + 64 server) verifying socket clustering, WebRTC state machines, OPFS streaming fallbacks, TURN relay protection, connection mode diagnostics, and protocol serialization:
+LAN Share is backed by **341 automated tests** (272 client + 69 server) verifying socket clustering, WebRTC state machines, OPFS streaming fallbacks, TURN relay protection, connection mode diagnostics, and protocol serialization:
 
 ```bash
 # Run server test suite (clustering, rooms, TURN credential caching)
@@ -406,15 +406,15 @@ lan-share/
 │   ├── src/
 │   │   ├── components/         # Radar, Chat, RoomModal, HotspotGuideModal, ConnectionModeBadge
 │   │   ├── hooks/              # useSignaling (Socket.IO), useWebRTC (engine hook)
-│   │   └── lib/                # TransferEngine, protocol, opfs, crypto, connectionModes, wakeLock
-│   │       └── __tests__/      # Vitest client suites (267 tests)
+│   │   └── lib/                # TransferEngine, protocol, opfs, sound, clipboard, notifications, wakeLock
+│   │       └── __tests__/      # Vitest client suites (272 tests)
 │   ├── package.json
 │   └── vite.config.js
 ├── server/                     # Node.js + Express + Socket.IO signaling service
 │   ├── index.js                # Server entry point, TURN endpoint, socket events
 │   ├── lib.js                  # Subnet clustering, room registry, SimilarityIndex
 │   ├── turn.js                 # Metered.ca credential manager with TTL caching
-│   ├── *.test.js               # Vitest server suites (64 tests)
+│   ├── *.test.js               # Vitest server suites (69 tests)
 │   └── package.json
 ├── docs/                       # Project documentation & guides
 │   ├── assets/                 # Vector banner & architecture diagrams

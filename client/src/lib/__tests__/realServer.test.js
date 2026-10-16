@@ -310,8 +310,7 @@ describe('TransferEngine against the real signaling server', () => {
 
         try {
             // A joins room 999888
-            socketA.emit('join-room', { roomCode: '999888' });
-            await new Promise((r) => setTimeout(r, 150));
+            await new Promise((resolve) => socketA.emit('join-room', { roomCode: '999888' }, resolve));
 
             // B also joins room 999888
             const userListsA = [];
@@ -355,9 +354,11 @@ describe('TransferEngine against the real signaling server', () => {
 
         try {
             // Alice and Bob join ROOM-X, Charlie joins ROOM-Y
-            socketA.emit('join-room', { roomCode: 'ROOM-X' });
-            socketB.emit('join-room', { roomCode: 'ROOM-X' });
-            socketC.emit('join-room', { roomCode: 'ROOM-Y' });
+            await Promise.all([
+                new Promise((res) => socketA.emit('join-room', { roomCode: 'ROOM-X' }, res)),
+                new Promise((res) => socketB.emit('join-room', { roomCode: 'ROOM-X' }, res)),
+                new Promise((res) => socketC.emit('join-room', { roomCode: 'ROOM-Y' }, res))
+            ]);
 
             await waitUntilPeerVisible(socketA, socketB.id, 'Alice sees Bob in ROOM-X');
 

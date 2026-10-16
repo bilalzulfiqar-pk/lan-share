@@ -79,30 +79,29 @@ export function ConnectionModeBadge({ mode = 'direct-lan', className = '', showI
             onMouseEnter={handleMouseEnter}
             onMouseLeave={handleMouseLeave}
         >
-            <span
+            <button
+                type="button"
                 className={`conn-mode-badge ${config.badgeClass} ${isPinned ? 'is-pinned' : ''}`}
                 title={`Transfer mode: ${config.label}${isPinned ? ' (Pinned open)' : ''}`}
                 onClick={handleTogglePin}
+                aria-expanded={isOpen}
+                aria-label={`Transfer mode info for ${config.label}${isPinned ? ' (Pinned open)' : ''}`}
             >
                 <span className={`conn-mode-dot ${config.dotColor}`} aria-hidden="true" />
                 <span className="conn-mode-label">{config.label}</span>
                 {showInfo && (
-                    <button
-                        type="button"
+                    <span
                         className={`conn-mode-info-btn ${isPinned ? 'is-pinned' : ''}`}
-                        onClick={handleTogglePin}
-                        aria-expanded={isOpen}
-                        aria-label={`Transfer mode info for ${config.label}${isPinned ? ' (Pinned open)' : ''}`}
-                        title={isPinned ? 'Click to unpin details' : 'Click to lock transfer mode details'}
+                        aria-hidden="true"
                     >
                         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                             <circle cx="12" cy="12" r="10" />
                             <line x1="12" y1="16" x2="12" y2="12" />
                             <line x1="12" y1="8" x2="12.01" y2="8" />
                         </svg>
-                    </button>
+                    </span>
                 )}
-            </span>
+            </button>
 
             {showInfo && (
                 <div

@@ -55,7 +55,7 @@ export const DeviceList = React.memo(({ devices, onToogle, selectedDevice, unrea
 
   const devicePositions = useMemo(() => {
     return devices.map((device) => {
-      const seed = device.id;
+      const seed = device.deviceId || device.id;
       const angle = seededRandom(seed + 'angle') * 360;
       const radius = 12 + seededRandom(seed + 'dist') * 32;
       return { ...device, angle, radius };

@@ -10,6 +10,11 @@ skills-lock.json
 video/node_modules/
 video/out/
 
+# Environment variables & secrets
+.env
+.env.*
+!.env.example
+
 # Local development & temporary files
 artifacts/
 docs/LAUNCH.md

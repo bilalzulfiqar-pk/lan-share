@@ -4,7 +4,9 @@
 
 ---
 
-## 1. Mobile Direct-to-Disk Streaming (OPFS)
+## 1. Mobile Direct-to-Disk Streaming (OPFS) `[IMPLEMENTED]`
+
+> **Status: Shipped in Production.** OPFS direct-to-disk streaming via `navigator.storage.getDirectory()` and `createWritable()` is fully implemented in `transferEngine.js` with per-attempt file collision avoidance, quota monitoring, and Web Share / anchor fallback.
 
 ### Context & Opportunity
 * On desktop Chromium browsers (Chrome, Edge), large files stream directly to disk using the File System Access API (`window.showSaveFilePicker`), allowing multi-gigabyte transfers with virtually zero RAM overhead.
@@ -40,7 +42,9 @@
 
 ---
 
-## 3. TURN Relay Documentation & Setup Guides
+## 3. TURN Relay Documentation & Setup Guides `[IMPLEMENTED]`
+
+> **Status: Shipped in Production.** Dynamic Metered.ca TURN relay integration with negative caching TTL, Stun fallback, and complete deployment documentation is active in `server/turn.js` and `docs/LAUNCH.md`.
 
 ### Context & Opportunity
 * On strict public Wi-Fi networks (hotels, airports, university dorms), routers frequently enable **Client / AP Isolation**, preventing devices on the same Wi-Fi from opening direct private IP-to-IP UDP sockets.

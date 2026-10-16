@@ -187,7 +187,7 @@ describe('OPFS Direct-to-Disk Sink', () => {
         expect(shareSpy).toHaveBeenCalled();
         const lastUpdate = lastUpdateFor(eventsB, id);
         expect(lastUpdate.saved).toBe(true);
-        expect(mockRoot.removeEntry).toHaveBeenCalledWith(`transfer-${id}.tmp`);
+        expect(mockRoot.removeEntry).toHaveBeenCalledWith(expect.stringMatching(new RegExp(`^transfer-${id}(-\\d+)?\\.tmp$`)));
 
         engineA.destroy();
         engineB.destroy();
@@ -253,5 +253,27 @@ describe('OPFS Direct-to-Disk Sink', () => {
         pair2.engineB.destroy();
     });
 
+    it('handles OPFS QuotaExceededError on init and falls back gracefully to memory mode (TEST-01)', async () => {
+        const quotaError = new DOMException('The quota has been exceeded.', 'QuotaExceededError');
+        mockRoot.getFileHandle.mockRejectedValueOnce(quotaError);
+
+        const { engineA, engineB, eventsB } = createEnginePair();
+        const file = createMockFile('quota-test.dat', 100 * 1024);
+
+        const id = await offerAndRequestId(engineA, eventsB, file);
+        await engineB.requestFile(id);
+
+        const state = engineB.receives.get(id);
+        // Seamlessly falls back to memory mode
+        expect(state.mode).toBe('memory');
+
+        await waitFor(() => lastUpdateFor(eventsB, id)?.status === 'completed', { label: 'completed in memory fallback' });
+        const final = lastUpdateFor(eventsB, id);
+        expect(final.status).toBe('completed');
+        expect(final.verified).toBe(true);
+
+        engineA.destroy();
+        engineB.destroy();
+    });
 });
 

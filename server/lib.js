@@ -127,6 +127,57 @@ function getClientIp(headers, fallbackAddress = '') {
     return (fallbackAddress || '').replace(/^::ffff:/, '');
 }
 
+function expandIPv6(ip) {
+    if (!ip || typeof ip !== 'string' || !ip.includes(':')) return ip;
+    const clean = ip.split('%')[0].trim().toLowerCase();
+
+    // Check for IPv4-mapped IPv6 suffix
+    if (clean.includes('.')) {
+        const lastColon = clean.lastIndexOf(':');
+        const ipv4Part = clean.slice(lastColon + 1);
+        const octets = ipv4Part.split('.').map(Number);
+        if (octets.length === 4 && octets.every((n) => !isNaN(n) && n >= 0 && n <= 255)) {
+            const hex1 = ((octets[0] << 8) | octets[1]).toString(16);
+            const hex2 = ((octets[2] << 8) | octets[3]).toString(16);
+            const prefix = clean.slice(0, lastColon);
+            return expandIPv6(`${prefix}:${hex1}:${hex2}`);
+        }
+    }
+
+    const parts = clean.split('::');
+    if (parts.length > 2) return clean;
+
+    const left = parts[0] ? parts[0].split(':').filter(Boolean) : [];
+    const right = parts[1] ? parts[1].split(':').filter(Boolean) : [];
+
+    if (parts.length === 2) {
+        const missing = 8 - (left.length + right.length);
+        const zeros = new Array(Math.max(0, missing)).fill('0');
+        const full = [...left, ...zeros, ...right].map((h) => h.padStart(4, '0'));
+        return full.join(':');
+    }
+
+    return left.map((h) => h.padStart(4, '0')).join(':');
+}
+
+function normalizeIpForClustering(ip) {
+    if (!ip || typeof ip !== 'string') return '';
+    let trimmed = ip.trim().toLowerCase();
+    if (trimmed.startsWith('::ffff:')) {
+        trimmed = trimmed.replace(/^::ffff:/, '');
+    }
+    // IPv4 address
+    if (!trimmed.includes(':')) {
+        return trimmed;
+    }
+    const expanded = expandIPv6(trimmed);
+    const groups = expanded.split(':');
+    if (groups.length === 8) {
+        return `${groups.slice(0, 4).join(':')}::/64`;
+    }
+    return trimmed;
+}
+
 function detectDeviceType(userAgent) {
     if (typeof userAgent !== 'string') {
         return 'desktop';
@@ -175,10 +226,12 @@ function areUsersVisible(leftUser, rightUser) {
     const bothHaveWan = leftHasWan && rightHasWan;
     const sharesWanFingerprint = hasOverlap(leftFingerprintGroups.wan, rightFingerprintGroups.wan);
     const sharesLanFingerprint = hasOverlap(leftFingerprintGroups.lan, rightFingerprintGroups.lan);
+    const leftClusterIp = normalizeIpForClustering(leftUser.publicIp);
+    const rightClusterIp = normalizeIpForClustering(rightUser.publicIp);
     const sharesHttpPublicIp =
-        Boolean(leftUser.publicIp) &&
-        Boolean(rightUser.publicIp) &&
-        leftUser.publicIp === rightUser.publicIp;
+        Boolean(leftClusterIp) &&
+        Boolean(rightClusterIp) &&
+        leftClusterIp === rightClusterIp;
 
     // Strongest signal: both browsers exposed the same LAN subnet.
     if (bothHaveLan && sharesLanFingerprint) {
@@ -325,7 +378,10 @@ class SimilarityIndex {
             }
         }
         if (user && user.publicIp) {
-            keys.add(`ip:${user.publicIp}`);
+            const clusterIp = normalizeIpForClustering(user.publicIp);
+            if (clusterIp) {
+                keys.add(`ip:${clusterIp}`);
+            }
         }
         if (user && Array.isArray(user.networkFingerprints)) {
             for (const fp of user.networkFingerprints) {
@@ -460,6 +516,7 @@ module.exports = {
     sanitizeDeviceId,
     normalizeJoinPayload,
     getClientIp,
+    normalizeIpForClustering,
     detectDeviceType,
     splitFingerprints,
     hasOverlap,

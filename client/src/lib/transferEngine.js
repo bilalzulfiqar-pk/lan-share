@@ -192,6 +192,7 @@ export class TransferEngine {
         this.offered = new Map();    // fileId -> { peerId, name, size, type } (metadata from FILES_OFFER)
         this.receives = new Map();   // fileId -> receive state
         this.downloadUrls = new Map(); // fileId -> object URL
+        this.opfsFiles = new Map();    // fileId -> opfsFileName
         this.activeTransferIds = new Set(); // fileId -> active upload or download
         this.earlyCandidates = new Map(); // peerId -> candidate[]
         this.destroyed = false;
@@ -397,7 +398,7 @@ export class TransferEngine {
         if (session.ignoreOffer) return;
 
         try {
-            if (offerCollision) {
+            if (offerCollision && session.pc.signalingState !== 'stable') {
                 await session.pc.setLocalDescription({ type: 'rollback' });
             }
             await session.pc.setRemoteDescription(offer);
@@ -1654,7 +1655,11 @@ export class TransferEngine {
         if (state.mode === 'memory' && (!canStreamSave() || pickerFailed) && canOpfsSave()) {
             try {
                 const root = await navigator.storage.getDirectory();
-                const tmpName = `transfer-${fileId}.tmp`;
+                const attemptId = Date.now();
+                const tmpName = `transfer-${fileId}-${attemptId}.tmp`;
+                state.opfsFileName = tmpName;
+                if (!this.opfsFiles) this.opfsFiles = new Map();
+                this.opfsFiles.set(fileId, tmpName);
                 const handle = await root.getFileHandle(tmpName, { create: true });
                 state.mode = 'opfs';
                 state.opfsFileHandle = handle;
@@ -1824,6 +1829,19 @@ export class TransferEngine {
         }
 
         const digest = state.hasher?.digest('hex');
+        if (digest && endMsg.digest && digest !== endMsg.digest) {
+            console.error(`[TransferEngine] SHA-256 integrity check failed for ${fileId}: computed ${digest} vs expected ${endMsg.digest}`);
+            this.discardReceive(fileId, state);
+            this.historyUpdate(fileId, {
+                status: 'error',
+                error: 'SHA-256 integrity check failed (file corrupted in transit)',
+                verified: false,
+                speed: null,
+                eta: null
+            });
+            return;
+        }
+
         const verified = Boolean(digest && endMsg.digest && digest === endMsg.digest);
 
         if (state.mode === 'fs-access' && state.stream) {
@@ -1883,7 +1901,7 @@ export class TransferEngine {
                             files: [file],
                             title: state.name
                         });
-                        await this.cleanupOpfsFile(fileId);
+                        await this.cleanupOpfsFile(fileId, state.opfsFileName);
                         this.receives.delete(fileId);
                         this.historyUpdate(fileId, {
                             status: 'completed',
@@ -1903,11 +1921,6 @@ export class TransferEngine {
                 const url = URL.createObjectURL(file);
                 this.downloadUrls.set(fileId, url);
                 this.saveReceivedFile(fileId, state.name);
-
-                // Clean up temp OPFS file after a safe delay
-                setTimeout(() => {
-                    this.cleanupOpfsFile(fileId).catch(() => {});
-                }, 60000);
 
                 this.receives.delete(fileId);
                 this.historyUpdate(fileId, {
@@ -1949,6 +1962,7 @@ export class TransferEngine {
         // Free the chunk buffers; the browser blob holds the data now.
         state.buffers = [];
         state.hasher = null;
+        this.receives.delete(fileId);
     }
 
     discardReceive(fileId, state) {
@@ -1968,8 +1982,9 @@ export class TransferEngine {
             state.stream = null;
         }
         if (state.mode === 'opfs') {
+            const fileName = state.opfsFileName;
             abortPromise.finally(() => {
-                this.cleanupOpfsFile(fileId).catch(() => {});
+                this.cleanupOpfsFile(fileId, fileName).catch(() => {});
             });
         }
         state.buffers = [];
@@ -1978,16 +1993,18 @@ export class TransferEngine {
         this.receives.delete(fileId);
     }
 
-    async cleanupOpfsFile(fileId) {
+    async cleanupOpfsFile(fileId, explicitName) {
         try {
             if (typeof navigator !== 'undefined' && navigator.storage?.getDirectory) {
                 const root = await navigator.storage.getDirectory();
+                const name = explicitName || this.opfsFiles?.get(fileId) || `transfer-${fileId}.tmp`;
                 try {
-                    await root.removeEntry(`transfer-${fileId}.tmp`);
+                    await root.removeEntry(name);
                 } catch {
                     await new Promise((resolve) => setTimeout(resolve, 80));
-                    await root.removeEntry(`transfer-${fileId}.tmp`).catch(() => {});
+                    await root.removeEntry(name).catch(() => {});
                 }
+                this.opfsFiles?.delete(fileId);
             }
         } catch {
             // ignore
@@ -2010,6 +2027,15 @@ export class TransferEngine {
 
         this.historyUpdate(fileId, { saved: true });
         return true;
+    }
+
+    revokeDownloadUrl(fileId) {
+        const url = this.downloadUrls.get(fileId);
+        if (url) {
+            URL.revokeObjectURL(url);
+            this.downloadUrls.delete(fileId);
+        }
+        this.cleanupOpfsFile(fileId).catch(() => {});
     }
 
 
@@ -2139,6 +2165,13 @@ export class TransferEngine {
 
         this.downloadUrls.forEach((url) => URL.revokeObjectURL(url));
         this.downloadUrls.clear();
+
+        if (this.opfsFiles) {
+            for (const [fileId, fileName] of this.opfsFiles.entries()) {
+                this.cleanupOpfsFile(fileId, fileName).catch(() => {});
+            }
+            this.opfsFiles.clear();
+        }
 
         this.socket.off?.('offer');
         this.socket.off?.('answer');

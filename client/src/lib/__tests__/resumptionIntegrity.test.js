@@ -151,10 +151,11 @@ describe('Resumption Integrity & Verification (TEST-06)', () => {
         const sessionB = engineB.sessions.get('alice');
         engineB.resumeActiveReceivesForSession(sessionB);
 
-        await waitFor(() => lastUpdateFor(eventsB, id)?.status === 'completed', { label: 'receiver completed' });
+        await waitFor(() => lastUpdateFor(eventsB, id)?.status === 'error', { label: 'receiver error on corruption' });
 
         const receiverFinal = lastUpdateFor(eventsB, id);
-        expect(receiverFinal.status).toBe('completed');
+        expect(receiverFinal.status).toBe('error');
+        expect(receiverFinal.error).toContain('SHA-256 integrity check failed');
         // Must fail verification because reconstructed bytes do not match sender's digest
         expect(receiverFinal.verified).toBe(false);
 

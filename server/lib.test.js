@@ -6,6 +6,7 @@ import {
     sanitizeDeviceId,
     normalizeJoinPayload,
     getClientIp,
+    normalizeIpForClustering,
     detectDeviceType,
     areUsersVisible,
     getVisibleUsersFor,
@@ -454,5 +455,63 @@ describe('SignalingSessionRegistry', () => {
         now = 1600;
         registry.prune();
         expect(registry.sessions.size).toBe(0);
+    });
+});
+
+describe('IPv6 /64 prefix clustering (BUG-HIGH-08)', () => {
+    it('normalizes IPv4 and IPv4-mapped IPv6 addresses accurately', () => {
+        expect(normalizeIpForClustering('192.168.1.1')).toBe('192.168.1.1');
+        expect(normalizeIpForClustering('::ffff:192.168.1.1')).toBe('192.168.1.1');
+        expect(normalizeIpForClustering('')).toBe('');
+        expect(normalizeIpForClustering(null)).toBe('');
+    });
+
+    it('normalizes SLAAC IPv6 addresses to their /64 network prefix', () => {
+        const phone = '2001:db8:abcd:1234:f1:23:45:67';
+        const laptop = '2001:db8:abcd:1234:89:ab:cd:ef';
+        expect(normalizeIpForClustering(phone)).toBe('2001:0db8:abcd:1234::/64');
+        expect(normalizeIpForClustering(laptop)).toBe('2001:0db8:abcd:1234::/64');
+        expect(normalizeIpForClustering(phone)).toBe(normalizeIpForClustering(laptop));
+    });
+
+    it('normalizes zero-compressed IPv6 addresses accurately', () => {
+        expect(normalizeIpForClustering('2001:db8:1:2::1')).toBe('2001:0db8:0001:0002::/64');
+        expect(normalizeIpForClustering('2001:db8:1:2::99')).toBe('2001:0db8:0001:0002::/64');
+    });
+
+    it('makes devices sharing the same IPv6 /64 prefix visible to each other', () => {
+        const userA = {
+            id: 'sock-phone',
+            name: 'Phone',
+            publicIp: '2001:db8:abcd:1234:f1:23:45:67',
+            networkFingerprints: []
+        };
+        const userB = {
+            id: 'sock-laptop',
+            name: 'Laptop',
+            publicIp: '2001:db8:abcd:1234:89:ab:cd:ef',
+            networkFingerprints: []
+        };
+        const userC = {
+            id: 'sock-remote',
+            name: 'Remote',
+            publicIp: '2001:db8:ffff:9999:1:2:3:4',
+            networkFingerprints: []
+        };
+
+        expect(areUsersVisible(userA, userB)).toBe(true);
+        expect(areUsersVisible(userA, userC)).toBe(false);
+    });
+
+    it('indexes devices sharing IPv6 /64 into the same bucket in SimilarityIndex', () => {
+        const index = new SimilarityIndex();
+        const userA = { id: 'sock-1', publicIp: '2001:db8:abcd:1234:1:1:1:1', networkFingerprints: [] };
+        const userB = { id: 'sock-2', publicIp: '2001:db8:abcd:1234:2:2:2:2', networkFingerprints: [] };
+
+        index.addUser(userA);
+        index.addUser(userB);
+
+        expect(index.getCandidateIdsFor(userA)).toEqual(['sock-2']);
+        expect(index.getCandidateIdsFor(userB)).toEqual(['sock-1']);
     });
 });

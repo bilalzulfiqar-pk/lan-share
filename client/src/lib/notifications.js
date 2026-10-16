@@ -55,7 +55,8 @@ export async function showNotification(title, options = {}) {
     // 1. Primary path: Service Worker Registration (Required on Android Chrome & iOS PWAs)
     if (typeof navigator !== 'undefined' && 'serviceWorker' in navigator) {
         try {
-            const registration = await navigator.serviceWorker.ready;
+            const swTimeout = new Promise((resolve) => setTimeout(() => resolve(null), 300));
+            const registration = await Promise.race([navigator.serviceWorker.ready, swTimeout]);
             if (registration && typeof registration.showNotification === 'function') {
                 await registration.showNotification(title, payload);
                 return true;

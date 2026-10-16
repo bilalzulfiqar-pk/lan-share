@@ -118,10 +118,12 @@ function App() {
     localStorage.setItem(NOTIFY_STORAGE_KEY, notifyEnabled ? 'true' : 'false');
   }, [notifyEnabled]);
 
-  const announceEvent = useCallback((title, body) => {
+  const announceEvent = useCallback((title, body, { playSound = true } = {}) => {
     if (!notifyEnabled) return;
 
-    playNotificationBlip();
+    if (playSound) {
+      playNotificationBlip();
+    }
     if (document.hidden) {
       showNotification(title, { body, tag: 'lan-share' });
     }
@@ -149,10 +151,9 @@ function App() {
     setNotifyEnabled(false);
   }, [notifyEnabled]);
 
-  // { peerId, key } - the history key is pinned when the chat opens so the
-  // panel keeps its history even if the peer list momentarily empties during
-  // a signaling reconnect.
-  const [chatSession, setChatSession] = useState({ peerId: null, key: null });
+  // { open, peerId, key, peerName } - the history key and peer metadata are pinned when
+  // the chat opens so the panel keeps its connection info during the 380ms slide-out animation.
+  const [chatSession, setChatSession] = useState({ open: false, peerId: null, key: null, peerName: '' });
   const [chatByDevice, setChatByDevice] = useState(() => {
     try {
       return JSON.parse(localStorage.getItem(CHAT_STORAGE_KEY)) || {};
@@ -183,16 +184,16 @@ function App() {
       direction: 'in'
     });
 
-    if (chatSession.peerId !== peerId) {
+    if (!chatSession.open || chatSession.key !== key) {
       setUnreadByDevice((prev) => ({ ...prev, [key]: (prev[key] || 0) + 1 }));
       announceEvent(`Message from ${getPeerName(peerId)}`, message.text.length > 80 ? `${message.text.slice(0, 80)}…` : message.text);
     } else {
-      // Refresh the pinned key in case the peer reconnected with a new
+      // Refresh the pinned peerId in case the peer reconnected with a new
       // socket id but the same device.
       const peer = peers.find((p) => p.id === peerId);
-      setChatSession((current) => (current.peerId === peerId ? { ...current, key, peerName: peer?.name || current.peerName } : current));
+      setChatSession((current) => (current.key === key ? { ...current, peerId, peerName: peer?.name || current.peerName } : current));
     }
-  }, [announceEvent, appendChatMessage, chatSession.peerId, deviceKeyForPeer, getPeerName, peers]);
+  }, [announceEvent, appendChatMessage, chatSession.key, chatSession.open, deviceKeyForPeer, getPeerName, peers]);
 
   const [strictLocalMode, setStrictLocalMode] = useState(
     () => localStorage.getItem('lan-share-strict-local') === 'true'
@@ -215,7 +216,7 @@ function App() {
   } = useWebRTC(socket, myId, {
     getPeerName,
     onChat: handleIncomingChat,
-    onNotify: (event) => announceEvent(event.title, event.body),
+    onNotify: (event) => announceEvent(event.title, event.body, { playSound: !event.silent && event.title !== 'Transfer Complete' }),
     strictLocalMode,
     soundEnabled: notifyEnabled
   });
@@ -223,6 +224,7 @@ function App() {
   const openChatWithPeer = useCallback((peerId) => {
     const peer = peers.find((p) => p.id === peerId);
     setChatSession({
+      open: true,
       peerId,
       key: deviceKeyForPeer(peerId),
       peerName: peer?.name || getPeerName(peerId)
@@ -231,13 +233,13 @@ function App() {
   }, [deviceKeyForPeer, getPeerName, peers]);
 
   const closeChat = useCallback(() => {
-    setChatSession({ peerId: null, key: null, peerName: '' });
+    setChatSession((current) => ({ ...current, open: false }));
   }, []);
 
   // If a chat peer reconnects with a fresh socket id for the same device,
   // update the active chat session's peerId so messaging seamlessly resumes.
   useEffect(() => {
-    if (chatSession.key) {
+    if (chatSession.open && chatSession.key) {
       const activePeer = peers.find((p) => (p.deviceId && p.deviceId === chatSession.key) || p.id === chatSession.peerId);
       if (activePeer && activePeer.id !== chatSession.peerId) {
         queueMicrotask(() => {
@@ -249,7 +251,7 @@ function App() {
         });
       }
     }
-  }, [peers, chatSession.key, chatSession.peerId]);
+  }, [peers, chatSession.key, chatSession.peerId, chatSession.open]);
 
   const currentChatPeer = chatSession.peerId
     ? peers.find((p) => p.id === chatSession.peerId || (chatSession.key && p.deviceId && p.deviceId === chatSession.key))
@@ -377,8 +379,11 @@ function App() {
   useEffect(() => {
     if (!showThemeMenu) return;
     const updatePos = () => {
-      if (!themeButtonRef.current) return;
-      const rect = themeButtonRef.current.getBoundingClientRect();
+      const anchor = (themeButtonRef.current && themeButtonRef.current.offsetParent !== null)
+        ? themeButtonRef.current
+        : (document.querySelector('.header-more-btn') || themeButtonRef.current);
+      if (!anchor) return;
+      const rect = anchor.getBoundingClientRect();
       const menuMaxWidth = 320;
       const menuMaxHeight = Math.min(window.innerHeight * 0.7, 420);
       const gap = 8;
@@ -871,7 +876,7 @@ function App() {
       )}
 
       <ChatPanel
-        open={Boolean(chatSession.peerId)}
+        open={Boolean(chatSession.open)}
         peerName={chatSession.peerName || (chatSession.peerId ? getPeerName(chatSession.peerId) : '')}
         connectionLabel={chatStatusLabel}
         messages={chatMessages}

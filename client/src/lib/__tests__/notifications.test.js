@@ -133,4 +133,23 @@ describe('Notifications Utility', () => {
         const result = await showNotification('Crash test', {});
         expect(result).toBe(false);
     });
+
+    it('falls back to desktop Notification if navigator.serviceWorker.ready hangs indefinitely (BUG-HIGH-01)', async () => {
+        const mockNotificationConstructor = vi.fn();
+        vi.stubGlobal('window', { Notification: mockNotificationConstructor });
+        mockNotificationConstructor.permission = 'granted';
+        vi.stubGlobal('Notification', mockNotificationConstructor);
+        // serviceWorker.ready returns a promise that never resolves
+        vi.stubGlobal('navigator', {
+            serviceWorker: {
+                ready: new Promise(() => {})
+            }
+        });
+
+        const result = await showNotification('Hanging SW Test', { body: 'Fallback worked' });
+        expect(result).toBe(true);
+        expect(mockNotificationConstructor).toHaveBeenCalledWith('Hanging SW Test', expect.objectContaining({
+            body: 'Fallback worked'
+        }));
+    });
 });

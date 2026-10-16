@@ -308,6 +308,45 @@ describe('FileItem component honest state rendering', () => {
         expect(lanHtml).not.toContain('mode-direct-lan');
         expect(lanHtml).not.toContain('Local Wi-Fi Transfer');
     });
+
+    it('formats ETA without off-by-one rounding errors like "1m 60s" (BUG-MED-02)', () => {
+        // 119.6s should render "2m left", not "1m 60s"
+        const item119s = {
+            id: 'f15',
+            fileName: 'large.zip',
+            fileSize: 100 * 1024 * 1024,
+            direction: 'out',
+            status: 'uploading',
+            progress: 50,
+            speed: 1024 * 1024,
+            eta: 119.6,
+            peerId: 'peer1'
+        };
+
+        const html119 = renderToStaticMarkup(
+            <FileItem item={item119s} getPeerName={() => 'Alice'} />
+        );
+        expect(html119).toContain('2m left');
+        expect(html119).not.toContain('1m 60s');
+
+        // 59.8s should render "1m left", not "60s"
+        const item59s = {
+            id: 'f16',
+            fileName: 'clip.mp4',
+            fileSize: 10 * 1024 * 1024,
+            direction: 'out',
+            status: 'uploading',
+            progress: 80,
+            speed: 1024 * 1024,
+            eta: 59.8,
+            peerId: 'peer1'
+        };
+
+        const html59 = renderToStaticMarkup(
+            <FileItem item={item59s} getPeerName={() => 'Alice'} />
+        );
+        expect(html59).toContain('1m left');
+    });
 });
 
 

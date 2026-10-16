@@ -44,7 +44,34 @@ describe('ChatPanel component rendering', () => {
         expect(html).toContain('Peer disconnected · Offline');
         expect(html).toContain('is-offline');
         expect(html).toContain('peer-offline-dot');
-        expect(html).toContain('placeholder="Peer has disconnected"');
         expect(html).toContain('disabled=""');
+    });
+
+    it('renders message bubbles as selectable divs with separate copy buttons and clickable links (BUG-MED-01, FEAT-02, TEST-03)', () => {
+        const props = {
+            ...defaultProps,
+            messages: [
+                { id: 'm1', text: 'Visit https://github.com/mian-b/lan-share for code', ts: 1710000000000, direction: 'in' },
+                { id: 'm2', text: 'token_sample_test_abcdef1234567890', ts: 1710000010000, direction: 'out' }
+            ]
+        };
+
+        const html = renderToStaticMarkup(<ChatPanel {...props} />);
+
+        // Must NOT render button as the outer chat bubble (no nested interactive HTML)
+        expect(html).not.toMatch(/<button[^>]*class="chat-bubble\s/);
+        expect(html).toContain('<div class="chat-bubble chat-bubble-in');
+
+        // Links must render as valid <a> tags
+        expect(html).toContain('<a href="https://github.com/mian-b/lan-share" target="_blank" rel="noopener noreferrer" class="chat-message-link">https://github.com/mian-b/lan-share</a>');
+
+        // High-entropy secrets must render as <code>
+        expect(html).toContain('<code class="chat-message-code">token_sample_test_abcdef1234567890</code>');
+
+        // Copy button exists inside each bubble with accessible label and micro-icon
+        expect(html).toContain('class="chat-bubble-copy');
+        expect(html).toContain('title="Copy message text"');
+        expect(html).toContain('aria-label="Copy message:');
+        expect(html).toContain('<svg width="12" height="12"');
     });
 });

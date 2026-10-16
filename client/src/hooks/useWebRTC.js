@@ -5,11 +5,10 @@ const ERROR_AUTO_CLEAR_MS = 6000;
 
 // Thin React binding around TransferEngine. All connection and transfer logic
 // lives in the engine; this hook only mirrors engine events into state.
-export function useWebRTC(socket, myId, { getPeerName, onChat, onNotify, strictLocalMode: initialStrictLocalMode = false, soundEnabled = false } = {}) {
+export function useWebRTC(socket, myId, { getPeerName, onChat, onNotify, strictLocalMode = false, soundEnabled = false } = {}) {
     const [history, setHistory] = useState([]);
     const [peerStatus, setPeerStatus] = useState({});
     const [connectionTypes, setConnectionTypes] = useState({});
-    const [strictLocalMode, setStrictLocalMode] = useState(initialStrictLocalMode);
     const [error, setError] = useState(null);
 
     const engineRef = useRef(null);
@@ -34,11 +33,6 @@ export function useWebRTC(socket, myId, { getPeerName, onChat, onNotify, strictL
             engineRef.current.updateMyId(myId);
         }
     }, [myId]);
-
-    // Sync strictLocalMode prop when updated by parent
-    useEffect(() => {
-        setStrictLocalMode(initialStrictLocalMode);
-    }, [initialStrictLocalMode]);
 
     // Keep strictLocalMode updated in engine
     useEffect(() => {
@@ -140,12 +134,30 @@ export function useWebRTC(socket, myId, { getPeerName, onChat, onNotify, strictL
         return connectionTypes[peerId] || engineRef.current?.getConnectionType(peerId) || 'unknown';
     }, [connectionTypes]);
 
+    const clearHistory = useCallback(() => {
+        setHistory((prev) => {
+            const activeStatuses = new Set(['uploading', 'downloading', 'connecting', 'waiting', 'offered']);
+            const remaining = [];
+            prev.forEach((item) => {
+                if (activeStatuses.has(item.status)) {
+                    remaining.push(item);
+                } else {
+                    if (item.downloadUrl) {
+                        URL.revokeObjectURL(item.downloadUrl);
+                    }
+                    engineRef.current?.revokeDownloadUrl?.(item.id);
+                }
+            });
+            return remaining;
+        });
+    }, []);
+
     return {
         history,
+        clearHistory,
         peerStatus,
         connectionTypes,
         strictLocalMode,
-        setStrictLocalMode,
         error,
         sendFilesOffer,
         requestFile,

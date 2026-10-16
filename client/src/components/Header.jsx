@@ -211,9 +211,6 @@ export function Header({
                   type="button"
                   className="header-more-item"
                   onClick={() => {
-                    if (moreButtonRef.current && themeButtonRef) {
-                      themeButtonRef.current = moreButtonRef.current;
-                    }
                     setShowMoreMenu(false);
                     setShowThemeMenu(true);
                   }}

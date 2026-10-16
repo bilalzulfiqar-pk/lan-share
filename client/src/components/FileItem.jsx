@@ -98,9 +98,10 @@ function FileItemComponent({ item, onRequest, onSave, onCancel, getPeerName, onO
 
   const formatEta = (seconds) => {
     if (seconds == null || !Number.isFinite(seconds)) return null;
-    if (seconds < 60) return `${Math.max(1, Math.round(seconds))}s`;
-    const minutes = Math.floor(seconds / 60);
-    const rest = Math.round(seconds % 60);
+    const total = Math.max(0, Math.round(seconds));
+    if (total < 60) return `${Math.max(1, total)}s`;
+    const minutes = Math.floor(total / 60);
+    const rest = total % 60;
     return rest > 0 ? `${minutes}m ${rest}s` : `${minutes}m`;
   };
 

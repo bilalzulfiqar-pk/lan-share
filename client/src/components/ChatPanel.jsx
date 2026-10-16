@@ -1,11 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
-// eslint-disable-next-line no-unused-vars
-import { motion } from 'framer-motion';
 import { copyText } from '../lib/clipboard';
 
 const URL_SPLIT_PATTERN = /(https?:\/\/[^\s<>"']+)/g;
 const URL_MATCH_PATTERN = /^https?:\/\/[^\s<>"']+$/;
-const COPIED_FEEDBACK_MS = 1200;
 
 // Long, space-free strings (API keys, passwords, tokens) render in monospace.
 function looksLikeSecret(text) {
@@ -50,41 +47,91 @@ function formatTimestamp(ts) {
   }
 }
 
-function ChatBubble({ message, copiedId, onCopy, reduceMotion }) {
+function CopyIcon({ className = '' }) {
+  return (
+    <svg width="12" height="12" className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <rect width="13" height="13" x="9" y="9" rx="2" ry="2" />
+      <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+    </svg>
+  );
+}
+
+function CheckIcon({ className = '' }) {
+  return (
+    <svg width="12" height="12" className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <polyline points="20 6 9 17 4 12" />
+    </svg>
+  );
+}
+
+function ChatBubble({ message, copiedId, onCopy, onResetCopy, onCancelReset, isNew }) {
   const isOutgoing = message.direction === 'out';
   const copied = copiedId === message.id;
 
   return (
-    <motion.div
-      className={`chat-message-row ${isOutgoing ? 'is-outgoing' : 'is-incoming'}`}
-      initial={reduceMotion ? false : { opacity: 0, y: 8 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={reduceMotion ? { duration: 0 } : { type: 'spring', stiffness: 380, damping: 30 }}
+    <div
+      className={`chat-message-row ${isOutgoing ? 'is-outgoing' : 'is-incoming'}${isNew ? ' is-new' : ''}`}
     >
-      <button
-        type="button"
+      <div
         className={`chat-bubble ${isOutgoing ? 'chat-bubble-out' : 'chat-bubble-in'} ${looksLikeSecret(message.text) ? 'is-secret' : ''}`}
-        onClick={() => onCopy(message)}
-        title="Copy message"
-        aria-label={`Copy message from ${isOutgoing ? 'you' : 'peer'}: ${message.text.slice(0, 60)}`}
+        onMouseEnter={copied ? onCancelReset : undefined}
+        onMouseLeave={copied ? () => onResetCopy(false) : undefined}
       >
         <span className="chat-bubble-text">
           <MessageBody text={message.text} />
         </span>
         <span className="chat-bubble-meta">
           <span className="chat-bubble-time">{formatTimestamp(message.ts)}</span>
-          <span className="chat-bubble-copy" aria-hidden="true">{copied ? 'Copied' : 'Copy'}</span>
+          <button
+            type="button"
+            className={`chat-bubble-copy ${copied ? 'is-copied' : ''}`}
+            onClick={(event) => onCopy(message, event)}
+            onBlur={copied ? () => onResetCopy(true) : undefined}
+            title={copied ? 'Copied' : 'Copy message text'}
+            aria-label={copied ? 'Copied' : `Copy message: ${message.text.slice(0, 60)}`}
+          >
+            <CopyIcon className="copy-icon-idle" />
+            <CheckIcon className="copy-icon-done" />
+          </button>
         </span>
-      </button>
-    </motion.div>
+      </div>
+    </div>
   );
 }
 
 export function ChatPanel({ open, peerName, connectionLabel, messages, onSend, onClose, reduceMotion, isPeerOnline = true }) {
   const [draft, setDraft] = useState('');
   const [copiedId, setCopiedId] = useState(null);
+  const [activePeer, setActivePeer] = useState(null);
+  const [initialIds, setInitialIds] = useState(() => new Set());
   const scrollRef = useRef(null);
   const inputRef = useRef(null);
+  const resetCopyTimerRef = useRef(null);
+
+  const currentPeerKey = open ? peerName : null;
+  if (currentPeerKey !== activePeer) {
+    setActivePeer(currentPeerKey);
+    setInitialIds(open ? new Set(messages.map((m) => m.id)) : new Set());
+  }
+
+  useEffect(() => {
+    return () => {
+      if (resetCopyTimerRef.current) {
+        window.clearTimeout(resetCopyTimerRef.current);
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!open) return;
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape') {
+        onClose();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [open, onClose]);
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -98,11 +145,44 @@ export function ChatPanel({ open, peerName, connectionLabel, messages, onSend, o
     }
   }, [open, peerName, isPeerOnline]);
 
-  const handleCopy = async (message) => {
+  const handleCopy = async (message, event) => {
+    event?.currentTarget?.blur();
+    if (resetCopyTimerRef.current) {
+      window.clearTimeout(resetCopyTimerRef.current);
+      resetCopyTimerRef.current = null;
+    }
     const succeeded = await copyText(message.text);
     if (succeeded) {
       setCopiedId(message.id);
-      window.setTimeout(() => setCopiedId((current) => (current === message.id ? null : current)), COPIED_FEEDBACK_MS);
+      // Auto-revert checkmark back to copy icon after 1.4s, or upon mouse leave
+      resetCopyTimerRef.current = window.setTimeout(() => {
+        setCopiedId((current) => (current === message.id ? null : current));
+        resetCopyTimerRef.current = null;
+      }, 1400);
+    }
+  };
+
+  const handleResetCopy = (immediate = false) => {
+    if (resetCopyTimerRef.current) {
+      window.clearTimeout(resetCopyTimerRef.current);
+      resetCopyTimerRef.current = null;
+    }
+    if (immediate) {
+      setCopiedId(null);
+    } else {
+      // Allow CSS fade-out transition (--dur-fast: 140ms) to complete before resetting
+      // text back to "Copy" so the button stays "Copied" while fading away.
+      resetCopyTimerRef.current = window.setTimeout(() => {
+        setCopiedId(null);
+        resetCopyTimerRef.current = null;
+      }, 180);
+    }
+  };
+
+  const handleCancelReset = () => {
+    if (resetCopyTimerRef.current) {
+      window.clearTimeout(resetCopyTimerRef.current);
+      resetCopyTimerRef.current = null;
     }
   };
 
@@ -154,7 +234,7 @@ export function ChatPanel({ open, peerName, connectionLabel, messages, onSend, o
               {messages.length === 0 ? (
                 <p className="chat-empty">
                   Messages are sent directly to this device over an encrypted
-                  peer-to-peer channel. Tap any message to copy it.
+                  peer-to-peer channel. Use the copy button or select text freely.
                 </p>
               ) : (
                 messages.map((message) => (
@@ -163,7 +243,9 @@ export function ChatPanel({ open, peerName, connectionLabel, messages, onSend, o
                     message={message}
                     copiedId={copiedId}
                     onCopy={handleCopy}
-                    reduceMotion={reduceMotion}
+                    onResetCopy={handleResetCopy}
+                    onCancelReset={handleCancelReset}
+                    isNew={!reduceMotion && !initialIds.has(message.id)}
                   />
                 ))
               )}

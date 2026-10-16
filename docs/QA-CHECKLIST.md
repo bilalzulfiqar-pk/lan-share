@@ -7,7 +7,7 @@ A practical 5-minute checklist to verify LAN Share on two devices (e.g., laptop 
 ## 1. Discovery & Room Pairing
 
 - [ ] **LAN Radar:** Both devices on the same Wi-Fi appear on each other's radar within ~3–5 seconds.
-- [ ] **Room Code Creation:** Click **Room** in the header, generate a 6-digit code (e.g., `492810`), and verify the room status badge shows `In Room`.
+- [ ] **Room Code Creation:** Click **Rooms** in the header, generate a 6-digit code (e.g., `492810`), and verify the room status badge shows `In Room`.
 - [ ] **QR Code Scanning:** Scan the room QR code with a phone camera; the phone opens the app and auto-joins the room (`#room=492810`).
 - [ ] **Peer Isolation:** Devices in the room see each other; devices outside the room are hidden.
 - [ ] **Leave Room:** Click **Leave Room** on either device; verify both return to the default local radar.

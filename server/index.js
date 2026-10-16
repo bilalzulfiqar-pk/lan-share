@@ -275,10 +275,15 @@ io.on('connection', (socket) => {
 
             const payload = extractPayload(data);
             const target = typeof data?.target === 'string' ? data.target : null;
-            const targetUser = target ? users[target] : null;
 
-            if (!targetUser || !isValidPayload(payload)) {
+            if (!isValidPayload(payload)) {
                 registerRelayStrike(socket);
+                return;
+            }
+
+            const targetUser = target ? users[target] : null;
+            if (!targetUser) {
+                // Target departed mid-handshake; drop silently without penalizing sender
                 return;
             }
 
@@ -317,6 +322,23 @@ if (require.main === module) {
     server.listen(PORT, () => {
         console.log(`Server running on port ${PORT}`);
     });
+
+    const shutdown = (signal) => {
+        console.log(`Received ${signal}. Closing server gracefully...`);
+        io.close(() => {
+            server.close(() => {
+                console.log('HTTP and Socket.IO server closed.');
+                process.exit(0);
+            });
+        });
+        setTimeout(() => {
+            console.error('Forced shutdown due to timeout');
+            process.exit(1);
+        }, 5000).unref();
+    };
+
+    process.on('SIGTERM', () => shutdown('SIGTERM'));
+    process.on('SIGINT', () => shutdown('SIGINT'));
 }
 
 module.exports = { app, server, users, similarityIndex, turnManager, turnLimiter, handleTurnCredentials, DEFAULT_STUN_SERVERS, signalingRegistry };
