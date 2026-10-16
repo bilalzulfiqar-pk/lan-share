@@ -1,6 +1,8 @@
 node_modules/
 client/node_modules/
 server/node_modules/
+worker/node_modules/
+.wrangler/
 client/dist/
 server/dist/
 /.agents

@@ -1,0 +1,16 @@
+{
+  "name": "worker",
+  "version": "1.0.0",
+  "description": "Cloudflare Workers + Durable Objects signaling backend for LAN Share",
+  "main": "src/index.js",
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "test": "npx vitest run"
+  },
+  "devDependencies": {
+    "vitest": "^5.0.5",
+    "wrangler": "^3.114.0"
+  }
+}

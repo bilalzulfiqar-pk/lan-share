@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { io } from 'socket.io-client';
+import { createCloudflareSocket, shouldUseCloudflareSocket } from '../lib/cloudflareSocket';
 
 const SIGNALING_SERVER_PORT = 3001;
 const DEVICE_ID_STORAGE_KEY = 'lan-share-device-id';
@@ -326,7 +327,9 @@ export function useSignaling(displayName) {
             }
         }
 
-        const newSocket = io(url);
+        const signalingTransport = import.meta.env.VITE_SIGNALING_TRANSPORT;
+        const useCloudflare = shouldUseCloudflareSocket(url, signalingTransport);
+        const newSocket = useCloudflare ? createCloudflareSocket(url) : io(url);
 
         const onUpgrade = (transport) => {
             setTransportName(transport.name);

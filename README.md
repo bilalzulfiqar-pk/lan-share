@@ -6,7 +6,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Live Demo](https://img.shields.io/badge/Live%20Demo-lan--share.vercel.app-brightgreen.svg)](https://lan-share.vercel.app/)
-[![Tests Passing](https://img.shields.io/badge/Tests-348%20Passed-success.svg)](#quality-assurance--automated-testing)
+[![Tests Passing](https://img.shields.io/badge/Tests-371%20Passed-success.svg)](#quality-assurance--automated-testing)
 [![React 19](https://img.shields.io/badge/React-19-61dafb.svg)](https://react.dev/)
 [![Vite 7](https://img.shields.io/badge/Vite-7-646cff.svg)](https://vitejs.dev/)
 [![WebRTC](https://img.shields.io/badge/WebRTC-DataChannels-333333.svg)](https://webrtc.org/)
@@ -52,8 +52,9 @@
 - [Tech Stack](#tech-stack)
 - [Self-Hosting & Deployment](#self-hosting--deployment)
   - [1. Client Deployment (Vercel / Netlify / Cloudflare Pages)](#1-client-deployment-vercel--netlify--cloudflare-pages)
-  - [2. Signaling Server Deployment (Render / Railway / Fly.io / VPS)](#2-signaling-server-deployment-render--railway--flyio--vps)
-  - [3. Free TURN Relay Setup (Metered.ca)](#3-free-turn-relay-setup-meteredca)
+  - [2. Node.js Signaling Server (Render / Railway / Fly.io / VPS)](#2-nodejs-signaling-server-render--railway--flyio--vps)
+  - [3. Cloudflare Workers + Durable Objects Edge Signaling (Serverless)](#3-cloudflare-workers--durable-objects-edge-signaling-serverless)
+  - [4. Free TURN Relay Setup (Metered.ca)](#4-free-turn-relay-setup-meteredca)
   - [Environment Variables Reference](#environment-variables-reference)
 - [Quality Assurance & Automated Testing](#quality-assurance--automated-testing)
 - [Project Structure](#project-structure)
@@ -337,7 +338,7 @@ LAN Share is designed for zero-cost, lightweight self-hosting across modern clou
   - `VITE_SERVER_URL`: URL of your deployed signaling service (e.g., `https://your-signal-server.onrender.com`).
   - `VITE_SITE_URL`: Canonical URL for OpenGraph and QR sharing (e.g., `https://lan-share.vercel.app`).
 
-### 2. Signaling Server Deployment (Render / Railway / Fly.io / VPS)
+### 2. Node.js Signaling Server (Render / Railway / Fly.io / VPS)
 - **Root Directory:** `server`
 - **Runtime:** Node.js 20+
 - **Build Command:** `npm install`
@@ -345,7 +346,25 @@ LAN Share is designed for zero-cost, lightweight self-hosting across modern clou
 - **Health Check Endpoint:** `GET /health` (returns `{"ok": true}`)
 - **Free Render Wake-Up:** The client automatically issues a non-blocking `/health` ping on load to wake free-tier sleeping instances with responsive UI status banners.
 
-### 3. Free TURN Relay Setup (Metered.ca)
+### 3. Cloudflare Workers + Durable Objects Edge Signaling (Serverless)
+A zero-cost, zero-sleep edge signaling backend deployed to Cloudflare Workers with WebSocket Hibernation:
+- **Root Directory:** `worker`
+- **Runtime:** Cloudflare Workers (Free Plan compatible with SQLite-backed Durable Objects)
+- **Transport:** Native WebSockets with Hibernation API (zero idle CPU or memory consumption)
+- **Deploy to Cloudflare:**
+  ```bash
+  cd worker
+  npx wrangler deploy
+  ```
+- **Optional Metered.ca TURN Secrets:**
+  ```bash
+  npx wrangler secret put METERED_APP_NAME
+  npx wrangler secret put METERED_API_KEY
+  ```
+- **Client Configuration:**
+  Set `VITE_SERVER_URL` in your client environment to your Worker URL (e.g., `https://lan-share-signaling.<your-subdomain>.workers.dev`). The client automatically detects `*.workers.dev` and connects via native WebSocket. You can also explicitly configure transport with `VITE_SIGNALING_TRANSPORT=ws` or `VITE_SIGNALING_TRANSPORT=socketio`.
+
+### 4. Free TURN Relay Setup (Metered.ca)
 To allow small files (<150 MB) to route through AP-isolated networks:
 1. Sign up for a free account at [Metered.ca OpenRelay](https://www.metered.ca/tools/openrelay/).
 2. Create an application to get your **App Name** and **API Key**.
@@ -359,23 +378,27 @@ To allow small files (<150 MB) to route through AP-isolated networks:
 | Variable | Scope | Required | Description |
 | :--- | :---: | :---: | :--- |
 | `PORT` | Server | Optional | Port for the signaling service (default: `3001`). |
-| `METERED_APP_NAME` | Server | Optional | Metered.ca application name for TURN relay. |
-| `METERED_API_KEY` | Server | Optional | Metered.ca REST API key for caching ephemeral TURN credentials. |
-| `VITE_SERVER_URL` | Client | Optional | Signaling server URL (default: `http://localhost:3001` or relative origin). |
+| `METERED_APP_NAME` | Server / Worker | Optional | Metered.ca application name for TURN relay. |
+| `METERED_API_KEY` | Server / Worker | Optional | Metered.ca REST API key for caching ephemeral TURN credentials. |
+| `VITE_SERVER_URL` | Client | Optional | Signaling server URL (default: `http://localhost:3001` or relative origin). Supports Node.js Socket.IO or `*.workers.dev`. |
+| `VITE_SIGNALING_TRANSPORT` | Client | Optional | Transport override (`ws`, `cloudflare`, `socketio`). Defaults to auto-detecting `*.workers.dev`. |
 | `VITE_SITE_URL` | Client | Optional | Canonical site URL for SEO meta and QR sharing (default: `https://lan-share.vercel.app`). |
 
 ---
 
 ## Quality Assurance & Automated Testing
 
-LAN Share is backed by **348 automated tests** (278 client + 70 server) verifying socket clustering, WebRTC state machines, OPFS streaming fallbacks, TURN relay protection, connection mode diagnostics, and protocol serialization:
+LAN Share is backed by **371 automated tests** (288 client + 70 server + 13 worker) verifying socket clustering, WebRTC state machines, OPFS streaming fallbacks, TURN relay protection, connection mode diagnostics, and protocol serialization:
 
 ```bash
 # Run server test suite (clustering, rooms, TURN credential caching)
 npm test --prefix server
 
-# Run client test suite (transfer engine, resumption, OPFS, wakeLock, protocols)
+# Run client test suite (transfer engine, resumption, OPFS, wakeLock, cloudflareSocket, protocols)
 npm test --prefix client
+
+# Run worker test suite (Cloudflare Worker routes & SignalingHub Durable Object hibernation)
+npm test --prefix worker
 
 # Run client code linter
 npm run lint --prefix client
@@ -402,9 +425,9 @@ lan-share/
 │   ├── public/                 # Manifest, favicons, audio cues, SEO assets
 │   ├── src/
 │   │   ├── components/         # Radar, Chat, RoomModal, HotspotGuideModal, ConnectionModeBadge
-│   │   ├── hooks/              # useSignaling (Socket.IO), useWebRTC (engine hook)
-│   │   └── lib/                # TransferEngine, protocol, opfs, sound, clipboard, notifications, wakeLock
-│   │       └── __tests__/      # Vitest client suites (278 tests)
+│   │   ├── hooks/              # useSignaling, useWebRTC
+│   │   └── lib/                # TransferEngine, cloudflareSocket, protocol, opfs, wakeLock
+│   │       └── __tests__/      # Vitest client suites (287 tests)
 │   ├── package.json
 │   └── vite.config.js
 ├── server/                     # Node.js + Express + Socket.IO signaling service
@@ -412,6 +435,12 @@ lan-share/
 │   ├── lib.js                  # Subnet clustering, room registry, SimilarityIndex
 │   ├── turn.js                 # Metered.ca credential manager with TTL caching
 │   ├── *.test.js               # Vitest server suites (70 tests)
+│   └── package.json
+├── worker/                     # Cloudflare Workers + Durable Objects edge signaling
+│   ├── src/
+│   │   ├── index.js            # Worker router & SignalingHub Durable Object
+│   │   └── __tests__/          # Vitest worker suites (13 tests)
+│   ├── wrangler.toml           # Cloudflare Workers Free Plan configuration
 │   └── package.json
 ├── docs/                       # Project documentation & guides
 │   ├── assets/                 # Vector banner & architecture diagrams

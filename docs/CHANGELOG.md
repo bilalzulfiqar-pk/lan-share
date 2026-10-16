@@ -6,6 +6,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [1.2.0] - 2026-10-16
+
+### Added
+* **Cloudflare Workers + Hibernatable Durable Objects Backend (`worker/`):** Zero-sleep, free-tier edge signaling backend utilizing Cloudflare's WebSocket Hibernation API with SQLite-backed Durable Objects (`new_sqlite_classes`). Hibernation state serialization preserves device metadata, subnets, and active WebRTC sessions across sleep cycles with zero idle CPU cost.
+* **Edge Keepalive Pings (`setWebSocketAutoResponse`):** Configured Cloudflare edge auto-response pairs to answer client 25s keepalive pings without waking the Durable Object, preventing NAT drops on home and mobile routers.
+* **Universal Frontend Transport Adapter (`client/src/lib/cloudflareSocket.js`):** Transparent Socket.IO-compatible WebSocket wrapper for `useSignaling.js`. Auto-detects `*.workers.dev` deployments or responds to `VITE_SIGNALING_TRANSPORT=ws|socketio` with exponential backoff auto-reconnection and ACK resolution.
+* **Turn & STUN Edge Caching:** Ported ephemeral Metered.ca TURN credential caching and IP rate limiting to Cloudflare Workers HTTP routes with `Cache-Control: private, no-cache`.
+* **Expanded Automated Test Suite:** Added 13 Worker/DO integration tests and 10 transport adapter unit tests, expanding test coverage to 371 automated tests across server, client, and worker.
+
+---
+
 ## [1.1.0] - 2026-09-29
 
 ### Added
