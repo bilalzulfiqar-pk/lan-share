@@ -286,7 +286,7 @@ export function RoomModal({
                           className="room-code-input"
                           placeholder="e.g. 492810"
                           value={inputCode}
-                          onChange={(e) => setInputCode(e.target.value.toUpperCase().slice(0, 16))}
+                          onChange={(e) => setInputCode(e.target.value.replace(/\s+/g, '').toUpperCase().slice(0, 16))}
                           maxLength={16}
                           autoFocus
                           aria-label="New room code"
@@ -355,7 +355,7 @@ export function RoomModal({
                       className="room-code-input"
                       placeholder="e.g. 492810"
                       value={inputCode}
-                      onChange={(e) => setInputCode(e.target.value.toUpperCase().slice(0, 16))}
+                      onChange={(e) => setInputCode(e.target.value.replace(/\s+/g, '').toUpperCase().slice(0, 16))}
                       maxLength={16}
                       autoFocus
                       aria-label="Room code"

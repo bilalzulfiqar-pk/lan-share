@@ -6,12 +6,14 @@ const URL_MATCH_PATTERN = /^https?:\/\/[^\s<>"']+$/;
 
 // Long, space-free strings (API keys, passwords, tokens) render in monospace.
 function looksLikeSecret(text) {
+  if (!text || typeof text !== 'string') return false;
   const trimmed = text.trim();
   return trimmed.length >= 16 && !/\s/.test(trimmed);
 }
 
 function MessageBody({ text }) {
-  const parts = text.split(URL_SPLIT_PATTERN);
+  const safeText = typeof text === 'string' ? text : String(text || '');
+  const parts = safeText.split(URL_SPLIT_PATTERN);
 
   return (
     <>
@@ -88,7 +90,7 @@ function ChatBubble({ message, copiedId, onCopy, onResetCopy, onCancelReset, isN
             onClick={(event) => onCopy(message, event)}
             onBlur={copied ? () => onResetCopy(true) : undefined}
             title={copied ? 'Copied' : 'Copy message text'}
-            aria-label={copied ? 'Copied' : `Copy message: ${message.text.slice(0, 60)}`}
+            aria-label={copied ? 'Copied' : `Copy message: ${String(message?.text || '').slice(0, 60)}`}
           >
             <CopyIcon className="copy-icon-idle" />
             <CheckIcon className="copy-icon-done" />

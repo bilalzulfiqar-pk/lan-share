@@ -293,5 +293,41 @@ describe('OPFS Direct-to-Disk Sink', () => {
         expect(mockRoot.removeEntry).toHaveBeenCalledWith('transfer-orphan2-1729000000000.tmp');
         expect(mockRoot.removeEntry).toHaveBeenCalledWith('transfer-legacy.tmp');
     });
+
+    it('cancels sender and marks transfer failed if disk write fails mid-stream (CORE-BUG-04, R3-ENH-02)', async () => {
+        const { engineA, engineB, eventsA, eventsB } = createEnginePair();
+        const file = createMockFile('midwrite-fail.dat', 2 * 1024 * 1024);
+
+        const id = await offerAndRequestId(engineA, eventsB, file);
+
+        // Make the writable fail on write
+        const originalGetFileHandle = mockRoot.getFileHandle;
+        mockRoot.getFileHandle = vi.fn(async (name, opts) => {
+            const handle = await originalGetFileHandle(name, opts);
+            handle.createWritable = vi.fn(async () => ({
+                write: vi.fn(async () => {
+                    throw new Error('Disk quota exceeded mid-stream');
+                }),
+                close: vi.fn(async () => {}),
+                abort: vi.fn(async () => {})
+            }));
+            return handle;
+        });
+
+        await engineB.requestFile(id);
+
+        await waitFor(() => lastUpdateFor(eventsB, id)?.status === 'failed', { label: 'receiver marks failed' });
+        const receiverFinal = lastUpdateFor(eventsB, id);
+        expect(receiverFinal.status).toBe('failed');
+        expect(receiverFinal.error).toContain('Could not write to disk');
+
+        // Sender should receive cancel notification and mark cancelled
+        await waitFor(() => lastUpdateFor(eventsA, id)?.status === 'cancelled', { label: 'sender cancelled' });
+        const senderFinal = lastUpdateFor(eventsA, id);
+        expect(senderFinal.status).toBe('cancelled');
+
+        engineA.destroy();
+        engineB.destroy();
+    });
 });
 

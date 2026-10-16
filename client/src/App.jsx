@@ -922,10 +922,14 @@ function App() {
 
           <DeviceList
             devices={peers}
+            onToggle={handleDeviceToggle}
             onToogle={handleDeviceToggle}
             selectedDevice={activeSelectedDevice}
             unreadCounts={unreadBySocketId}
             onDropFiles={handleDropFiles}
+            isConnected={isConnected}
+            isReconnecting={isReconnecting}
+            disconnectElapsed={disconnectElapsed}
           />
 
           <AnimatePresence>

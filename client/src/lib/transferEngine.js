@@ -167,6 +167,8 @@ class PeerSession {
         this.peerConfirmedDirectLan = false;
         this.pendingIceRestart = false;
         this.iceTransportListening = false;
+        this.restartingIce = false;
+        this.iceRestartWatchdog = null;
     }
 }
 
@@ -656,6 +658,7 @@ export class TransferEngine {
 
     async attemptIceRestart(session) {
         if (session.tearingDown || session.iceRestartsAttempted >= 2) {
+            session.restartingIce = false;
             return false;
         }
 
@@ -672,6 +675,7 @@ export class TransferEngine {
             return true;
         }
 
+        session.restartingIce = true;
         session.pendingIceRestart = false;
         session.receivesResumed = false;
         session.peerConfirmedDirectLan = false;
@@ -694,6 +698,7 @@ export class TransferEngine {
         if (session.tearingDown) return;
 
         if (state === 'connected') {
+            session.restartingIce = false;
             this.clearDisconnectGrace(session);
             this.clearConnectWatchdog(session);
             session.iceRestartsAttempted = 0;
@@ -713,11 +718,14 @@ export class TransferEngine {
         if (state === 'disconnected') {
             session.receivesResumed = false;
             // Often transient (Wi-Fi hiccup, ICE consent refresh). Give the
-            // connection a 3-second grace window before triggering ICE restart.
-            if (!session.disconnectGraceTimer && !session.restartingIce && !session.iceRestartWatchdog) {
+            // connection a grace window before triggering ICE restart.
+            // Polite peer initiates after 3s; impolite peer waits slightly longer (4.5s)
+            // to allow polite peer's offer to arrive and prevent restart glare.
+            if (!session.disconnectGraceTimer && !session.restartingIce) {
+                const graceDelay = session.polite ? 3000 : 4500;
                 session.disconnectGraceTimer = setTimeout(() => {
                     session.disconnectGraceTimer = null;
-                    if (session.restartingIce || session.iceRestartWatchdog) return;
+                    if (session.restartingIce) return;
                     const pc = session.pc;
                     const isStillDisconnected = pc && (pc.connectionState === 'disconnected' || pc.iceConnectionState === 'disconnected');
                     if (isStillDisconnected) {
@@ -727,7 +735,7 @@ export class TransferEngine {
                             }
                         });
                     }
-                }, 3000);
+                }, graceDelay);
             }
             return;
         }
@@ -735,7 +743,19 @@ export class TransferEngine {
         if (state === 'failed') {
             session.receivesResumed = false;
             this.clearDisconnectGrace(session);
-            this.attemptIceRestart(session).then((restarted) => {
+            if (session.restartingIce) return;
+
+            const initiate = session.polite
+                ? this.attemptIceRestart(session)
+                : new Promise((resolve) => setTimeout(() => {
+                    if (session.tearingDown || session.pc?.connectionState === 'connected') {
+                        resolve(true);
+                    } else {
+                        this.attemptIceRestart(session).then(resolve);
+                    }
+                }, 1500));
+
+            initiate.then((restarted) => {
                 if (!restarted) {
                     this.teardownSession(session, 'Connection failed.');
                 }
@@ -937,6 +957,10 @@ export class TransferEngine {
         // 2. Check active outgoing entries
         for (const [fileId, entry] of this.outgoing.entries()) {
             if (entry.peerId === session.peerId && shouldBlock(entry.file.size)) {
+                if (entry.graceTimer) {
+                    clearTimeout(entry.graceTimer);
+                    entry.graceTimer = null;
+                }
                 entry.cancelled = true;
                 entry.settled = true;
                 this.outgoing.delete(fileId);
@@ -1031,6 +1055,7 @@ export class TransferEngine {
     teardownSession(session, reason) {
         if (session.tearingDown) return;
         session.tearingDown = true;
+        session.restartingIce = false;
 
         this.clearConnectWatchdog(session);
         this.clearDisconnectGrace(session);
@@ -1187,6 +1212,17 @@ export class TransferEngine {
             if (state.peerId === session.peerId && !state.finalized && state.received < state.size) {
                 if (state.retryCount < 2) {
                     state.retryCount += 1;
+                    if (state.channel) {
+                        state.channel.onmessage = null;
+                        state.channel.onclose = null;
+                        state.channel.onerror = null;
+                        try {
+                            state.channel.close();
+                        } catch {
+                            // ignore
+                        }
+                        state.channel = null;
+                    }
                     this.sendOnControl(session, {
                         type: MSG.FILE_REQUEST,
                         fileId,
@@ -1445,6 +1481,7 @@ export class TransferEngine {
                 let hOffset = 0;
                 const HASH_BLOCK = 1024 * 1024;
                 while (hOffset < fromOffset) {
+                    if (entry.uploadSessionId !== currentSessionId) return;
                     if (entry.cancelled) throw new TransferAbortedError();
                     const blk = await file.slice(hOffset, Math.min(fromOffset, hOffset + HASH_BLOCK)).arrayBuffer();
                     hasher.update(new Uint8Array(blk));
@@ -1463,6 +1500,7 @@ export class TransferEngine {
 
         try {
             while (offset < totalSize) {
+                if (entry.uploadSessionId !== currentSessionId) return;
                 if (entry.cancelled) throw new TransferAbortedError();
                 if (channel.readyState !== 'open') throw new TransferAbortedError('Connection closed during transfer.');
 
@@ -1473,6 +1511,7 @@ export class TransferEngine {
 
                 const buffer = await file.slice(offset, offset + chunkSize).arrayBuffer();
 
+                if (entry.uploadSessionId !== currentSessionId) return;
                 if (entry.cancelled) throw new TransferAbortedError();
                 if (channel.readyState !== 'open') throw new TransferAbortedError('Connection closed during transfer.');
 
@@ -1658,6 +1697,7 @@ export class TransferEngine {
             streamPendingBytes: 0,
             opfsFileHandle: null,
             writeChain: Promise.resolve(),
+            writeError: null,
             buffers: [],
             hasher: null,
             finalized: false,
@@ -1743,8 +1783,12 @@ export class TransferEngine {
         }
 
         const fileId = state.id;
-        state.writeChain = state.writeChain.then(() => state.stream?.write(merged)).catch((error) => {
-            if (!state.finalized) {
+        state.writeChain = state.writeChain.then(async () => {
+            if (state.writeError) return;
+            await state.stream?.write(merged);
+        }).catch((error) => {
+            if (!state.writeError) {
+                state.writeError = error;
                 state.finalized = true;
                 const session = this.sessions.get(state.peerId);
                 if (session) {
@@ -1900,11 +1944,25 @@ export class TransferEngine {
         if (state.mode === 'fs-access' && state.stream) {
             try {
                 await state.writeChain;
+                if (state.writeError) {
+                    return;
+                }
                 await state.stream.close();
                 state.stream = null;
             } catch (error) {
-                this.discardReceive(fileId, state);
-                this.historyUpdate(fileId, { status: 'error', error: `Could not write to disk: ${error.message}` });
+                if (!state.writeError) {
+                    state.writeError = error;
+                    const session = this.sessions.get(state.peerId);
+                    if (session) {
+                        this.sendOnControl(session, {
+                            type: MSG.FILE_CANCEL,
+                            fileId,
+                            reason: `Could not write to disk: ${error.message}`
+                        });
+                    }
+                    this.discardReceive(fileId, state);
+                    this.historyUpdate(fileId, { status: FILE_STATUS.FAILED, error: `Could not write to disk: ${error.message}` });
+                }
                 return;
             }
 
@@ -1927,11 +1985,27 @@ export class TransferEngine {
         if (state.mode === 'opfs' && state.opfsFileHandle) {
             try {
                 await state.writeChain;
-                await state.stream.close();
-                state.stream = null;
+                if (state.writeError) {
+                    return;
+                }
+                if (state.stream) {
+                    await state.stream.close();
+                    state.stream = null;
+                }
             } catch (error) {
-                this.discardReceive(fileId, state);
-                this.historyUpdate(fileId, { status: 'error', error: `Could not write to disk: ${error.message}` });
+                if (!state.writeError) {
+                    state.writeError = error;
+                    const session = this.sessions.get(state.peerId);
+                    if (session) {
+                        this.sendOnControl(session, {
+                            type: MSG.FILE_CANCEL,
+                            fileId,
+                            reason: `Could not write to disk: ${error.message}`
+                        });
+                    }
+                    this.discardReceive(fileId, state);
+                    this.historyUpdate(fileId, { status: FILE_STATUS.FAILED, error: `Could not write to disk: ${error.message}` });
+                }
                 return;
             }
 
@@ -2067,7 +2141,9 @@ export class TransferEngine {
                 } else {
                     await root.removeEntry(`transfer-${fileId}.tmp`).catch(() => {});
                 }
-                this.opfsFiles?.delete(fileId);
+                if (!name || this.opfsFiles?.get(fileId) === name) {
+                    this.opfsFiles?.delete(fileId);
+                }
             }
         } catch {
             // ignore

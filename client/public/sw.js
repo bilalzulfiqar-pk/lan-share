@@ -89,8 +89,8 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // Only handle app shell and static bundles
-  const isAppShell = pathname === '/' || pathname === '/index.html' || pathname.startsWith('/assets/');
+  // Only handle app shell, document navigations, and static bundles
+  const isAppShell = request.mode === 'navigate' || pathname === '/' || pathname === '/index.html' || pathname.startsWith('/assets/');
   if (!isAppShell) {
     return;
   }
@@ -102,7 +102,7 @@ self.addEventListener('fetch', (event) => {
   event.respondWith(
     fetch(request)
       .then((networkResponse) => {
-        if (networkResponse && networkResponse.status === 200 && networkResponse.type === 'basic') {
+        if (networkResponse && networkResponse.status === 200 && (networkResponse.type === 'basic' || networkResponse.type === 'cors')) {
           const clone = networkResponse.clone();
           caches.open(CACHE_NAME).then((cache) => cache.put(request, clone)).catch(() => {});
         }

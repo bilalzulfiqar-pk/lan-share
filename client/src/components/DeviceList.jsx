@@ -49,12 +49,24 @@ const detectDeviceShape = (device) => {
   return 'monitor';
 };
 
-export const DeviceList = React.memo(({ devices, onToogle, selectedDevice, unreadCounts = {}, onDropFiles }) => {
+export const DeviceList = React.memo(({
+  devices = [],
+  onToggle,
+  onToogle,
+  selectedDevice,
+  unreadCounts = {},
+  onDropFiles,
+  isConnected = true,
+  isReconnecting = false,
+  disconnectElapsed = 0
+}) => {
+  const toggleHandler = onToggle || onToogle;
   const [dropTargetId, setDropTargetId] = useState(null);
   const reduceMotion = useReducedMotion();
 
   const devicePositions = useMemo(() => {
-    return devices.map((device) => {
+    const deviceList = Array.isArray(devices) ? devices : [];
+    return deviceList.map((device) => {
       const seed = device.deviceId || device.id;
       const angle = seededRandom(seed + 'angle') * 360;
       const radius = 12 + seededRandom(seed + 'dist') * 32;
@@ -86,7 +98,7 @@ export const DeviceList = React.memo(({ devices, onToogle, selectedDevice, unrea
               type="button"
               className={`radar-blip ${selectedDevice === device.id ? 'selected' : ''} ${isDropTarget ? 'drop-target' : ''}`}
               style={{ top: `${50 + y}%`, left: `${50 + x}%` }}
-              onClick={() => onToogle(device.id)}
+              onClick={() => toggleHandler?.(device.id)}
               onDragOver={(event) => {
                 event.preventDefault();
                 event.dataTransfer.dropEffect = 'copy';
@@ -126,10 +138,16 @@ export const DeviceList = React.memo(({ devices, onToogle, selectedDevice, unrea
         })}
       </AnimatePresence>
 
-      {devices.length === 0 && (
+      {devicePositions.length === 0 && (
         <div className="radar-status" role="status" aria-live="polite">
           <span className="radar-status-dot" aria-hidden="true" />
-          Scanning local network…
+          {typeof navigator !== 'undefined' && !navigator.onLine
+            ? 'Offline · Reconnect to Wi-Fi'
+            : !isConnected && disconnectElapsed > 3000
+              ? 'Connecting · Server waking up…'
+              : !isConnected || isReconnecting
+                ? 'Connecting to network…'
+                : 'Scanning local network…'}
         </div>
       )}
     </div>

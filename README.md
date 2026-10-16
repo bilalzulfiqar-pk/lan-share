@@ -371,7 +371,7 @@ To allow small files (<150 MB) to route through AP-isolated networks:
 
 ## Quality Assurance & Automated Testing
 
-LAN Share is backed by **345 automated tests** (275 client + 70 server) verifying socket clustering, WebRTC state machines, OPFS streaming fallbacks, TURN relay protection, connection mode diagnostics, and protocol serialization:
+LAN Share is backed by **348 automated tests** (278 client + 70 server) verifying socket clustering, WebRTC state machines, OPFS streaming fallbacks, TURN relay protection, connection mode diagnostics, and protocol serialization:
 
 ```bash
 # Run server test suite (clustering, rooms, TURN credential caching)
@@ -407,14 +407,14 @@ lan-share/
 │   │   ├── components/         # Radar, Chat, RoomModal, HotspotGuideModal, ConnectionModeBadge
 │   │   ├── hooks/              # useSignaling (Socket.IO), useWebRTC (engine hook)
 │   │   └── lib/                # TransferEngine, protocol, opfs, sound, clipboard, notifications, wakeLock
-│   │       └── __tests__/      # Vitest client suites (272 tests)
+│   │       └── __tests__/      # Vitest client suites (278 tests)
 │   ├── package.json
 │   └── vite.config.js
 ├── server/                     # Node.js + Express + Socket.IO signaling service
 │   ├── index.js                # Server entry point, TURN endpoint, socket events
 │   ├── lib.js                  # Subnet clustering, room registry, SimilarityIndex
 │   ├── turn.js                 # Metered.ca credential manager with TTL caching
-│   ├── *.test.js               # Vitest server suites (69 tests)
+│   ├── *.test.js               # Vitest server suites (70 tests)
 │   └── package.json
 ├── docs/                       # Project documentation & guides
 │   ├── assets/                 # Vector banner & architecture diagrams

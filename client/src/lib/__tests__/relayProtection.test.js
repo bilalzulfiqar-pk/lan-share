@@ -4,7 +4,8 @@ import {
     RELAY_MAX_FILE_SIZE_BYTES,
     RELAY_SIZE_LIMIT_ERROR,
     STRICT_LOCAL_RELAY_BLOCKED_ERROR,
-    FILE_STATUS
+    FILE_STATUS,
+    MSG
 } from '../protocol';
 import {
     installMockWebRTC,
@@ -200,6 +201,24 @@ describe('WebRTC Connection Type Detection & Strict Local Mode', () => {
             ])
         }));
     });
+
+    it('does not attempt ICE restart on impolite answerer when setTurnCredentials is called (CORE-BUG-01, R3-ENH-01)', () => {
+        engineA = new TransferEngine({
+            socket: socketA,
+            myId: 'peer-z-9999', // Lexicographically greater => impolite
+            fetchTurnCredentials: false
+        });
+
+        const session = engineA.getOrCreateSession('peer-a-1111');
+        expect(session.polite).toBe(false);
+        const restartSpy = vi.spyOn(engineA, 'attemptIceRestart');
+
+        engineA.setTurnCredentials({
+            iceServers: [{ urls: 'turn:metered.ca:443', username: 'u', credential: 'p' }]
+        });
+
+        expect(restartSpy).not.toHaveBeenCalled();
+    });
 });
 
 describe('Relay 150 MB Quota Protection', () => {
@@ -362,6 +381,47 @@ describe('Relay 150 MB Quota Protection', () => {
 
         expect(sessionA.pendingOfferFiles).toHaveLength(0);
         expect(errorsA).toContain(STRICT_LOCAL_RELAY_BLOCKED_ERROR);
+    });
+
+    it('blocks and cancels active inbound receives when connection is demoted to relay-turn (CORE-BUG-05, R3-ENH-03)', () => {
+        const sessionB = engineB.sessions.get(peerAId);
+        sessionB.channelReady = true;
+
+        const fakeChannel = {
+            close: vi.fn(),
+            readyState: 'open'
+        };
+
+        engineB.historyAdd([{
+            id: 'inbound-large',
+            fileName: 'large-inbound.iso',
+            fileSize: 200 * 1024 * 1024,
+            direction: 'in',
+            status: 'downloading'
+        }]);
+
+        engineB.receives.set('inbound-large', {
+            peerId: peerAId,
+            name: 'large-inbound.iso',
+            size: 200 * 1024 * 1024,
+            received: 50 * 1024 * 1024,
+            finalized: false,
+            channel: fakeChannel
+        });
+
+        const controlSpy = vi.spyOn(engineB, 'sendOnControl');
+
+        // Demote session connection to relay-turn
+        sessionB.connectionType = 'relay-turn';
+        engineB.checkRelayCapForSession(sessionB);
+
+        expect(fakeChannel.close).toHaveBeenCalled();
+        expect(controlSpy).toHaveBeenCalledWith(sessionB, expect.objectContaining({
+            type: MSG.FILE_CANCEL,
+            fileId: 'inbound-large',
+            reason: RELAY_SIZE_LIMIT_ERROR
+        }));
+        expect(historyB.some((h) => h.id === 'inbound-large' && h.status === FILE_STATUS.BLOCKED)).toBe(true);
     });
 });
 
