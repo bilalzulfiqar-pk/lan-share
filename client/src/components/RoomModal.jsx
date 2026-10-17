@@ -3,6 +3,7 @@ import { useEffect, useRef, useState, useCallback } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import QRCode from 'qrcode';
 import { copyText } from '../lib/clipboard';
+import { QrScanner } from './QrScanner';
 
 const COPIED_FEEDBACK_MS = 1400;
 
@@ -22,10 +23,12 @@ export function RoomModal({
   const [copiedLink, setCopiedLink] = useState(false);
   const [copiedCode, setCopiedCode] = useState(false);
   const [showSwitchForm, setShowSwitchForm] = useState(false);
+  const [isScanning, setIsScanning] = useState(false);
   const [prevRoomCode, setPrevRoomCode] = useState(roomCode);
   if (roomCode !== prevRoomCode) {
     setPrevRoomCode(roomCode);
     setShowSwitchForm(false);
+    setIsScanning(false);
   }
 
   useEffect(() => {
@@ -73,6 +76,7 @@ export function RoomModal({
     setCopiedLink(false);
     setCopiedCode(false);
     setShowSwitchForm(false);
+    setIsScanning(false);
     onClose();
   }, [onClose]);
 
@@ -126,6 +130,12 @@ export function RoomModal({
       setInputCode('');
     }
   };
+
+  const handleScanSuccess = useCallback((code) => {
+    setIsScanning(false);
+    setShowSwitchForm(false);
+    onJoinRoom(code);
+  }, [onJoinRoom]);
 
   const handleLeave = () => {
     onLeaveRoom();
@@ -278,36 +288,60 @@ export function RoomModal({
 
                 {showSwitchForm ? (
                   <div className="room-switch-box">
-                    <form className="room-input-form" onSubmit={handleJoinSubmit}>
-                      <div className="room-input-wrapper">
-                        <input
-                          ref={inputRef}
-                          type="text"
-                          className="room-code-input"
-                          placeholder="e.g. 492810"
-                          value={inputCode}
-                          onChange={(e) => setInputCode(e.target.value.replace(/\s+/g, '').toUpperCase().slice(0, 16))}
-                          maxLength={16}
-                          autoFocus
-                          aria-label="New room code"
-                          data-testid="room-switch-input"
-                        />
+                    {isScanning ? (
+                      <QrScanner
+                        onScan={handleScanSuccess}
+                        onCancel={() => setIsScanning(false)}
+                      />
+                    ) : (
+                      <>
+                        <form className="room-input-form" onSubmit={handleJoinSubmit}>
+                          <div className="room-input-wrapper">
+                            <div className="room-input-box-wrapper">
+                              <input
+                                ref={inputRef}
+                                type="text"
+                                className="room-code-input"
+                                placeholder="e.g. 492810"
+                                value={inputCode}
+                                onChange={(e) => setInputCode(e.target.value.replace(/\s+/g, '').toUpperCase().slice(0, 16))}
+                                maxLength={16}
+                                autoFocus
+                                aria-label="New room code"
+                                data-testid="room-switch-input"
+                              />
+                              <button
+                                type="button"
+                                className="room-scan-pill-btn"
+                                onClick={() => setIsScanning(true)}
+                                title="Scan room QR code with camera"
+                                aria-label="Scan room QR code with camera"
+                              >
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                                  <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" />
+                                  <circle cx="12" cy="13" r="4" />
+                                </svg>
+                                <span className="room-scan-pill-text">Scan</span>
+                              </button>
+                            </div>
+                            <button
+                              type="submit"
+                              className="btn btn-primary btn-auto room-join-btn"
+                              disabled={!inputCode.trim()}
+                            >
+                              Switch
+                            </button>
+                          </div>
+                        </form>
                         <button
-                          type="submit"
-                          className="btn btn-primary btn-auto room-join-btn"
-                          disabled={!inputCode.trim()}
+                          type="button"
+                          className="room-cancel-switch-btn"
+                          onClick={() => setShowSwitchForm(false)}
                         >
-                          Switch
+                          Cancel
                         </button>
-                      </div>
-                    </form>
-                    <button
-                      type="button"
-                      className="room-cancel-switch-btn"
-                      onClick={() => setShowSwitchForm(false)}
-                    >
-                      Cancel
-                    </button>
+                      </>
+                    )}
                   </div>
                 ) : (
                   <button
@@ -327,59 +361,84 @@ export function RoomModal({
                 animate={{ opacity: 1, transition: { duration: 0.24, ease: [0.25, 1, 0.5, 1] } }}
                 exit={reduceMotion ? { opacity: 0 } : { opacity: 0, transition: { duration: 0.16, ease: [0.4, 0, 1, 1] } }}
               >
-                <button
-                  type="button"
-                  className="btn btn-primary room-create-btn"
-                  onClick={handleCreateRandom}
-                  data-testid="create-room-btn"
-                >
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                    <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
-                    <circle cx="8.5" cy="8.5" r="1.5" />
-                    <circle cx="15.5" cy="8.5" r="1.5" />
-                    <circle cx="15.5" cy="15.5" r="1.5" />
-                    <circle cx="8.5" cy="15.5" r="1.5" />
-                  </svg>
-                  Create Random 6-Digit Room
-                </button>
-
-                <div className="room-divider">
-                  <span>or enter an existing code</span>
-                </div>
-
-                <form className="room-input-form" onSubmit={handleJoinSubmit}>
-                  <div className="room-input-wrapper">
-                    <input
-                      ref={inputRef}
-                      type="text"
-                      className="room-code-input"
-                      placeholder="e.g. 492810"
-                      value={inputCode}
-                      onChange={(e) => setInputCode(e.target.value.replace(/\s+/g, '').toUpperCase().slice(0, 16))}
-                      maxLength={16}
-                      autoFocus
-                      aria-label="Room code"
-                      data-testid="room-code-input"
-                    />
+                {isScanning ? (
+                  <QrScanner
+                    onScan={handleScanSuccess}
+                    onCancel={() => setIsScanning(false)}
+                  />
+                ) : (
+                  <>
                     <button
-                      type="submit"
-                      className="btn btn-primary btn-auto room-join-btn"
-                      disabled={!inputCode.trim()}
-                      data-testid="join-room-submit-btn"
+                      type="button"
+                      className="btn btn-primary room-create-btn"
+                      onClick={handleCreateRandom}
+                      data-testid="create-room-btn"
                     >
-                      Join Room
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                        <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+                        <circle cx="8.5" cy="8.5" r="1.5" />
+                        <circle cx="15.5" cy="8.5" r="1.5" />
+                        <circle cx="15.5" cy="15.5" r="1.5" />
+                        <circle cx="8.5" cy="15.5" r="1.5" />
+                      </svg>
+                      Create Random 6-Digit Room
                     </button>
-                  </div>
-                </form>
 
-                <div className="room-tip">
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                    <circle cx="12" cy="12" r="10" />
-                    <line x1="12" y1="16" x2="12" y2="12" />
-                    <line x1="12" y1="8" x2="12.01" y2="8" />
-                  </svg>
-                  <span>Anyone with this code can share files with you, even across different Wi-Fi networks or mobile hotspots.</span>
-                </div>
+                    <div className="room-divider">
+                      <span>or enter an existing code</span>
+                    </div>
+
+                    <form className="room-input-form" onSubmit={handleJoinSubmit}>
+                      <div className="room-input-wrapper">
+                        <div className="room-input-box-wrapper">
+                          <input
+                            ref={inputRef}
+                            type="text"
+                            className="room-code-input"
+                            placeholder="e.g. 492810"
+                            value={inputCode}
+                            onChange={(e) => setInputCode(e.target.value.replace(/\s+/g, '').toUpperCase().slice(0, 16))}
+                            maxLength={16}
+                            autoFocus
+                            aria-label="Room code"
+                            data-testid="room-code-input"
+                          />
+                          <button
+                            type="button"
+                            className="room-scan-pill-btn"
+                            onClick={() => setIsScanning(true)}
+                            title="Scan room QR code with camera"
+                            aria-label="Scan room QR code with camera"
+                            data-testid="room-scan-qr-btn"
+                          >
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                              <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" />
+                              <circle cx="12" cy="13" r="4" />
+                            </svg>
+                            <span className="room-scan-pill-text">Scan</span>
+                          </button>
+                        </div>
+                        <button
+                          type="submit"
+                          className="btn btn-primary btn-auto room-join-btn"
+                          disabled={!inputCode.trim()}
+                          data-testid="join-room-submit-btn"
+                        >
+                          Join Room
+                        </button>
+                      </div>
+                    </form>
+
+                    <div className="room-tip">
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                        <circle cx="12" cy="12" r="10" />
+                        <line x1="12" y1="16" x2="12" y2="12" />
+                        <line x1="12" y1="8" x2="12.01" y2="8" />
+                      </svg>
+                      <span>Anyone with this code can share files with you, even across different Wi-Fi networks or mobile hotspots.</span>
+                    </div>
+                  </>
+                )}
               </motion.div>
             )}
           </AnimatePresence>

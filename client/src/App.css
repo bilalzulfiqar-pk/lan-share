@@ -3742,7 +3742,16 @@ button {
   width: 100%;
 }
 
+.room-input-box-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+  flex: 1;
+  min-width: 0;
+}
+
 .room-code-input {
+  width: 100%;
   flex: 1;
   min-width: 120px;
   font-family: var(--font-mono);
@@ -3751,7 +3760,7 @@ button {
   letter-spacing: 0.12em;
   text-align: center;
   text-transform: uppercase;
-  padding: 0.6rem 0.8rem;
+  padding: 0.6rem 4.8rem 0.6rem 0.8rem;
   background: var(--bg-app);
   border: var(--border-hairline);
   border-radius: var(--radius-md);
@@ -3763,6 +3772,224 @@ button {
   outline: none;
   border-color: var(--primary);
   box-shadow: 0 0 0 3px var(--primary-soft);
+}
+
+.room-scan-pill-btn {
+  position: absolute;
+  right: 6px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.28rem 0.6rem;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--text-secondary);
+  font-size: 0.74rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: color var(--dur-fast) ease, background-color var(--dur-fast) ease, border-color var(--dur-fast) ease;
+  user-select: none;
+  line-height: 1;
+}
+
+.room-scan-pill-btn:hover {
+  background: var(--primary-soft);
+  color: var(--primary);
+  border-color: transparent;
+  transform: translateY(-50%);
+}
+
+.room-scan-pill-btn:active {
+  background: var(--primary-soft-hover);
+  transform: translateY(-50%);
+  opacity: 0.9;
+}
+
+.room-scan-pill-btn svg {
+  flex-shrink: 0;
+  color: inherit;
+}
+
+.room-scan-pill-text {
+  letter-spacing: 0.02em;
+}
+
+/* =========================================================
+   Room QR Camera Scanner Viewfinder
+   ========================================================= */
+
+.room-scanner-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.85rem;
+  width: 100%;
+}
+
+.room-scanner-viewfinder {
+  position: relative;
+  width: 100%;
+  height: 230px;
+  background: #000000;
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  border: 1px solid var(--border-hairline);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: inset 0 0 20px rgba(0, 0, 0, 0.4);
+}
+
+.room-scanner-video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.room-scanner-loading,
+.room-scanner-error {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  gap: 0.65rem;
+  padding: 1.5rem;
+  color: var(--text-secondary);
+  font-size: 0.82rem;
+  height: 100%;
+}
+
+.room-scanner-error svg {
+  color: var(--danger, #ef4444);
+}
+
+.room-scanner-error p {
+  margin: 0;
+  line-height: 1.4;
+  max-width: 280px;
+}
+
+.room-scanner-reticle {
+  position: absolute;
+  inset: 22px;
+  pointer-events: none;
+  border-radius: var(--radius-md);
+}
+
+.reticle-corner {
+  position: absolute;
+  width: 24px;
+  height: 24px;
+  border: 3px solid var(--primary);
+  transition: border-color var(--dur-fast) ease;
+}
+
+.reticle-corner.top-left {
+  top: 0;
+  left: 0;
+  border-right: none;
+  border-bottom: none;
+  border-top-left-radius: 8px;
+}
+
+.reticle-corner.top-right {
+  top: 0;
+  right: 0;
+  border-left: none;
+  border-bottom: none;
+  border-top-right-radius: 8px;
+}
+
+.reticle-corner.bottom-left {
+  bottom: 0;
+  left: 0;
+  border-right: none;
+  border-top: none;
+  border-bottom-left-radius: 8px;
+}
+
+.reticle-corner.bottom-right {
+  bottom: 0;
+  right: 0;
+  border-left: none;
+  border-top: none;
+  border-bottom-right-radius: 8px;
+}
+
+@keyframes qrLaserSweep {
+  0% {
+    top: 4px;
+    opacity: 0.85;
+  }
+  50% {
+    top: calc(100% - 6px);
+    opacity: 1;
+  }
+  100% {
+    top: 4px;
+    opacity: 0.85;
+  }
+}
+
+.reticle-laser {
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  height: 2px;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    var(--primary) 20%,
+    var(--primary) 80%,
+    transparent
+  );
+  box-shadow: 0 0 8px 1px var(--primary);
+  animation: qrLaserSweep 2.2s ease-in-out infinite;
+}
+
+.room-scanner-viewfinder.scan-locked .reticle-corner {
+  border-color: var(--success, #10b981);
+}
+
+.room-scanner-viewfinder.scan-locked .reticle-laser {
+  background: var(--success, #10b981);
+  box-shadow: 0 0 12px 2px var(--success, #10b981);
+  animation-play-state: paused;
+}
+
+.room-scanner-controls {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.65rem;
+  width: 100%;
+}
+
+.room-scanner-cancel-btn {
+  flex: 1;
+  justify-content: center;
+  padding: 0.55rem 0.9rem;
+  font-size: 0.82rem;
+}
+
+.room-scanner-flip-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.55rem 0.8rem;
+  font-size: 0.82rem;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .reticle-laser {
+    animation: none;
+    top: 50%;
+    opacity: 0.6;
+  }
 }
 
 .room-join-btn {
@@ -3867,6 +4094,10 @@ button {
 
   .room-input-wrapper {
     flex-direction: column;
+    width: 100%;
+  }
+
+  .room-input-box-wrapper {
     width: 100%;
   }
 
@@ -4371,6 +4602,32 @@ button {
   margin: 0;
   font-size: 0.74rem;
   color: var(--text-secondary);
+  line-height: 1.38;
+}
+
+.conn-mode-popover-route-block {
+  background: rgba(16, 185, 129, 0.08);
+  border: 1px solid rgba(16, 185, 129, 0.25);
+  border-radius: var(--radius-xs);
+  padding: 0.45rem 0.55rem;
+  margin-top: 0.35rem;
+  margin-bottom: 0.35rem;
+}
+
+.conn-mode-route-pill {
+  display: inline-block;
+  font-size: 0.68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: #10b981;
+  margin-bottom: 0.2rem;
+}
+
+.conn-mode-route-text {
+  margin: 0;
+  font-size: 0.73rem;
+  color: var(--text-primary);
   line-height: 1.38;
 }
 
