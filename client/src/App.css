@@ -2665,6 +2665,10 @@ button {
   .file-name {
     font-size: 0.9rem;
   }
+
+  .server-status-popup {
+    top: 156px;
+  }
 }
 
 @media (max-width: 640px) {
@@ -2845,7 +2849,7 @@ button {
   }
 
   .server-status-popup {
-    top: 132px;
+    top: 145px;
     width: 95%;
     padding: 0.85rem 0.95rem;
   }
