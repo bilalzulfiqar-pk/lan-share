@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { MODE_CONFIG } from '../lib/connectionModes';
 
-export function ConnectionModeBadge({ mode = 'direct-lan', className = '', showInfo = true, defaultPinned = false }) {
+export function ConnectionModeBadge({ mode = 'direct-lan', className = '', showInfo = true, defaultPinned = false, routeNote = null }) {
     const [isPinned, setIsPinned] = useState(defaultPinned);
     const [isHovered, setIsHovered] = useState(false);
     const containerRef = useRef(null);
@@ -156,6 +156,13 @@ export function ConnectionModeBadge({ mode = 'direct-lan', className = '', showI
                         <span className="conn-mode-why-label">Why this mode is active:</span>
                         <p className="conn-mode-why-text">{config.why}</p>
                     </div>
+
+                    {routeNote && resolvedMode === 'direct-lan' && (
+                        <div className="conn-mode-popover-route-block" data-testid="conn-mode-route-optimization">
+                            <span className="conn-mode-route-pill">⚡ Route Optimization</span>
+                            <p className="conn-mode-route-text">{routeNote}</p>
+                        </div>
+                    )}
 
                     {config.tip && (
                         <div className="conn-mode-popover-tip-block">

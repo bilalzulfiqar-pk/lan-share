@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { TurnCredentialManager, DEFAULT_STUN_SERVERS } from './turn.js';
-import { app, turnLimiter, handleTurnCredentials } from './index.js';
+import { app, turnLimiter, handleTurnCredentials, users } from './index.js';
 
 describe('Server TurnCredentialManager', () => {
     const originalEnv = process.env;
@@ -263,7 +263,7 @@ describe('GET /api/turn-credentials endpoint and rate limiting', () => {
         expect.unreachable('Expected rate limiter to return 429 status after token exhaustion');
     });
 
-    it('sets Cache-Control: private, no-cache header on successful credential response', async () => {
+    it('sets Cache-Control: public, max-age=1800 header on successful credential response', async () => {
         let headerName = null;
         let headerVal = null;
         const req = { headers: {}, socket: { remoteAddress: '127.0.0.1' } };
@@ -286,7 +286,52 @@ describe('GET /api/turn-credentials endpoint and rate limiting', () => {
         await handleTurnCredentials(req, res);
         expect(res.statusCode).toBe(200);
         expect(headerName).toBe('Cache-Control');
-        expect(headerVal).toBe('private, no-cache');
+        expect(headerVal).toBe('public, max-age=1800');
+    });
+
+    it('isolates rate limits by socketId for distinct sockets on the same public IP', async () => {
+        const testIp = '103.148.128.82';
+        users['socket-dev-1'] = { id: 'socket-dev-1', publicIp: testIp };
+        users['socket-dev-2'] = { id: 'socket-dev-2', publicIp: testIp };
+
+        const createMockReqRes = (socketId) => {
+            const req = {
+                headers: { 'x-forwarded-for': testIp },
+                socket: { remoteAddress: testIp },
+                query: { socketId }
+            };
+            const res = {
+                statusCode: 200,
+                headers: {},
+                _data: null,
+                setHeader(name, val) { this.headers[name] = val; },
+                status(code) { this.statusCode = code; return this; },
+                json(data) { this._data = data; return this; }
+            };
+            return { req, res };
+        };
+
+        turnLimiter.reset('socket:socket-dev-1');
+        turnLimiter.reset('socket:socket-dev-2');
+
+        // Exhaust socket-dev-1 rate limit (capacity is 30)
+        for (let i = 0; i < 35; i++) {
+            const pair = createMockReqRes('socket-dev-1');
+            await handleTurnCredentials(pair.req, pair.res);
+        }
+
+        // Verify socket-dev-1 is blocked
+        const dev1Blocked = createMockReqRes('socket-dev-1');
+        await handleTurnCredentials(dev1Blocked.req, dev1Blocked.res);
+        expect(dev1Blocked.res.statusCode).toBe(429);
+
+        // Verify socket-dev-2 is NOT blocked even though it shares the same public IP
+        const dev2Req = createMockReqRes('socket-dev-2');
+        await handleTurnCredentials(dev2Req.req, dev2Req.res);
+        expect(dev2Req.res.statusCode).toBe(200);
+
+        delete users['socket-dev-1'];
+        delete users['socket-dev-2'];
     });
 
     it('falls back to default STUN servers if Metered returns an empty array', async () => {

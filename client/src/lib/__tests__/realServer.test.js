@@ -392,4 +392,34 @@ describe('TransferEngine against the real signaling server', () => {
             socketC.disconnect();
         }
     }, 20000);
+
+    it('relays request-offer between visible peers and authorizes reciprocal signaling', async () => {
+        const socketA = await connectClient();
+        const socketB = await connectClient();
+        try {
+            joinAs(socketA, 'MobileUser');
+            joinAs(socketB, 'LaptopUser');
+
+            await Promise.all([
+                waitUntilPeerVisible(socketA, socketB.id, 'MobileUser sees LaptopUser'),
+                waitUntilPeerVisible(socketB, socketA.id, 'LaptopUser sees MobileUser')
+            ]);
+
+            const requestOfferReceived = new Promise((resolve) => {
+                socketB.once('request-offer', (data) => resolve(data));
+            });
+
+            socketA.emit('request-offer', { target: socketB.id });
+
+            const received = await Promise.race([
+                requestOfferReceived,
+                new Promise((_, reject) => setTimeout(() => reject(new Error('timeout waiting for request-offer')), 4000))
+            ]);
+
+            expect(received.sender).toBe(socketA.id);
+        } finally {
+            socketA.disconnect();
+            socketB.disconnect();
+        }
+    }, 20000);
 });

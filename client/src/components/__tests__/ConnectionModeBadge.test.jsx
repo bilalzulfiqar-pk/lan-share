@@ -52,4 +52,18 @@ describe('ConnectionModeBadge Component', () => {
         expect(MODE_CONFIG['relay-turn'].label).toBe('Cloud Relay Transfer');
         expect(MODE_CONFIG['relay-turn'].description).toContain('(Max 150 MB per file).');
     });
+
+    it('renders route optimization note in popover when routeNote is provided on direct-lan', () => {
+        const note = 'Handshake initiated by receiver device to access local Wi-Fi IP directly.';
+        const html = renderToStaticMarkup(<ConnectionModeBadge mode="direct-lan" routeNote={note} />);
+        expect(html).toContain('conn-mode-popover-route-block');
+        expect(html).toContain('⚡ Route Optimization');
+        expect(html).toContain(note);
+    });
+
+    it('omits route optimization note when routeNote is not provided', () => {
+        const html = renderToStaticMarkup(<ConnectionModeBadge mode="direct-lan" />);
+        expect(html).not.toContain('conn-mode-popover-route-block');
+        expect(html).not.toContain('⚡ Route Optimization');
+    });
 });

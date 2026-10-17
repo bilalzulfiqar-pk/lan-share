@@ -22,9 +22,10 @@ import {
     isRelayCandidate,
     stripRelayFromSdp,
     resolveTurnApiUrl,
-    isPrivateLanAddress
+    isPrivateLanAddress,
+    detectDeviceType
 } from './protocol';
-export { isPrivateLanAddress };
+export { isPrivateLanAddress, detectDeviceType };
 import { wakeLockManager } from './wakeLock';
 import { playTransferCompleteChime, startAudioBeacon, stopAudioBeacon } from './sound';
 
@@ -177,6 +178,8 @@ export class TransferEngine {
         socket,
         myId,
         getPeerName,
+        getPeerInfo,
+        myDeviceType,
         onEvent,
         turnApiUrl = '/api/turn-credentials',
         turnCredentials = null,
@@ -187,6 +190,8 @@ export class TransferEngine {
         this.socket = socket;
         this.myId = myId;
         this.getPeerName = getPeerName || (() => 'Unknown');
+        this.getPeerInfo = typeof getPeerInfo === 'function' ? getPeerInfo : (() => null);
+        this.myDeviceType = typeof myDeviceType === 'string' ? myDeviceType : detectDeviceType(typeof navigator !== 'undefined' ? navigator.userAgent : '');
         this.onEvent = onEvent || (() => {});
         this.soundEnabled = Boolean(soundEnabled);
 
@@ -241,7 +246,12 @@ export class TransferEngine {
         if (this.turnPromise) return this.turnPromise;
         this.turnPromise = (async () => {
             try {
-                const url = resolveTurnApiUrl(this.turnApiUrl, this.socket);
+                let url = resolveTurnApiUrl(this.turnApiUrl, this.socket);
+                const socketId = this.myId || this.socket?.id;
+                if (socketId) {
+                    const separator = url.includes('?') ? '&' : '?';
+                    url = `${url}${separator}socketId=${encodeURIComponent(socketId)}`;
+                }
                 const res = await fetch(url);
                 if (res.ok) {
                     const data = await res.json();
@@ -332,6 +342,10 @@ export class TransferEngine {
         return this.sessions.get(peerId)?.connectionType || 'unknown';
     }
 
+    getRouteNote(peerId) {
+        return this.sessions.get(peerId)?.routeOptimizationNote || null;
+    }
+
     updateMyId(newMyId) {
         if (!newMyId || this.myId === newMyId) return;
         this.myId = newMyId;
@@ -375,7 +389,18 @@ export class TransferEngine {
         this.socket.on('offer', (data) => { this.handleOffer(data).catch(logHandlerError('offer')); });
         this.socket.on('answer', (data) => { this.handleAnswer(data).catch(logHandlerError('answer')); });
         this.socket.on('ice-candidate', (data) => { this.handleIceCandidate(data).catch(logHandlerError('ice-candidate')); });
+        this.socket.on('request-offer', (data) => { this.handleRequestOffer(data).catch(logHandlerError('request-offer')); });
     }
+
+    handleRequestOffer = async ({ sender: peerId } = {}) => {
+        if (!peerId) return;
+        const session = this.getOrCreateSession(peerId, { asAnswerer: false });
+        if (session.tearingDown) return;
+        session.isReverseOffer = true;
+        if (session.pc && session.pc.signalingState === 'stable' && !session.makingOffer) {
+            await this.initiateOffer(session);
+        }
+    };
 
     handleOffer = async ({ offer, sender: peerId }) => {
         if (!peerId || !offer) return;
@@ -392,6 +417,11 @@ export class TransferEngine {
         const session = this.getOrCreateSession(peerId, { asAnswerer: true });
 
         if (session.tearingDown) return;
+
+        if (session.requestOfferFallbackTimer) {
+            clearTimeout(session.requestOfferFallbackTimer);
+            session.requestOfferFallbackTimer = null;
+        }
 
         const isPolite = this.myId < peerId;
         session.polite = isPolite;
@@ -771,16 +801,20 @@ export class TransferEngine {
                 const stats = await session.pc.getStats();
                 const type = this.parseConnectionType(stats);
                 if (type && type !== 'unknown') {
-                    let effectiveType = type;
-                    if (session.peerConfirmedDirectLan && type === 'direct-stun') {
-                        effectiveType = 'direct-lan';
-                    } else if (type === 'relay-turn') {
+                    if (type === 'relay-turn') {
                         session.peerConfirmedDirectLan = false;
                     }
-
+                    const effectiveType = (type === 'direct-stun' && session.peerConfirmedDirectLan)
+                        ? 'direct-lan'
+                        : type;
                     const prevType = session.connectionType;
                     session.connectionType = effectiveType;
-                    this.emit({ type: 'connection-type', peerId: session.peerId, connectionType: effectiveType });
+                    this.emit({
+                        type: 'connection-type',
+                        peerId: session.peerId,
+                        connectionType: effectiveType,
+                        routeNote: session.routeOptimizationNote || null
+                    });
                     this.checkRelayCapForSession(session);
 
                     // Sync active transfer history items with the newly confirmed/upgraded connection type
@@ -902,17 +936,6 @@ export class TransferEngine {
             const remoteIsLan = isLanCandidate(remote, remoteType, remoteAddr);
 
             if (localIsLan && remoteIsLan) {
-                return 'direct-lan';
-            }
-
-            // Both peers reflected through STUN behind the exact same public NAT IP -> local Wi-Fi NAT loopback
-            if (
-                localType === 'srflx' &&
-                remoteType === 'srflx' &&
-                localAddr &&
-                remoteAddr &&
-                localAddr === remoteAddr
-            ) {
                 return 'direct-lan';
             }
 
@@ -1067,6 +1090,11 @@ export class TransferEngine {
         if (session.tearingDown) return;
         session.tearingDown = true;
         session.restartingIce = false;
+
+        if (session.requestOfferFallbackTimer) {
+            clearTimeout(session.requestOfferFallbackTimer);
+            session.requestOfferFallbackTimer = null;
+        }
 
         this.clearConnectWatchdog(session);
         this.clearDisconnectGrace(session);
@@ -1306,12 +1334,42 @@ export class TransferEngine {
         }
     }
 
+    ensureSessionForPeer(peerId) {
+        let session = this.sessions.get(peerId);
+        if (session) return session;
+
+        const peerInfo = this.getPeerInfo(peerId);
+        const targetType = peerInfo?.deviceType || 'desktop';
+        const isMobileToDesktop = this.myDeviceType === 'mobile' && targetType === 'desktop';
+
+        if (isMobileToDesktop) {
+            session = this.getOrCreateSession(peerId, { asAnswerer: true });
+            session.routeOptimizationNote = 'Handshake initiated by receiver device to access local Wi-Fi IP directly.';
+            this.socket.emit('request-offer', { target: peerId, sender: this.myId });
+
+            session.requestOfferFallbackTimer = setTimeout(() => {
+                session.requestOfferFallbackTimer = null;
+                if (!session.tearingDown && !session.remoteDescriptionSet && session.pc?.signalingState === 'stable' && !session.makingOffer) {
+                    session.routeOptimizationNote = null;
+                    const channel = session.pc.createDataChannel(CONTROL_CHANNEL_LABEL);
+                    session.controlChannel = channel;
+                    session.createdControlChannel = true;
+                    this.attachControlChannel(session, channel);
+                    this.initiateOffer(session).catch((err) => console.error('[engine] Fallback offer failed:', err));
+                }
+            }, 2500);
+            return session;
+        }
+
+        return this.getOrCreateSession(peerId);
+    }
+
     // ------------------------------------------------------------------
     // Outgoing files
     // ------------------------------------------------------------------
 
     offerFiles(peerId, files) {
-        const session = this.getOrCreateSession(peerId);
+        const session = this.ensureSessionForPeer(peerId);
         if (session.pc && (session.pc.connectionState === 'connected' || session.pc.iceConnectionState === 'connected')) {
             this.detectConnectionType(session);
         }
@@ -2280,7 +2338,7 @@ export class TransferEngine {
     sendChat(peerId, text) {
         if (!peerId || typeof text !== 'string' || text.trim() === '') return;
 
-        const session = this.getOrCreateSession(peerId);
+        const session = this.ensureSessionForPeer(peerId);
         const message = {
             type: MSG.CHAT_MESSAGE,
             id: createTransferId(),
@@ -2326,6 +2384,7 @@ export class TransferEngine {
         this.socket.off?.('offer');
         this.socket.off?.('answer');
         this.socket.off?.('ice-candidate');
+        this.socket.off?.('request-offer');
 
         this.outgoing.clear();
         this.offered.clear();

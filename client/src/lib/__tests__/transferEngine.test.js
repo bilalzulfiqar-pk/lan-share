@@ -456,4 +456,72 @@ describe('TransferEngine', () => {
         engineB.destroy();
         vi.useRealTimers();
     });
+
+    it('honestly reports direct-stun for srflx candidate pairs even when public IPs match under CGNAT', () => {
+        const bus = createSocketBus();
+        const socket = new MockSocket('alice', bus);
+        const engine = new TransferEngine({
+            socket,
+            myId: 'alice',
+            fetchTurnCredentials: false
+        });
+
+        const stats = new Map([
+            ['t1', { type: 'transport', selectedCandidatePairId: 'cp1' }],
+            ['cp1', { id: 'cp1', localCandidateId: 'c1', remoteCandidateId: 'c2' }],
+            ['c1', { id: 'c1', candidateType: 'srflx', address: '103.148.128.82' }],
+            ['c2', { id: 'c2', candidateType: 'srflx', address: '103.148.128.82' }]
+        ]);
+
+        expect(engine.parseConnectionType(stats)).toBe('direct-stun');
+        engine.destroy();
+    });
+
+    it('emits request-offer and sets routeOptimizationNote when Mobile initiates transfer to Desktop', () => {
+        const bus = createSocketBus();
+        const socket = new MockSocket('mobile-1', bus);
+        const emitSpy = vi.spyOn(socket, 'emit');
+
+        const engine = new TransferEngine({
+            socket,
+            myId: 'mobile-1',
+            myDeviceType: 'mobile',
+            getPeerInfo: (id) => (id === 'laptop-1' ? { deviceType: 'desktop' } : null),
+            fetchTurnCredentials: false
+        });
+
+        const file = createMockFile('video.mp4', 1024 * 1024);
+        engine.offerFiles('laptop-1', [file]);
+
+        expect(emitSpy).toHaveBeenCalledWith('request-offer', { target: 'laptop-1', sender: 'mobile-1' });
+        const session = engine.sessions.get('laptop-1');
+        expect(session).toBeDefined();
+        expect(session.routeOptimizationNote).toBe('Handshake initiated by receiver device to access local Wi-Fi IP directly.');
+        expect(engine.getRouteNote('laptop-1')).toBe('Handshake initiated by receiver device to access local Wi-Fi IP directly.');
+
+        engine.destroy();
+    });
+
+    it('creates offer when Desktop receives request-offer from Mobile', async () => {
+        const bus = createSocketBus();
+        const socket = new MockSocket('laptop-1', bus);
+
+        const engine = new TransferEngine({
+            socket,
+            myId: 'laptop-1',
+            myDeviceType: 'desktop',
+            fetchTurnCredentials: false
+        });
+
+        const initiateSpy = vi.spyOn(engine, 'initiateOffer');
+
+        await engine.handleRequestOffer({ sender: 'mobile-1' });
+
+        const session = engine.sessions.get('mobile-1');
+        expect(session).toBeDefined();
+        expect(session.isReverseOffer).toBe(true);
+        expect(initiateSpy).toHaveBeenCalledWith(session);
+
+        engine.destroy();
+    });
 });

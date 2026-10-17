@@ -206,6 +206,17 @@ function hasOverlap(leftValues, rightValues) {
     return leftValues.some((value) => rightValues.includes(value));
 }
 
+function isVirtualSubnet(fingerprint) {
+    if (typeof fingerprint !== 'string') return false;
+    const clean = fingerprint.replace(/^lan:ipv4:/, '').trim();
+    const parts = clean.split('.');
+    if (parts.length >= 2 && parts[0] === '172') {
+        const second = parseInt(parts[1], 10);
+        return second >= 16 && second <= 31;
+    }
+    return false;
+}
+
 function areUsersVisible(leftUser, rightUser) {
     if (!leftUser || !rightUser) {
         return false;
@@ -245,15 +256,23 @@ function areUsersVisible(leftUser, rightUser) {
         return true;
     }
 
-    // Next strongest signal: both browsers independently discovered the same
-    // public network identity through ICE/STUN (e.g. behind the same Wi-Fi router NAT).
-    if (bothHaveWan && sharesWanFingerprint) {
-        return true;
+    // Both browsers explicitly reported distinct LAN subnets without overlap.
+    // If neither side's LAN subnet is a virtual adapter (e.g. Docker/WSL in 172.16-31.x.x),
+    // they represent distinct physical home/office routers (e.g. 192.168.1 vs 192.168.0 on CGNAT).
+    // They must be isolated even if they share an ISP CGNAT public IP.
+    if (bothHaveLan && !sharesLanFingerprint) {
+        const leftHasOnlyVirtual = leftFingerprintGroups.lan.every(isVirtualSubnet);
+        const rightHasOnlyVirtual = rightFingerprintGroups.lan.every(isVirtualSubnet);
+        const eitherIsVirtual = leftHasOnlyVirtual || rightHasOnlyVirtual;
+        if (!eitherIsVirtual || !sharesWanFingerprint) {
+            return false;
+        }
     }
 
-    // Both browsers explicitly reported distinct LAN subnets without a matching WAN STUN identity -> distinct network segments.
-    if (bothHaveLan && !sharesLanFingerprint) {
-        return false;
+    // Next strongest signal: one or both devices did not report a LAN subnet (e.g. desktop mDNS masking),
+    // or one reported a virtual adapter while both share the verified public STUN identity.
+    if (bothHaveWan && sharesWanFingerprint) {
+        return true;
     }
 
     // Baseline: devices connect from the same public HTTP IP.

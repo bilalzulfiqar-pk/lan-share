@@ -246,3 +246,12 @@ export function isPrivateLanAddress(addr) {
     return false;
 }
 
+export function detectDeviceType(userAgent) {
+    if (typeof userAgent !== 'string') {
+        return 'desktop';
+    }
+    return /Android|iPhone|iPad|iPod|Mobile|Opera Mini|IEMobile/i.test(userAgent)
+        ? 'mobile'
+        : 'desktop';
+}
+

@@ -207,6 +207,7 @@ function App() {
     history,
     peerStatus,
     connectionTypes,
+    routeNotes,
     error,
     sendFilesOffer,
     requestFile,
@@ -215,6 +216,7 @@ function App() {
     sendChat
   } = useWebRTC(socket, myId, {
     getPeerName,
+    getPeerInfo: (peerId) => peers.find((p) => p.id === peerId) || null,
     onChat: handleIncomingChat,
     onNotify: (event) => announceEvent(event.title, event.body, { playSound: !event.silent && event.title !== 'Transfer Complete' }),
     strictLocalMode,
@@ -1007,6 +1009,7 @@ function App() {
                         ? connectionTypes[activeSelectedDevice]
                         : 'unknown'
                     }
+                    routeNote={activeSelectedDevice ? routeNotes[activeSelectedDevice] : null}
                     className="file-selection-mode-badge"
                   />
                 </div>

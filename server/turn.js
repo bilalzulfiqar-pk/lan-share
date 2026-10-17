@@ -135,11 +135,17 @@ class TurnCredentialManager {
     }
 }
 
-function createTurnCredentialsHandler({ manager, limiter, getClientIp = (headers, addr) => addr || '127.0.0.1' }) {
+function createTurnCredentialsHandler({ manager, limiter, getClientIp = (headers, addr) => addr || '127.0.0.1', isValidSocket = () => false }) {
     return async function handleTurnCredentials(req, res) {
         const headers = req?.headers || {};
         const clientIp = req?.ip ? String(req.ip).replace(/^::ffff:/i, '') : getClientIp(headers, req?.socket?.remoteAddress);
-        if (limiter && !limiter.tryConsume(clientIp)) {
+
+        const socketId = req?.query?.socketId;
+        const limiterKey = (socketId && typeof isValidSocket === 'function' && isValidSocket(socketId, clientIp))
+            ? `socket:${socketId}`
+            : clientIp;
+
+        if (limiter && !limiter.tryConsume(limiterKey)) {
             return res.status(429).json({
                 error: 'Too many requests for TURN credentials. Please wait.',
                 iceServers: DEFAULT_STUN_SERVERS
@@ -149,7 +155,7 @@ function createTurnCredentialsHandler({ manager, limiter, getClientIp = (headers
         try {
             const credentials = await manager.getCredentials();
             if (typeof res.setHeader === 'function') {
-                res.setHeader('Cache-Control', 'private, no-cache');
+                res.setHeader('Cache-Control', 'public, max-age=1800');
             }
             return res.json(credentials);
         } catch (err) {

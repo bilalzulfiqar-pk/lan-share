@@ -5,14 +5,16 @@ const ERROR_AUTO_CLEAR_MS = 6000;
 
 // Thin React binding around TransferEngine. All connection and transfer logic
 // lives in the engine; this hook only mirrors engine events into state.
-export function useWebRTC(socket, myId, { getPeerName, onChat, onNotify, strictLocalMode = false, soundEnabled = false } = {}) {
+export function useWebRTC(socket, myId, { getPeerName, getPeerInfo, onChat, onNotify, strictLocalMode = false, soundEnabled = false } = {}) {
     const [history, setHistory] = useState([]);
     const [peerStatus, setPeerStatus] = useState({});
     const [connectionTypes, setConnectionTypes] = useState({});
+    const [routeNotes, setRouteNotes] = useState({});
     const [error, setError] = useState(null);
 
     const engineRef = useRef(null);
     const getPeerNameRef = useRef(getPeerName);
+    const getPeerInfoRef = useRef(getPeerInfo);
     const onChatRef = useRef(onChat);
     const onNotifyRef = useRef(onNotify);
     const myIdRef = useRef(myId);
@@ -21,6 +23,7 @@ export function useWebRTC(socket, myId, { getPeerName, onChat, onNotify, strictL
 
     useEffect(() => {
         getPeerNameRef.current = getPeerName;
+        getPeerInfoRef.current = getPeerInfo;
         onChatRef.current = onChat;
         onNotifyRef.current = onNotify;
         soundEnabledRef.current = soundEnabled;
@@ -58,6 +61,7 @@ export function useWebRTC(socket, myId, { getPeerName, onChat, onNotify, strictL
             strictLocalMode: strictLocalModeRef.current,
             soundEnabled: soundEnabledRef.current,
             getPeerName: (peerId) => getPeerNameRef.current?.(peerId) || 'Unknown',
+            getPeerInfo: (peerId) => getPeerInfoRef.current?.(peerId) || null,
             onEvent: (event) => {
                 switch (event.type) {
                     case 'history:add':
@@ -73,6 +77,9 @@ export function useWebRTC(socket, myId, { getPeerName, onChat, onNotify, strictL
                         break;
                     case 'connection-type':
                         setConnectionTypes((prev) => ({ ...prev, [event.peerId]: event.connectionType }));
+                        if (event.routeNote !== undefined) {
+                            setRouteNotes((prev) => ({ ...prev, [event.peerId]: event.routeNote }));
+                        }
                         break;
                     case 'error':
                         setError(event.message);
@@ -157,6 +164,7 @@ export function useWebRTC(socket, myId, { getPeerName, onChat, onNotify, strictL
         clearHistory,
         peerStatus,
         connectionTypes,
+        routeNotes,
         strictLocalMode,
         error,
         sendFilesOffer,

@@ -30,12 +30,17 @@ const app = express();
 app.set('trust proxy', 1);
 app.use(cors());
 
+// Store connected users: socketId -> { id, name, deviceId, deviceType, publicIp, networkFingerprints, roomCode }
+const users = Object.create(null);
+const similarityIndex = new SimilarityIndex();
+
 const turnLimiter = createRateLimiter({ capacity: 30, refillPerSecond: 1 });
 const turnManager = new TurnCredentialManager();
 const handleTurnCredentials = createTurnCredentialsHandler({
     manager: turnManager,
     limiter: turnLimiter,
-    getClientIp
+    getClientIp,
+    isValidSocket: (id, ip) => Boolean(users[id] && (!ip || !users[id].publicIp || users[id].publicIp === ip))
 });
 
 app.get('/health', (req, res) => {
@@ -54,10 +59,6 @@ const io = new Server(server, {
     pingInterval: 10000,
     pingTimeout: 5000
 });
-
-// Store connected users: socketId -> { id, name, deviceId, deviceType, publicIp, networkFingerprints, roomCode }
-const users = Object.create(null);
-const similarityIndex = new SimilarityIndex();
 
 const relayLimiter = createRateLimiter({ capacity: 40, refillPerSecond: 20 });
 const joinLimiter = createRateLimiter({ capacity: 10, refillPerSecond: 5 });
@@ -306,7 +307,7 @@ io.on('connection', (socket) => {
                 return;
             }
 
-            if (eventName === 'offer' && currentlyVisible) {
+            if ((eventName === 'offer' || eventName === 'request-offer') && currentlyVisible) {
                 signalingRegistry.registerSession(socket.id, target);
             }
 
@@ -317,6 +318,7 @@ io.on('connection', (socket) => {
     relay('offer', (payload) => isValidSessionDescription(payload.offer, 'offer'), (data) => ({ offer: data?.offer }));
     relay('answer', (payload) => isValidSessionDescription(payload.answer, 'answer'), (data) => ({ answer: data?.answer }));
     relay('ice-candidate', (payload) => isValidIceCandidate(payload.candidate), (data) => ({ candidate: data?.candidate }));
+    relay('request-offer', (payload) => Boolean(payload && typeof payload === 'object'), () => ({}));
 
     socket.on('disconnect', () => {
         console.log('User disconnected:', socket.id);

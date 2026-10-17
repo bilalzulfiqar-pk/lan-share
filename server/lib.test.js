@@ -225,6 +225,19 @@ describe('areUsersVisible', () => {
         expect(areUsersVisible(userA, userB)).toBe(false);
     });
 
+    it('isolates neighbors sharing the same public WAN IP and STUN WAN candidate when they report different LAN subnets (CGNAT)', () => {
+        const neighborA = user({
+            publicIp: '103.148.128.82',
+            networkFingerprints: ['lan:ipv4:192.168.1', 'wan:ipv4:103.148.128.82']
+        });
+        const neighborB = user({
+            id: 'b',
+            publicIp: '103.148.128.82',
+            networkFingerprints: ['lan:ipv4:192.168.0', 'wan:ipv4:103.148.128.82']
+        });
+        expect(areUsersVisible(neighborA, neighborB)).toBe(false);
+    });
+
     it('hides peers with different public IPs', () => {
         expect(areUsersVisible(
             user(),
