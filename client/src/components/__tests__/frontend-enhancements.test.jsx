@@ -303,6 +303,13 @@ describe('Frontend UI & State Synchronization Enhancements', () => {
             // Check pinned chip & active state styling
             expect(appCss).toMatch(/\.conn-mode-pinned-chip\s*\{[^}]*border-radius:\s*var\(--radius-pill\);/);
             expect(appCss).toMatch(/\.conn-mode-badge\.is-pinned\s*\{[^}]*box-shadow:/);
+
+            // Check that .conn-mode-badge uses scoped color transitions and avoids filter: brightness to prevent text/border shifting
+            expect(appCss).not.toMatch(/\.conn-mode-badge:hover\s*\{[^}]*filter:\s*brightness/);
+            expect(appCss).toMatch(/\.conn-mode-badge\s*\{[\s\S]*?transition:\s*background-color/);
+
+            // Check that .conn-mode-pinned-chip is hidden on touch devices and small viewports
+            expect(appCss).toMatch(/@media\s*\([^)]*hover:\s*none[^)]*\)[^{]*\{[\s\S]*?\.conn-mode-pinned-chip\s*\{[^}]*display:\s*none/);
         });
     });
 });

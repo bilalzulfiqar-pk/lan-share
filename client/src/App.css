@@ -3580,6 +3580,7 @@ button {
 }
 
 .room-card {
+  --dur-room-transition: 0.35s;
   width: min(440px, 94vw);
   background: var(--bg-surface);
   border: var(--border-hairline);
@@ -3666,28 +3667,28 @@ button {
 @keyframes roomContentFadeIn {
   from {
     opacity: 0;
-    transform: translateY(2px);
   }
   to {
     opacity: 1;
-    transform: translateY(0);
   }
 }
 
 .room-active-section,
 .room-join-section,
-.room-join-fields {
+.room-join-fields,
+.room-scanner-wrapper {
   display: flex;
   flex-direction: column;
   gap: 0.85rem;
   width: 100%;
-  animation: roomContentFadeIn 0.22s cubic-bezier(0.16, 1, 0.3, 1) both;
+  animation: roomContentFadeIn var(--dur-room-transition, 0.35s) cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
 @media (prefers-reduced-motion: reduce) {
   .room-active-section,
   .room-join-section,
-  .room-join-fields {
+  .room-join-fields,
+  .room-scanner-wrapper {
     animation: none;
   }
 }
@@ -4384,12 +4385,12 @@ button {
   border-radius: var(--radius-pill);
   line-height: 1.25;
   cursor: pointer;
-  transition: all var(--dur-fast) var(--ease-out);
+  transition:
+    background-color var(--dur-fast) var(--ease-out),
+    border-color var(--dur-fast) var(--ease-out),
+    color var(--dur-fast) var(--ease-out),
+    box-shadow var(--dur-fast) var(--ease-out);
   user-select: none;
-}
-
-.conn-mode-badge:hover {
-  filter: brightness(1.08);
 }
 
 .conn-mode-badge.mode-direct-lan {
@@ -4502,7 +4503,7 @@ button {
   -webkit-backdrop-filter: blur(20px);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-md);
-  box-shadow: var(--shadow-lg), 0 8px 24px rgba(0, 0, 0, 0.3);
+  box-shadow: var(--shadow-md);
   padding: 0.85rem 0.95rem;
   font-size: 0.76rem;
   line-height: 1.45;
@@ -4585,6 +4586,18 @@ button {
 .conn-mode-pinned-chip:hover {
   background: var(--primary);
   color: #ffffff;
+}
+
+@media (hover: none), (max-width: 640px) {
+  .conn-mode-pinned-chip {
+    display: none !important;
+  }
+
+  .conn-mode-popover-close {
+    padding: 4px;
+    min-width: 28px;
+    min-height: 28px;
+  }
 }
 
 .conn-mode-badge.is-pinned {

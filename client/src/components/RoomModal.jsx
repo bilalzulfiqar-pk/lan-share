@@ -144,7 +144,7 @@ export function RoomModal({
     if (open && !roomCode && !isScanning) {
       const timer = window.setTimeout(() => {
         inputRef.current?.focus({ preventScroll: true });
-      }, 180);
+      }, 260);
       return () => window.clearTimeout(timer);
     }
   }, [open, roomCode, isScanning]);
