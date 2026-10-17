@@ -347,7 +347,7 @@ function App() {
       return () => window.clearTimeout(timer);
     }
   }, [peers, selectedDevice]);
-  const [showGuide, setShowGuide] = useState(true);
+  const [guidePhase, setGuidePhase] = useState('initial');
   const [showDebugSidebar, setShowDebugSidebar] = useState(false);
   const [copied, setCopied] = useState(false);
   const [dismissedStatusEpisode, setDismissedStatusEpisode] = useState(0);
@@ -480,12 +480,26 @@ function App() {
     };
   }, [showThemeMenu]);
 
+  if ((peers.length > 0 || roomCode) && guidePhase !== 'dismissed') {
+    setGuidePhase('dismissed');
+  }
+
   useEffect(() => {
-    const timer = setTimeout(() => {
-      setShowGuide(false);
+    const fadeTimer = setTimeout(() => {
+      setGuidePhase((prev) => (prev === 'initial' ? 'quiet' : prev));
     }, 4000);
-    return () => clearTimeout(timer);
+
+    const roomTimer = setTimeout(() => {
+      setGuidePhase((prev) => (prev === 'quiet' ? 'room' : prev));
+    }, 8000);
+
+    return () => {
+      clearTimeout(fadeTimer);
+      clearTimeout(roomTimer);
+    };
   }, []);
+
+  const isGuideVisible = (guidePhase === 'initial' || guidePhase === 'room') && peers.length === 0 && !roomCode;
 
   const currentTheme = THEMES.find((t) => t.id === theme.split('-')[0]) || THEMES[0];
   const currentMode = theme.endsWith('-dark') ? 'dark' : 'light';
@@ -520,6 +534,18 @@ function App() {
   }, [peers, selectedDevice]);
 
   const activeSelectedDevice = activePeer ? activePeer.id : null;
+
+  // Connection mode badge display approach:
+  // - Set to true for Approach A (always-visible standby badge: "Ready to connect").
+  // - Set to false for Approach B (hide badge until a transfer or chat connection is established).
+  const SHOW_STANDBY_CONNECTION_BADGE = true;
+
+  const activeSelectedMode = (
+    activeSelectedDevice &&
+    peerStatus[activeSelectedDevice] === 'CONNECTED' &&
+    connectionTypes[activeSelectedDevice] &&
+    connectionTypes[activeSelectedDevice] !== 'unknown'
+  ) ? connectionTypes[activeSelectedDevice] : (SHOW_STANDBY_CONNECTION_BADGE && activeSelectedDevice ? 'unknown' : null);
 
   const activeTransferPeerId = useMemo(() => {
     const activeItem = history.find(
@@ -962,9 +988,27 @@ function App() {
 
       <div className="main-layout">
         <div className="radar-section">
-          <div className={`guide-text ${showGuide ? 'is-visible' : ''}`}>
-            <h2>Look for devices nearby</h2>
-            <p>Devices on your local network will pop up on the radar.</p>
+          <div className={`guide-text ${isGuideVisible ? 'is-visible' : ''}`}>
+            <h2>
+              {guidePhase === 'room' ? 'Not seeing your device?' : 'Look for devices nearby'}
+            </h2>
+            <p>
+              {guidePhase === 'room' ? (
+                <>
+                  If devices are on different Wi-Fi or mobile data,{' '}
+                  <button
+                    type="button"
+                    className="guide-room-action"
+                    onClick={() => setShowRoomModal(true)}
+                  >
+                    create a room to start sharing
+                  </button>
+                  .
+                </>
+              ) : (
+                'Devices on your local network will pop up on the radar.'
+              )}
+            </p>
           </div>
 
           <DeviceList
@@ -1003,15 +1047,23 @@ function App() {
                     <span>Send to</span>
                     <strong>{getPeerName(activeSelectedDevice)}</strong>
                   </div>
-                  <ConnectionModeBadge
-                    mode={
-                      peerStatus[activeSelectedDevice] === 'CONNECTED' && connectionTypes[activeSelectedDevice]
-                        ? connectionTypes[activeSelectedDevice]
-                        : 'unknown'
-                    }
-                    routeNote={activeSelectedDevice ? routeNotes[activeSelectedDevice] : null}
-                    className="file-selection-mode-badge"
-                  />
+                  <AnimatePresence>
+                    {activeSelectedMode && (
+                      <motion.div
+                        key="file-selection-mode-badge"
+                        initial={reduceMotion ? false : { opacity: 0, y: 4 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={reduceMotion ? { opacity: 0 } : { opacity: 0, y: -2 }}
+                        transition={reduceMotion ? { duration: 0 } : { duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
+                      >
+                        <ConnectionModeBadge
+                          mode={activeSelectedMode}
+                          routeNote={activeSelectedDevice ? routeNotes[activeSelectedDevice] : null}
+                          className="file-selection-mode-badge"
+                        />
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
                 </div>
                 <input
                   type="file"

@@ -62,7 +62,7 @@ describe('Frontend UI & State Synchronization Enhancements', () => {
             expect(html).toContain('room-leave-btn');
             expect(html).toContain('Leave Room');
             expect(html).not.toContain('Return to Local Radar');
-            expect(html).toContain('Switch to a different room');
+            expect(html).not.toContain('Switch to a different room');
         });
 
         it('verifies CSS rules prevent specificity clashes and enable mobile responsiveness', () => {

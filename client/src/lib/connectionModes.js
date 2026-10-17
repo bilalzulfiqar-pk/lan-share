@@ -41,12 +41,13 @@ export const MODE_CONFIG = {
     },
     'unknown': {
         modeKey: 'unknown',
-        label: 'Detecting Route…',
+        // Standby label before a file transfer or chat session is initiated:
+        label: 'Ready to connect',
         badgeClass: 'mode-unknown',
         dotColor: 'status-dot-gray',
-        title: 'Detecting Connection…',
-        description: 'Evaluating local network and WebRTC ICE candidate pairs to establish the most direct connection.',
-        why: 'Connection negotiation in progress.',
+        title: 'Ready to Connect',
+        description: 'Peer is discovered and reachable. When you send a file or chat, the connection will automatically select the fastest route.',
+        why: null,
         tip: null
     }
 };

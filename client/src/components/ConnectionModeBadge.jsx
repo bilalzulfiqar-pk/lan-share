@@ -152,10 +152,12 @@ export function ConnectionModeBadge({ mode = 'direct-lan', className = '', showI
 
                     <p className="conn-mode-popover-desc">{config.description}</p>
 
-                    <div className={`conn-mode-popover-why-block ${config.badgeClass}`}>
-                        <span className="conn-mode-why-label">Why this mode is active:</span>
-                        <p className="conn-mode-why-text">{config.why}</p>
-                    </div>
+                    {config.why && (
+                        <div className={`conn-mode-popover-why-block ${config.badgeClass}`}>
+                            <span className="conn-mode-why-label">Why this mode is active:</span>
+                            <p className="conn-mode-why-text">{config.why}</p>
+                        </div>
+                    )}
 
                     {routeNote && resolvedMode === 'direct-lan' && (
                         <div className="conn-mode-popover-route-block" data-testid="conn-mode-route-optimization">

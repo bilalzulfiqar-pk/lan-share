@@ -1705,7 +1705,7 @@ button {
   top: 12%;
   left: 50%;
   transform: translateX(-50%);
-  z-index: var(--z-base);
+  z-index: calc(var(--z-radar-blip-hover) + 5);
   text-align: center;
   width: 100%;
   pointer-events: none;
@@ -1734,6 +1734,37 @@ button {
 .guide-text.is-visible p {
   opacity: 1;
 }
+
+.guide-room-action {
+  background: none;
+  border: none;
+  padding: 0;
+  margin: 0;
+  font: inherit;
+  font-weight: 600;
+  color: var(--primary);
+  cursor: pointer;
+  display: inline;
+  text-decoration: none;
+  pointer-events: none;
+  transition: color var(--dur-fast) var(--ease-out);
+}
+
+.guide-text.is-visible .guide-room-action {
+  pointer-events: auto;
+}
+
+.guide-room-action:hover,
+.guide-room-action:focus-visible {
+  color: var(--primary-hover, #1d4ed8);
+}
+
+.guide-room-action:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
 
 .radar-container {
   position: relative;
@@ -3559,6 +3590,9 @@ button {
   flex-direction: column;
   gap: 1rem;
   will-change: transform;
+  transform: translateZ(0);
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
   max-height: calc(100vh - 2rem);
   max-height: calc(100dvh - 2rem);
   overflow-y: auto;
@@ -3626,13 +3660,36 @@ button {
   font-size: 0.8rem;
   color: var(--text-secondary);
   line-height: 1.4;
+  min-height: 2.8rem;
+}
+
+@keyframes roomContentFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(2px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .room-active-section,
-.room-join-section {
+.room-join-section,
+.room-join-fields {
   display: flex;
   flex-direction: column;
   gap: 0.85rem;
+  width: 100%;
+  animation: roomContentFadeIn 0.22s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .room-active-section,
+  .room-join-section,
+  .room-join-fields {
+    animation: none;
+  }
 }
 
 .room-code-showcase {
