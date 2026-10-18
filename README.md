@@ -6,7 +6,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Live Demo](https://img.shields.io/badge/Live%20Demo-lan--share.vercel.app-brightgreen.svg)](https://lan-share.vercel.app/)
-[![Tests Passing](https://img.shields.io/badge/Tests-377%20Passed-success.svg)](#quality-assurance--automated-testing)
+[![Tests Passing](https://img.shields.io/badge/Tests-406%20Passed-success.svg)](#quality-assurance--automated-testing)
 [![React 19](https://img.shields.io/badge/React-19-61dafb.svg)](https://react.dev/)
 [![Vite 7](https://img.shields.io/badge/Vite-7-646cff.svg)](https://vitejs.dev/)
 [![WebRTC](https://img.shields.io/badge/WebRTC-DataChannels-333333.svg)](https://webrtc.org/)
@@ -77,17 +77,19 @@ Transfers travel over direct WebRTC DataChannels at physical router speeds (30-8
 
 ### Core Transfer Engine & Storage
 - **Direct LAN Speeds (30-80+ MB/s):** Transfers stream peer-to-peer over DTLS-encrypted WebRTC DataChannels at physical router speeds with zero internet bandwidth consumption.
+- **1 MB Buffered Read-Ahead with Prefetching:** Decouples disk read operations (`1 MiB`) from network wire chunks (`64 KiB`) with double-buffered parallel prefetching, slashing Android Storage Access Framework (SAF) Binder IPC context switches by 94% on mobile uploads.
 - **Zero-RAM-Crash Disk Streaming:** Streams directly to disk on desktop via the native File System Access API and on mobile (iOS/Android) via the Origin Private File System (OPFS), maintaining a flat <20 MB RAM footprint even on 10+ GB transfers.
 - **Streaming WebAssembly SHA-256:** Cryptographically verifies files on-the-fly chunk-by-chunk using hardware-accelerated WebAssembly (`hash-wasm`), guaranteeing 100% bit-for-bit file integrity.
 
 ### Networking & NAT Resilience
-- **Dual Discovery Modes:** Automatic real-time discovery on local Wi-Fi via Subnet Radar, plus instant 6-digit room codes and QR pairing across segmented campus VLANs, guest networks, or cellular data.
+- **Dual Discovery Modes & In-App QR Scanner:** Automatic real-time discovery on local Wi-Fi via Subnet Radar, plus instant 6-digit room codes and camera QR scanning (`jsQR`) across segmented campus VLANs, guest networks, or cellular data.
+- **Reverse Handshake Route Optimization:** Smart offer inversion (`request-offer`) allows mobile devices to request desktop peers to initiate the SDP offer, unlocking direct local Wi-Fi transmission even under asymmetric AP filtering.
 - **Extender & Hotspot Resilience:** Automatic RFC 1918 peer-reflexive (`prflx`) classification across Wi-Fi repeaters, W3C Perfect Negotiation to prevent simultaneous-offer glare, and 3-second automatic ICE recovery.
-- **Transparent Connection Diagnostics:** Live badge diagnostics (`Local Wi-Fi Transfer`, `Direct Internet Transfer`, `Cloud Relay Transfer`) with interactive popovers explaining network topology and 150 MB relay quota caps.
+- **Transparent Connection Diagnostics & Live RTT:** Live badge diagnostics (`Local Wi-Fi Transfer`, `Direct Internet Transfer`, `Cloud Relay Transfer`) with interactive popovers explaining network topology, 150 MB relay quota caps, and real-time Round-Trip Time (`~1 ms`) telemetry.
 
 ### Session UX & Privacy
 - **Ephemeral P2P Encrypted Chat:** Send end-to-end encrypted messages, URLs, notes, and code snippets directly between devices with markdown auto-linking and one-tap copy, stored strictly in volatile memory.
-- **Intelligent Alerts & Screen Wake Lock:** Adaptive audio cues play in the foreground, while background Android tabs and desktop browsers trigger native system notifications via Service Worker, with `navigator.wakeLock` preventing mobile sleep mid-transfer.
+- **Intelligent Alerts & Screen Wake Lock:** Adaptive audio cues play in the foreground with gesture unlock, while background Android tabs and desktop browsers trigger native system notifications via Service Worker, with `navigator.wakeLock` preventing mobile sleep mid-transfer.
 - **15 Built-in Themes:** High-contrast presets (Cyberpunk, Tokyo Neon, Dracula, Nord, Ocean, Midnight, and minimalist modes) with automatic dynamic favicon generation and browser theme-color synchronization.
 
 ---
@@ -411,7 +413,7 @@ To allow small files (<150 MB) to route through AP-isolated networks (hotel, cam
 
 ## Quality Assurance & Automated Testing
 
-LAN Share is backed by **378 automated tests** (292 client + 73 server + 13 worker) verifying socket clustering, WebRTC state machines, OPFS streaming fallbacks, TURN relay protection, connection mode diagnostics, and protocol serialization:
+LAN Share is backed by **406 automated tests** (318 client + 75 server + 13 worker) verifying socket clustering, WebRTC state machines, OPFS streaming fallbacks, TURN relay protection, connection mode diagnostics, and protocol serialization:
 
 ```bash
 # Run server test suite (clustering, rooms, TURN credential caching)
@@ -432,11 +434,12 @@ npm run build --prefix client
 
 Key test suites include:
 - **`networkScenarios.test.js`:** Simulates direct LAN host pairs, Wi-Fi extender `prflx` candidates, STUN internet traversal, TURN fallback, polite peer glare rollback, and automatic 3-second ICE restarts.
-- **`resumptionIntegrity.test.js`:** Tests mid-transfer DataChannel drops, byte-offset resumption, and verifies that corrupted chunks trigger immediate SHA-256 rejection.
+- **`resumptionIntegrity.test.js`:** Tests mid-transfer DataChannel drops, byte-offset resumption across 1 MiB boundaries, and verifies that corrupted chunks trigger immediate SHA-256 rejection.
+- **`transferEngine.test.js`:** Tests multi-block 1 MiB transfers, RTT latency extraction, route optimization inversion, and single-threaded main loop backpressure handling.
 - **`relayProtection.test.js`:** Verifies 150 MB file quota blocks on TURN relays and enforces Strict Local Mode candidate stripping.
 - **`realServer.test.js`:** Spins up real Node.js socket servers in child processes to test end-to-end multi-peer room isolation and signaling relays.
 
-For detailed manual testing across physical hardware, see the [Manual QA Checklist](docs/QA-CHECKLIST.md).
+For practical cross-device verification across physical hardware, see the [Manual Cross-Device Testing Guide](docs/MANUAL-TESTING.md).
 
 ---
 
@@ -447,17 +450,17 @@ lan-share/
 ├── client/                     # React 19 + Vite frontend
 │   ├── public/                 # Manifest, favicons, audio cues, SEO assets
 │   ├── src/
-│   │   ├── components/         # Radar, Chat, RoomModal, HotspotGuideModal, ConnectionModeBadge
+│   │   ├── components/         # Radar, Chat, RoomModal, HotspotGuideModal, ConnectionModeBadge, QrScanner
 │   │   ├── hooks/              # useSignaling, useWebRTC
 │   │   └── lib/                # TransferEngine, cloudflareSocket, protocol, opfs, wakeLock
-│   │       └── __tests__/      # Vitest client suites (287 tests)
+│   │       └── __tests__/      # Vitest client suites (318 tests)
 │   ├── package.json
 │   └── vite.config.js
 ├── server/                     # Node.js + Express + Socket.IO signaling service
 │   ├── index.js                # Server entry point, TURN endpoint, socket events
 │   ├── lib.js                  # Subnet clustering, room registry, SimilarityIndex
 │   ├── turn.js                 # Metered.ca credential manager with TTL caching
-│   ├── *.test.js               # Vitest server suites (70 tests)
+│   ├── *.test.js               # Vitest server suites (75 tests)
 │   └── package.json
 ├── worker/                     # Cloudflare Workers + Durable Objects edge signaling
 │   ├── src/
@@ -467,7 +470,7 @@ lan-share/
 │   └── package.json
 ├── docs/                       # Project documentation & guides
 │   ├── assets/                 # Vector banner & architecture diagrams
-│   ├── QA-CHECKLIST.md         # Multi-device QA checklist
+│   ├── MANUAL-TESTING.md       # Cross-device manual testing guide
 │   └── CHANGELOG.md            # Detailed milestone and release notes
 ├── docker-compose.yml          # Containerized local development stack
 └── README.md                   # Repository overview

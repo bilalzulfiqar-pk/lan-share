@@ -4,6 +4,26 @@ All notable changes and architectural improvements to LAN Share are documented i
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [1.3.0] - 2026-10-18
+
+### Added
+* **1 MiB Buffered Read-Ahead with Double-Buffered Prefetching (`client/src/lib/transferEngine.js`):** Decoupled disk read block size (`DISK_READ_BLOCK_BYTES = 1024 * 1024` — 1 MiB) from wire transmission chunk size (`MAX_CHUNK_SIZE_BYTES = 65536` — 64 KiB). Implemented double-buffered background prefetching where Android flash storage reads the subsequent 1 MiB block in parallel while the current block drains over the WebRTC DataChannel, slashing Android Storage Access Framework (SAF) Binder IPC context switches by 94% on mobile uploads.
+* **1 MiB Reads for Resumption Prefix Hashing:** Upgraded mid-file byte-offset resumption prefix hashing pass (`0 .. fromOffset`) to stream in 1 MiB blocks instead of 64 KiB slices, accelerating resumption setup on multi-gigabyte transfers.
+* **Zero-Cost Live RTT Latency Telemetry:** Extracted `currentRoundTripTime` / `roundTripTime` from the active, nominated WebRTC candidate-pair in `TransferEngine.parseConnectionDetails()`. Wired live latency (`~1 ms`) through `useWebRTC.js` into the Connection Mode popover badge and Debug Console sidebar, giving mathematical proof that traffic routes directly on local Wi-Fi without internet loopback.
+* **Reverse Handshake Route Optimization (`request-offer`):** Implemented an SDP offer/answer inversion protocol allowing mobile receiver devices to request desktop peers to initiate the offer. This grants mobile devices direct access to desktop local Wi-Fi host candidates even under asymmetric router AP filtering, with full fallback protection.
+* **In-App Camera QR Code Scanner (`client/src/components/QrScanner.jsx`):** Integrated a camera-based QR scanner using `jsQR` with live video stream rendering, automatic canvas scanning, torch/flashlight controls, rear/front camera selection, and instant room auto-joining.
+* **Audio Gesture Unlock & Bell Notification Controls:** Hardened the WebAudio notification system with user gesture unlocking on first interaction, desktop/mobile Service Worker notification sync, and UI bell toggles for silent operation.
+
+### Changed
+* **Exponential Moving Average (EMA) Speed Smoothing:** Upgraded live transfer speed calculations to an exponential moving average (`alpha = 0.3`) with a 1500 ms stall detection watchdog that decays speed to 0 MB/s if the connection freezes.
+* **Diagnostic Popover Header & Layout Polish:** Redesigned the Connection Mode diagnostic popover header: converted the pinned state indicator into a sleek, borderless, transparent icon button (`[📌]`) matching the close (`×`) icon, added `white-space: nowrap` to titles and latency badges, and expanded desktop popover width to 315px (260px on mobile) to eliminate all awkward line wrapping.
+* **Mobile Responsive Spacing:** Standardized 38px file icon sizing and refined card padding across compact mobile viewports (< 480px).
+* **Test Suite Expansion:** Expanded automated test coverage across client, server, and worker packages to **406 automated tests** (318 client + 75 server + 13 worker, 100% passing).
+
+### Fixed
+* **Grace Timer Race Condition:** Hardened DataChannel reattachment tests against event-loop timing jitter during parallel multi-suite execution.
+* **Double-Buffered Rejection Guard:** Attached `.catch(() => {})` handlers to background prefetch promises to prevent unhandled promise rejections on transfer abort or early teardown.
+
 ---
 
 ## [1.2.0] - 2026-10-16
