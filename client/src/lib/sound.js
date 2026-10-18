@@ -40,8 +40,16 @@ function playTone(context, frequency, startAt, duration, volume) {
     oscillator.stop(startAt + duration + 0.05);
 }
 
-export function playNotificationBlip() {
+export function unlockAudioContext() {
     const context = getContext();
+    if (context && context.state === 'suspended') {
+        context.resume().catch(() => {});
+    }
+    return context;
+}
+
+export function playNotificationBlip() {
+    const context = unlockAudioContext();
     if (!context) return;
 
     try {

@@ -1,5 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { isIosDevice, areNotificationsSupported } from '../lib/notifications';
+import { isIosDevice, areNotificationsSupported, getNotificationPermission } from '../lib/notifications';
+
+export const SHOW_NOTIFICATION_BELL = true;
 
 export function Header({
   isConnected,
@@ -17,6 +19,7 @@ export function Header({
   setShowQrPopup,
   notifyEnabled,
   handleNotifyToggle,
+  showNotificationBell = SHOW_NOTIFICATION_BELL,
   showDebugSidebar,
   toggleDebugSidebar,
   roomCode,
@@ -145,12 +148,15 @@ export function Header({
             </svg>
           </button>
 
-          {(() => {
+          {showNotificationBell && (() => {
             const isIos = isIosDevice();
+            const perm = getNotificationPermission();
             const notifyTitle = notifyEnabled
               ? (isIos && !areNotificationsSupported()
                   ? 'Sound alerts active (Add to Home Screen for banner alerts) - click to mute'
-                  : 'Alerts active - click to mute')
+                  : (perm === 'granted'
+                      ? 'Sound & banner alerts active - click to mute'
+                      : 'Sound alerts active (browser banners blocked in site settings) - click to mute'))
               : 'Alerts muted - click to enable sounds and notifications';
 
             const notifyAriaLabel = notifyEnabled

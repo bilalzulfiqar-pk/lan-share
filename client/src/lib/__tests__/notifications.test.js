@@ -91,13 +91,14 @@ describe('Notifications Utility', () => {
             }
         });
 
-        const result = await showNotification('Transfer Complete', { body: 'Received photo.jpg' });
+        const result = await showNotification('Transfer Complete', { body: 'Received photo.jpg', tag: 'custom-file-tag' });
 
         expect(result).toBe(true);
         expect(mockShowNotification).toHaveBeenCalledWith('Transfer Complete', expect.objectContaining({
             body: 'Received photo.jpg',
             icon: '/icon-192.png',
-            badge: '/icon-192.png'
+            badge: '/icon-192.png',
+            tag: 'custom-file-tag'
         }));
     });
 

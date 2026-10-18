@@ -118,34 +118,82 @@ function App() {
     localStorage.setItem(NOTIFY_STORAGE_KEY, notifyEnabled ? 'true' : 'false');
   }, [notifyEnabled]);
 
-  const announceEvent = useCallback((title, body, { playSound = true } = {}) => {
+  const unreadAlertsRef = useRef(0);
+  const baseTitleRef = useRef('');
+
+  useEffect(() => {
+    if (typeof document !== 'undefined') {
+      baseTitleRef.current = document.title || 'LAN Share';
+    }
+
+    const clearAlertBadge = () => {
+      unreadAlertsRef.current = 0;
+      if (typeof document !== 'undefined' && baseTitleRef.current) {
+        document.title = baseTitleRef.current;
+      }
+    };
+
+    window.addEventListener('focus', clearAlertBadge);
+    const onVisibility = () => {
+      if (typeof document !== 'undefined' && !document.hidden) {
+        clearAlertBadge();
+      }
+    };
+    document.addEventListener('visibilitychange', onVisibility);
+
+    return () => {
+      window.removeEventListener('focus', clearAlertBadge);
+      document.removeEventListener('visibilitychange', onVisibility);
+    };
+  }, []);
+
+  const announceEvent = useCallback((title, body, { playSound = true, tag } = {}) => {
     if (!notifyEnabled) return;
 
     if (playSound) {
       playNotificationBlip();
     }
-    if (document.hidden) {
-      showNotification(title, { body, tag: 'lan-share' });
+
+    const isBackgrounded = typeof document !== 'undefined' && (
+      document.hidden || (typeof document.hasFocus === 'function' && !document.hasFocus())
+    );
+
+    if (isBackgrounded) {
+      unreadAlertsRef.current += 1;
+      const count = unreadAlertsRef.current;
+      const cleanBase = (baseTitleRef.current || document.title || 'LAN Share').replace(/^\(\d+\)\s*/, '');
+      baseTitleRef.current = cleanBase;
+      document.title = `(${count}) ${cleanBase}`;
+
+      showNotification(title, {
+        body,
+        tag: tag || `lan-share-${Date.now()}`
+      });
     }
   }, [notifyEnabled]);
 
   const handleNotifyToggle = useCallback(async () => {
     if (!notifyEnabled) {
-      if (!areNotificationsSupported()) {
-        // Sound-only mode for browsers with no Notification API.
-        setNotifyEnabled(true);
-        return;
+      // 1. Synchronously unlock Web Audio & play blip on the EXACT tick of the user gesture
+      setNotifyEnabled(true);
+      playNotificationBlip();
+
+      // 2. Afterwards, query or prompt for OS notification permission asynchronously
+      let permission = 'denied';
+      if (areNotificationsSupported()) {
+        permission = getNotificationPermission();
+        if (permission === 'default') {
+          permission = await requestNotificationPermission();
+        }
       }
 
-      let permission = getNotificationPermission();
-      if (permission === 'default') {
-        permission = await requestNotificationPermission();
+      // 3. One-time welcome banner if OS permission was granted
+      if (permission === 'granted') {
+        showNotification('LAN Share Alerts Enabled', {
+          body: 'You will be notified when files or messages arrive in the background.',
+          tag: 'lan-share-welcome'
+        });
       }
-
-      // Only flip the bell on when notifications can actually be delivered.
-      // Dismissing the prompt leaves permission 'default' - the bell stays
-      // off and will ask again next time; a blocked browser stays off too.
-      setNotifyEnabled(permission === 'granted');
       return;
     }
     setNotifyEnabled(false);
@@ -186,7 +234,11 @@ function App() {
 
     if (!chatSession.open || chatSession.key !== key) {
       setUnreadByDevice((prev) => ({ ...prev, [key]: (prev[key] || 0) + 1 }));
-      announceEvent(`Message from ${getPeerName(peerId)}`, message.text.length > 80 ? `${message.text.slice(0, 80)}…` : message.text);
+      announceEvent(
+        `Message from ${getPeerName(peerId)}`,
+        message.text.length > 80 ? `${message.text.slice(0, 80)}…` : message.text,
+        { tag: `lan-share-chat-${peerId}` }
+      );
     } else {
       // Refresh the pinned peerId in case the peer reconnected with a new
       // socket id but the same device.
@@ -218,7 +270,14 @@ function App() {
     getPeerName,
     getPeerInfo: (peerId) => peers.find((p) => p.id === peerId) || null,
     onChat: handleIncomingChat,
-    onNotify: (event) => announceEvent(event.title, event.body, { playSound: !event.silent && event.title !== 'Transfer Complete' }),
+    onNotify: (event) => announceEvent(
+      event.title,
+      event.body,
+      {
+        playSound: !event.silent && event.title !== 'Transfer Complete',
+        tag: `lan-share-file-${event.fileId || Date.now()}`
+      }
+    ),
     strictLocalMode,
     soundEnabled: notifyEnabled
   });

@@ -1,7 +1,7 @@
 import React from 'react';
 import { describe, it, expect } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { Header } from '../Header';
+import { Header, SHOW_NOTIFICATION_BELL } from '../Header';
 
 describe('Header component rendering', () => {
     const defaultProps = {
@@ -64,13 +64,28 @@ describe('Header component rendering', () => {
         expect(html).not.toContain('is-active-icon');
     });
 
-    it('renders active alert tooltip and aria attributes when notifyEnabled is true', () => {
+    it('renders active alert tooltip when notifyEnabled is true and browser banners are blocked/unsupported', () => {
         const html = renderToStaticMarkup(<Header {...defaultProps} notifyEnabled={true} />);
 
-        expect(html).toContain('title="Alerts active - click to mute"');
+        expect(html).toContain('title="Sound alerts active (browser banners blocked in site settings) - click to mute"');
         expect(html).toContain('aria-label="Mute sound alerts and notifications"');
         expect(html).toContain('aria-pressed="true"');
         expect(html).toContain('is-active-icon');
+    });
+
+    it('renders full sound & banner alert tooltip when notifyEnabled is true and permission is granted', () => {
+        const originalNotification = globalThis.Notification;
+        const originalWindow = globalThis.window;
+        globalThis.Notification = { permission: 'granted' };
+        globalThis.window = { Notification: globalThis.Notification };
+        try {
+            const html = renderToStaticMarkup(<Header {...defaultProps} notifyEnabled={true} />);
+            expect(html).toContain('title="Sound &amp; banner alerts active - click to mute"');
+            expect(html).toContain('is-active-icon');
+        } finally {
+            globalThis.Notification = originalNotification;
+            globalThis.window = originalWindow;
+        }
     });
 
     it('renders the mobile more button and desktop tool classes', () => {
@@ -82,5 +97,13 @@ describe('Header component rendering', () => {
         expect(html).toContain('header-tool-theme');
         expect(html).toContain('header-tool-qr');
         expect(html).toContain('header-tool-debug');
+    });
+
+    it('exports SHOW_NOTIFICATION_BELL and hides the bell icon when showNotificationBell is false', () => {
+        expect(SHOW_NOTIFICATION_BELL).toBe(true);
+
+        const html = renderToStaticMarkup(<Header {...defaultProps} showNotificationBell={false} />);
+        expect(html).not.toContain('aria-label="Enable sound alerts and notifications"');
+        expect(html).not.toContain('aria-label="Mute sound alerts and notifications"');
     });
 });
