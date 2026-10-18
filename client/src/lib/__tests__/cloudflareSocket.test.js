@@ -226,6 +226,30 @@ describe('createCloudflareSocket adapter', () => {
         socket.disconnect();
     });
 
+    it('cleanly forwards and receives WebRTC signaling events including request-offer', async () => {
+        const socket = createCloudflareSocket('https://lan-share-signaling.workers.dev');
+        vi.advanceTimersByTime(15);
+        const ws = MockWebSocket.instances[0];
+        ws.receiveMessage({ type: 'connected', id: 'peer-1' });
+
+        const requestOfferListener = vi.fn();
+        socket.on('request-offer', requestOfferListener);
+
+        // 1. Verify emit sends { type: 'request-offer', data: { target: 'peer-2' } }
+        socket.emit('request-offer', { target: 'peer-2' });
+        expect(ws.sent.length).toBe(1);
+        const sentMsg = JSON.parse(ws.sent[0]);
+        expect(sentMsg.type).toBe('request-offer');
+        expect(sentMsg.data).toEqual({ target: 'peer-2' });
+
+        // 2. Verify server message invokes listener with payload
+        ws.receiveMessage({ type: 'request-offer', data: { sender: 'peer-2' } });
+        expect(requestOfferListener).toHaveBeenCalledTimes(1);
+        expect(requestOfferListener).toHaveBeenCalledWith({ sender: 'peer-2' });
+
+        socket.disconnect();
+    });
+
     it('automatically reconnects with backoff on unexpected close and fires connect again', async () => {
         const socket = createCloudflareSocket('https://lan-share-signaling.workers.dev');
         vi.advanceTimersByTime(15);

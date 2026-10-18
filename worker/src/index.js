@@ -459,8 +459,8 @@ export class SignalingHub extends DurableObject {
             return;
         }
 
-        // WebRTC Signaling Relays: offer, answer, ice-candidate
-        if (type === 'offer' || type === 'answer' || type === 'ice-candidate') {
+        // WebRTC Signaling Relays: offer, answer, ice-candidate, request-offer
+        if (type === 'offer' || type === 'answer' || type === 'ice-candidate' || type === 'request-offer') {
             const sender = this.users[socketId];
             if (!sender) return;
 
@@ -480,6 +480,9 @@ export class SignalingHub extends DurableObject {
             } else if (type === 'ice-candidate') {
                 payload = { candidate: data?.candidate };
                 isValid = isValidIceCandidate(payload.candidate);
+            } else if (type === 'request-offer') {
+                payload = {};
+                isValid = Boolean(data && typeof data === 'object');
             }
 
             const target = typeof data?.target === 'string' ? data.target : null;
@@ -503,7 +506,7 @@ export class SignalingHub extends DurableObject {
                 return;
             }
 
-            if (type === 'offer' && currentlyVisible) {
+            if ((type === 'offer' || type === 'request-offer') && currentlyVisible) {
                 this.signalingRegistry.registerSession(socketId, target);
                 const pairKey = this.signalingRegistry._pairKey(socketId, target);
                 const expiresAt = this.signalingRegistry.sessions.get(pairKey);

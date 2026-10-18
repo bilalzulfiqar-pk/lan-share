@@ -373,6 +373,19 @@ describe('SignalingHub Durable Object with WebSocket Hibernation', () => {
         expect(receivedCandidate.type).toBe('ice-candidate');
         expect(receivedCandidate.data.sender).toBe(id1);
         expect(receivedCandidate.data.candidate).toEqual(validCandidate);
+
+        // Send request-offer from Bob to Alice (e.g. transfer renegotiation)
+        ws1.sent.length = 0;
+        await hub.webSocketMessage(ws2, JSON.stringify({
+            type: 'request-offer',
+            data: { target: id1 }
+        }));
+
+        expect(ws1.sent.length).toBe(1);
+        const receivedRequestOffer = JSON.parse(ws1.sent[0]);
+        expect(receivedRequestOffer.type).toBe('request-offer');
+        expect(receivedRequestOffer.data.sender).toBe(id2);
+        expect(hub.signalingRegistry.isAuthorized(id2, id1)).toBe(true);
     });
 
     it('enforces relay strikes and disconnects abusive clients on 25 strikes', async () => {
