@@ -10,6 +10,7 @@ export function useWebRTC(socket, myId, { getPeerName, getPeerInfo, onChat, onNo
     const [peerStatus, setPeerStatus] = useState({});
     const [connectionTypes, setConnectionTypes] = useState({});
     const [routeNotes, setRouteNotes] = useState({});
+    const [connectionRtts, setConnectionRtts] = useState({});
     const [error, setError] = useState(null);
 
     const engineRef = useRef(null);
@@ -80,6 +81,9 @@ export function useWebRTC(socket, myId, { getPeerName, getPeerInfo, onChat, onNo
                         if (event.routeNote !== undefined) {
                             setRouteNotes((prev) => ({ ...prev, [event.peerId]: event.routeNote }));
                         }
+                        if (event.rttMs !== undefined) {
+                            setConnectionRtts((prev) => ({ ...prev, [event.peerId]: event.rttMs }));
+                        }
                         break;
                     case 'error':
                         setError(event.message);
@@ -141,6 +145,10 @@ export function useWebRTC(socket, myId, { getPeerName, getPeerInfo, onChat, onNo
         return connectionTypes[peerId] || engineRef.current?.getConnectionType(peerId) || 'unknown';
     }, [connectionTypes]);
 
+    const getConnectionRtt = useCallback((peerId) => {
+        return connectionRtts[peerId] ?? engineRef.current?.getConnectionRtt(peerId) ?? null;
+    }, [connectionRtts]);
+
     const clearHistory = useCallback(() => {
         setHistory((prev) => {
             const activeStatuses = new Set(['uploading', 'downloading', 'connecting', 'waiting', 'offered']);
@@ -165,6 +173,7 @@ export function useWebRTC(socket, myId, { getPeerName, getPeerInfo, onChat, onNo
         peerStatus,
         connectionTypes,
         routeNotes,
+        connectionRtts,
         strictLocalMode,
         error,
         sendFilesOffer,
@@ -172,6 +181,7 @@ export function useWebRTC(socket, myId, { getPeerName, getPeerInfo, onChat, onNo
         saveReceivedFile,
         cancelTransfer,
         sendChat,
-        getConnectionType
+        getConnectionType,
+        getConnectionRtt
     };
 }

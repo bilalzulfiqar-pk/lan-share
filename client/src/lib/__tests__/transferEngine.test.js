@@ -348,7 +348,7 @@ describe('TransferEngine', () => {
 
     it('channel reattachment clears grace timer and preserves current progress', async () => {
         const { engineA, engineB, eventsB } = createEnginePair();
-        const file = createMockFile('stream2.bin', 1024 * 1024);
+        const file = createMockFile('stream2.bin', 2 * 1024 * 1024);
 
         const id = await offerAndRequestId(engineA, eventsB, file);
         await engineB.requestFile(id);
@@ -363,6 +363,8 @@ describe('TransferEngine', () => {
         // Close channel to trigger grace period
         const currentChannel = engineA.outgoing.get(id)?.channel;
         currentChannel?.close();
+
+        await waitFor(() => receiveState.graceTimer != null, { label: 'graceTimer initiated' });
 
         const expectedProgress = Math.floor((receiveState.received / receiveState.size) * 100);
         expect(expectedProgress).toBeGreaterThan(0);
@@ -475,6 +477,98 @@ describe('TransferEngine', () => {
 
         expect(engine.parseConnectionType(stats)).toBe('direct-stun');
         engine.destroy();
+    });
+
+    it('extracts RTT telemetry from active candidate pair in parseConnectionDetails', () => {
+        const bus = createSocketBus();
+        const socket = new MockSocket('alice', bus);
+        const engine = new TransferEngine({
+            socket,
+            myId: 'alice',
+            fetchTurnCredentials: false
+        });
+
+        const statsWithRtt = new Map([
+            ['t1', { type: 'transport', selectedCandidatePairId: 'cp1' }],
+            ['cp1', { id: 'cp1', localCandidateId: 'c1', remoteCandidateId: 'c2', currentRoundTripTime: 0.0035 }],
+            ['c1', { id: 'c1', candidateType: 'host', address: '192.168.1.50' }],
+            ['c2', { id: 'c2', candidateType: 'host', address: '192.168.1.51' }]
+        ]);
+
+        const details = engine.parseConnectionDetails(statsWithRtt);
+        expect(details.type).toBe('direct-lan');
+        expect(details.rttMs).toBe(4); // 3.5ms rounded to 4ms
+
+        // Sub-millisecond latency clamped to 1ms
+        const statsSubMs = new Map([
+            ['t1', { type: 'transport', selectedCandidatePairId: 'cp1' }],
+            ['cp1', { id: 'cp1', localCandidateId: 'c1', remoteCandidateId: 'c2', currentRoundTripTime: 0.0003 }],
+            ['c1', { id: 'c1', candidateType: 'host', address: '192.168.1.50' }],
+            ['c2', { id: 'c2', candidateType: 'host', address: '192.168.1.51' }]
+        ]);
+        expect(engine.parseConnectionDetails(statsSubMs).rttMs).toBe(1);
+
+        // Fallback roundTripTime property
+        const statsFallback = new Map([
+            ['t1', { type: 'transport', selectedCandidatePairId: 'cp1' }],
+            ['cp1', { id: 'cp1', localCandidateId: 'c1', remoteCandidateId: 'c2', roundTripTime: 0.012 }],
+            ['c1', { id: 'c1', candidateType: 'host', address: '192.168.1.50' }],
+            ['c2', { id: 'c2', candidateType: 'host', address: '192.168.1.51' }]
+        ]);
+        expect(engine.parseConnectionDetails(statsFallback).rttMs).toBe(12);
+
+        // Negative/invalid RTT ignored
+        const statsInvalid = new Map([
+            ['t1', { type: 'transport', selectedCandidatePairId: 'cp1' }],
+            ['cp1', { id: 'cp1', localCandidateId: 'c1', remoteCandidateId: 'c2', currentRoundTripTime: -0.5 }],
+            ['c1', { id: 'c1', candidateType: 'host', address: '192.168.1.50' }],
+            ['c2', { id: 'c2', candidateType: 'host', address: '192.168.1.51' }]
+        ]);
+        expect(engine.parseConnectionDetails(statsInvalid).rttMs).toBeNull();
+
+        engine.destroy();
+    });
+
+    it('transfers a multi-block 2.5 MiB file across 1 MiB boundaries with SHA-256 verification', async () => {
+        const { engineA, engineB, eventsA, eventsB } = createEnginePair();
+        const file = createMockFile('large-payload.bin', Math.round(2.5 * 1024 * 1024), 'application/octet-stream', 0x5a);
+
+        const id = await offerAndRequestId(engineA, eventsB, file);
+        await engineB.requestFile(id);
+
+        await waitFor(() => lastUpdateFor(eventsA, id)?.status === 'completed', { label: 'sender completed' });
+        await waitFor(() => lastUpdateFor(eventsB, id)?.status === 'completed', { label: 'receiver completed' });
+
+        const receiverUpdate = lastUpdateFor(eventsB, id);
+        expect(receiverUpdate.verified).toBe(true);
+        expect(receiverUpdate.progress).toBe(100);
+
+        engineA.destroy();
+        engineB.destroy();
+    });
+
+    it('resumes file upload from mid-file offset 1,250,000 across 1 MiB block boundary with SHA-256 integrity', async () => {
+        const { engineA, engineB, eventsA, eventsB } = createEnginePair();
+        const fileSize = Math.round(2.5 * 1024 * 1024);
+        const file = createMockFile('resumed-payload.bin', fileSize, 'application/octet-stream', 0x3c);
+
+        const id = await offerAndRequestId(engineA, eventsB, file);
+        await engineB.requestFile(id);
+
+        // Resume from offset 1,250,000 (spans across 1 MiB boundary)
+        const fromOffset = 1250000;
+        const sessionA = engineA.sessions.get('bob');
+        expect(sessionA).toBeDefined();
+
+        await engineA.startUpload(sessionA, id, fromOffset);
+
+        await waitFor(() => lastUpdateFor(eventsA, id)?.status === 'completed', { label: 'sender completed resumption' });
+        const senderUpdate = lastUpdateFor(eventsA, id);
+        expect(senderUpdate.progress).toBe(100);
+        expect(senderUpdate.digest).toBeTruthy();
+
+        engineA.destroy();
+        engineB.destroy();
     });
 
     it('emits request-offer and sets routeOptimizationNote when Mobile initiates transfer to Desktop', () => {

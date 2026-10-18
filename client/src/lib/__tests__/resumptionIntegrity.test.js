@@ -67,21 +67,21 @@ describe('Resumption Integrity & Verification (TEST-06)', () => {
 
     it('reconstructs file bit-for-bit after 50% DataChannel drop and verifies SHA-256', async () => {
         const { engineA, engineB, eventsA, eventsB } = createEnginePair();
-        // 512 KiB = 8 chunks of 64 KiB
-        const fileSize = 512 * 1024;
+        // 2 MiB = two 1 MiB blocks
+        const fileSize = 2 * 1024 * 1024;
         const file = createMockFile('video-512k.mp4', fileSize, 'video/mp4', 0x77, 8);
 
         const id = await offerAndRequestId(engineA, eventsB, file);
         await engineB.requestFile(id);
 
-        // Wait until approximately 50% (at least 256 KiB = 4 chunks) has been received
+        // Wait until approximately 50% (at least 1024 KiB = 1 MiB block) has been received
         const receiveState = await waitFor(() => {
             const state = engineB.receives.get(id);
-            return (state && state.received >= 256 * 1024 && state.received < fileSize) ? state : null;
+            return (state && state.received >= 1024 * 1024 && state.received < fileSize) ? state : null;
         }, { interval: 2, label: '50% progress' });
 
         const receivedAtDrop = receiveState.received;
-        expect(receivedAtDrop).toBeGreaterThanOrEqual(256 * 1024);
+        expect(receivedAtDrop).toBeGreaterThanOrEqual(1024 * 1024);
         expect(receivedAtDrop).toBeLessThan(fileSize);
 
         // Simulate abrupt DataChannel close (e.g. Wi-Fi blip or NAT timeout)
@@ -113,18 +113,18 @@ describe('Resumption Integrity & Verification (TEST-06)', () => {
 
     it('rejects transfer verification if a chunk is corrupted during resumption', async () => {
         const { engineA, engineB, eventsB } = createEnginePair();
-        const fileSize = 512 * 1024;
+        const fileSize = 2 * 1024 * 1024;
         const file = createMockFile('integrity-test.bin', fileSize, 'application/octet-stream', 0x99, 8);
 
         const id = await offerAndRequestId(engineA, eventsB, file);
         await engineB.requestFile(id);
 
-        // Wait until at least 1 chunk (64 KiB) is received while transfer is still in flight
+        // Wait until at least 1 block (1024 KiB) is received while transfer is still in flight
         const receiveState = await waitFor(() => {
             const state = engineB.receives.get(id);
-            return (state && state.received >= 64 * 1024 && state.received < fileSize) ? state : null;
+            return (state && state.received >= 1024 * 1024 && state.received < fileSize) ? state : null;
         }, { interval: 2, label: 'initial chunk' });
-        expect(receiveState.received).toBeGreaterThanOrEqual(64 * 1024);
+        expect(receiveState.received).toBeGreaterThanOrEqual(1024 * 1024);
         expect(receiveState.received).toBeLessThan(fileSize);
 
         // Drop channel

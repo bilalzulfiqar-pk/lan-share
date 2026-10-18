@@ -260,6 +260,7 @@ function App() {
     peerStatus,
     connectionTypes,
     routeNotes,
+    connectionRtts,
     error,
     sendFilesOffer,
     requestFile,
@@ -857,6 +858,9 @@ function App() {
                             <span className={`conn-type-badge ${connectionTypes[debugPeerId]}`}>
                               {connectionTypes[debugPeerId]}
                             </span>
+                            {connectionRtts[debugPeerId] !== undefined && connectionRtts[debugPeerId] !== null ? (
+                              <span className="debug-rtt"> (~{connectionRtts[debugPeerId]} ms)</span>
+                            ) : null}
                           </>
                         ) : null}
                       </span>
@@ -1118,6 +1122,7 @@ function App() {
                         <ConnectionModeBadge
                           mode={activeSelectedMode}
                           routeNote={activeSelectedDevice ? routeNotes[activeSelectedDevice] : null}
+                          rttMs={activeSelectedDevice && connectionRtts[activeSelectedDevice] !== undefined ? connectionRtts[activeSelectedDevice] : null}
                           className="file-selection-mode-badge"
                         />
                       </motion.div>

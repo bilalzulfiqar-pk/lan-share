@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { MODE_CONFIG } from '../lib/connectionModes';
 
-export function ConnectionModeBadge({ mode = 'direct-lan', className = '', showInfo = true, defaultPinned = false, routeNote = null }) {
+export function ConnectionModeBadge({ mode = 'direct-lan', className = '', showInfo = true, defaultPinned = false, routeNote = null, rttMs = null }) {
     const [isPinned, setIsPinned] = useState(defaultPinned);
     const [isHovered, setIsHovered] = useState(false);
     const containerRef = useRef(null);
@@ -119,6 +119,15 @@ export function ConnectionModeBadge({ mode = 'direct-lan', className = '', showI
                             <h4 className="conn-mode-popover-title">{config.title}</h4>
                         </div>
                         <div className="conn-mode-popover-actions">
+                            {rttMs !== null && (
+                                <span
+                                    className="conn-mode-rtt-chip"
+                                    data-testid="conn-mode-rtt-indicator"
+                                    title={`Round-Trip Latency: ~${rttMs} ms`}
+                                >
+                                    ~{rttMs} ms
+                                </span>
+                            )}
                             {isPinned && (
                                 <button
                                     type="button"
@@ -128,11 +137,10 @@ export function ConnectionModeBadge({ mode = 'direct-lan', className = '', showI
                                     aria-label="Unpin transfer mode details"
                                     data-testid="conn-mode-pinned-indicator"
                                 >
-                                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                                         <line x1="12" y1="17" x2="12" y2="22" />
                                         <path d="M5 17h14v-2l-2-2V5h1V3H6v2h1v8l-2 2v2z" />
                                     </svg>
-                                    <span>Pinned</span>
                                 </button>
                             )}
                             <button

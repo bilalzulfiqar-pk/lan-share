@@ -23,7 +23,8 @@ import {
     stripRelayFromSdp,
     resolveTurnApiUrl,
     isPrivateLanAddress,
-    detectDeviceType
+    detectDeviceType,
+    DISK_READ_BLOCK_BYTES
 } from './protocol';
 export { isPrivateLanAddress, detectDeviceType };
 import { wakeLockManager } from './wakeLock';
@@ -240,6 +241,7 @@ class PeerSession {
         this.iceTransportListening = false;
         this.restartingIce = false;
         this.iceRestartWatchdog = null;
+        this.rttMs = null;
     }
 }
 
@@ -414,6 +416,10 @@ export class TransferEngine {
 
     getRouteNote(peerId) {
         return this.sessions.get(peerId)?.routeOptimizationNote || null;
+    }
+
+    getConnectionRtt(peerId) {
+        return this.sessions.get(peerId)?.rttMs ?? null;
     }
 
     updateMyId(newMyId) {
@@ -869,7 +875,11 @@ export class TransferEngine {
         try {
             if (typeof session.pc.getStats === 'function') {
                 const stats = await session.pc.getStats();
-                const type = this.parseConnectionType(stats);
+                const details = this.parseConnectionDetails(stats);
+                const type = details.type;
+                if (details.rttMs !== null) {
+                    session.rttMs = details.rttMs;
+                }
                 if (type && type !== 'unknown') {
                     if (type === 'relay-turn') {
                         session.peerConfirmedDirectLan = false;
@@ -883,6 +893,7 @@ export class TransferEngine {
                         type: 'connection-type',
                         peerId: session.peerId,
                         connectionType: effectiveType,
+                        rttMs: session.rttMs ?? null,
                         routeNote: session.routeOptimizationNote || null
                     });
                     this.checkRelayCapForSession(session);
@@ -924,8 +935,8 @@ export class TransferEngine {
         return session.connectionType || 'unknown';
     }
 
-    parseConnectionType(stats) {
-        if (!stats) return 'unknown';
+    parseConnectionDetails(stats) {
+        if (!stats) return { type: 'unknown', rttMs: null, selectedPair: null };
 
         let selectedPair = null;
         const reports = typeof stats.values === 'function'
@@ -979,7 +990,15 @@ export class TransferEngine {
             }
         }
 
+        let rttMs = null;
         if (selectedPair) {
+            const rawRtt = typeof selectedPair.currentRoundTripTime === 'number'
+                ? selectedPair.currentRoundTripTime
+                : (typeof selectedPair.roundTripTime === 'number' ? selectedPair.roundTripTime : null);
+            if (typeof rawRtt === 'number' && Number.isFinite(rawRtt) && rawRtt >= 0) {
+                rttMs = Math.max(1, Math.round(rawRtt * 1000));
+            }
+
             const local = findReport(selectedPair.localCandidateId);
             const remote = findReport(selectedPair.remoteCandidateId);
 
@@ -990,7 +1009,7 @@ export class TransferEngine {
             const remoteAddr = remote?.address || remote?.ip || selectedPair.remoteAddress || selectedPair.remoteIp;
 
             if (localType === 'relay' || remoteType === 'relay') {
-                return 'relay-turn';
+                return { type: 'relay-turn', rttMs, selectedPair };
             }
 
             const isLanCandidate = (cand, fallbackType, fallbackAddr) => {
@@ -1006,19 +1025,23 @@ export class TransferEngine {
             const remoteIsLan = isLanCandidate(remote, remoteType, remoteAddr);
 
             if (localIsLan && remoteIsLan) {
-                return 'direct-lan';
+                return { type: 'direct-lan', rttMs, selectedPair };
             }
 
             if (localType === 'srflx' || remoteType === 'srflx' || localType === 'prflx' || remoteType === 'prflx') {
-                return 'direct-stun';
+                return { type: 'direct-stun', rttMs, selectedPair };
             }
 
             if (localType === 'host' && remoteType === 'host') {
-                return 'direct-lan';
+                return { type: 'direct-lan', rttMs, selectedPair };
             }
         }
 
-        return 'unknown';
+        return { type: 'unknown', rttMs, selectedPair };
+    }
+
+    parseConnectionType(stats) {
+        return this.parseConnectionDetails(stats).type;
     }
 
     getRelayBlockError(isStrict = this.strictLocalMode) {
@@ -1281,7 +1304,13 @@ export class TransferEngine {
                 if (msg.mode === 'direct-lan' && session.connectionType !== 'relay-turn') {
                     session.peerConfirmedDirectLan = true;
                     session.connectionType = 'direct-lan';
-                    this.emit({ type: 'connection-type', peerId: session.peerId, connectionType: 'direct-lan' });
+                    this.emit({
+                        type: 'connection-type',
+                        peerId: session.peerId,
+                        connectionType: 'direct-lan',
+                        rttMs: session.rttMs ?? null,
+                        routeNote: session.routeOptimizationNote || null
+                    });
                     for (const [id, entry] of this.outgoing.entries()) {
                         if (entry.peerId === session.peerId) {
                             this.historyUpdate(id, { connectionType: 'direct-lan' });
@@ -1618,11 +1647,10 @@ export class TransferEngine {
                 // Already have the full file digest cached
             } else {
                 let hOffset = 0;
-                const HASH_BLOCK = 1024 * 1024;
                 while (hOffset < fromOffset) {
                     if (entry.uploadSessionId !== currentSessionId) return;
                     if (entry.cancelled) throw new TransferAbortedError();
-                    const blk = await file.slice(hOffset, Math.min(fromOffset, hOffset + HASH_BLOCK)).arrayBuffer();
+                    const blk = await file.slice(hOffset, Math.min(fromOffset, hOffset + DISK_READ_BLOCK_BYTES)).arrayBuffer();
                     hasher.update(new Uint8Array(blk));
                     hOffset += blk.byteLength;
                 }
@@ -1647,29 +1675,64 @@ export class TransferEngine {
             progress.noteTransferred(deltaSent, actualSent, totalSize);
         };
 
+        let nextReadPromise = null;
+        if (offset < totalSize) {
+            const initialEnd = Math.min(totalSize, offset + DISK_READ_BLOCK_BYTES);
+            nextReadPromise = file.slice(offset, initialEnd).arrayBuffer();
+            nextReadPromise.catch(() => {});
+        }
+
         try {
             while (offset < totalSize) {
                 if (entry.uploadSessionId !== currentSessionId) return;
                 if (entry.cancelled) throw new TransferAbortedError();
                 if (channel.readyState !== 'open') throw new TransferAbortedError('Connection closed during transfer.');
 
-                if (channel.bufferedAmount > SEND_HIGH_WATER_BYTES) {
-                    await waitForBufferDrain(channel, SEND_LOW_WATER_BYTES, reportSenderProgress);
-                    continue;
-                }
-
-                const buffer = await file.slice(offset, offset + chunkSize).arrayBuffer();
+                const blockBuffer = await nextReadPromise;
 
                 if (entry.uploadSessionId !== currentSessionId) return;
                 if (entry.cancelled) throw new TransferAbortedError();
                 if (channel.readyState !== 'open') throw new TransferAbortedError('Connection closed during transfer.');
 
-                channel.send(buffer);
-                if (!entry.digest) {
-                    hasher.update(new Uint8Array(buffer));
+                if (!blockBuffer || blockBuffer.byteLength === 0) {
+                    break;
                 }
-                offset += buffer.byteLength;
-                reportSenderProgress();
+
+                // Double-buffered prefetch: immediately trigger the read for the next 1 MiB block in background
+                const nextBlockStart = offset + blockBuffer.byteLength;
+                if (nextBlockStart < totalSize) {
+                    const nextBlockEnd = Math.min(totalSize, nextBlockStart + DISK_READ_BLOCK_BYTES);
+                    nextReadPromise = file.slice(nextBlockStart, nextBlockEnd).arrayBuffer();
+                    nextReadPromise.catch(() => {});
+                } else {
+                    nextReadPromise = null;
+                }
+
+                // Slicing standalone 64 KiB ArrayBuffers for wire transmission & backpressure control
+                let subOffset = 0;
+                while (subOffset < blockBuffer.byteLength) {
+                    if (entry.uploadSessionId !== currentSessionId) return;
+                    if (entry.cancelled) throw new TransferAbortedError();
+                    if (channel.readyState !== 'open') throw new TransferAbortedError('Connection closed during transfer.');
+
+                    if (channel.bufferedAmount > SEND_HIGH_WATER_BYTES) {
+                        await waitForBufferDrain(channel, SEND_LOW_WATER_BYTES, reportSenderProgress);
+                        if (entry.uploadSessionId !== currentSessionId) return;
+                        if (entry.cancelled) throw new TransferAbortedError();
+                        if (channel.readyState !== 'open') throw new TransferAbortedError('Connection closed during transfer.');
+                    }
+
+                    const chunkEnd = Math.min(blockBuffer.byteLength, subOffset + chunkSize);
+                    const chunk = blockBuffer.slice(subOffset, chunkEnd);
+
+                    channel.send(chunk);
+                    if (!entry.digest) {
+                        hasher.update(new Uint8Array(chunk));
+                    }
+                    subOffset += chunk.byteLength;
+                    offset += chunk.byteLength;
+                    reportSenderProgress();
+                }
             }
 
             await waitForBufferDrain(channel, 0, reportSenderProgress);
@@ -1745,7 +1808,13 @@ export class TransferEngine {
         if (senderConnectionType === 'direct-lan' && session.connectionType !== 'relay-turn') {
             session.peerConfirmedDirectLan = true;
             session.connectionType = 'direct-lan';
-            this.emit({ type: 'connection-type', peerId: session.peerId, connectionType: 'direct-lan' });
+            this.emit({
+                type: 'connection-type',
+                peerId: session.peerId,
+                connectionType: 'direct-lan',
+                rttMs: session.rttMs ?? null,
+                routeNote: session.routeOptimizationNote || null
+            });
         }
         const peerName = this.getPeerName(session.peerId);
         const streamCapable = canStreamSave() || canOpfsSave();

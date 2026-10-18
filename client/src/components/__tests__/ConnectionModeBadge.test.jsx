@@ -41,7 +41,8 @@ describe('ConnectionModeBadge Component', () => {
         const pinnedHtml = renderToStaticMarkup(<ConnectionModeBadge mode="direct-lan" defaultPinned={true} />);
         expect(pinnedHtml).toContain('conn-mode-pinned-chip');
         expect(pinnedHtml).toContain('data-testid="conn-mode-pinned-indicator"');
-        expect(pinnedHtml).toContain('Pinned');
+        expect(pinnedHtml).toContain('title="Pinned open. Click to unpin"');
+        expect(pinnedHtml).toContain('aria-label="Unpin transfer mode details"');
         expect(pinnedHtml).toContain('is-pinned');
         expect(pinnedHtml).toContain('conn-mode-popover is-open');
     });
@@ -66,5 +67,21 @@ describe('ConnectionModeBadge Component', () => {
         const html = renderToStaticMarkup(<ConnectionModeBadge mode="direct-lan" />);
         expect(html).not.toContain('conn-mode-popover-route-block');
         expect(html).not.toContain('⚡ Route Optimization');
+    });
+
+    it('renders RTT indicator chip in popover when rttMs is provided', () => {
+        const html = renderToStaticMarkup(<ConnectionModeBadge mode="direct-lan" rttMs={4} />);
+        expect(html).toContain('conn-mode-rtt-chip');
+        expect(html).toContain('data-testid="conn-mode-rtt-indicator"');
+        expect(html).toContain('~4 ms');
+    });
+
+    it('omits RTT indicator chip when rttMs is null or undefined', () => {
+        const htmlNull = renderToStaticMarkup(<ConnectionModeBadge mode="direct-lan" rttMs={null} />);
+        expect(htmlNull).not.toContain('data-testid="conn-mode-rtt-indicator"');
+        expect(htmlNull).not.toContain('conn-mode-rtt-chip');
+
+        const htmlUndef = renderToStaticMarkup(<ConnectionModeBadge mode="direct-lan" />);
+        expect(htmlUndef).not.toContain('data-testid="conn-mode-rtt-indicator"');
     });
 });

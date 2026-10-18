@@ -20,6 +20,7 @@ function createEnginePair(options = {}) {
     const engineA = new TransferEngine({
         socket: socketA,
         myId: 'alice',
+        fetchTurnCredentials: false,
         getPeerName: () => 'Bob',
         onEvent: (event) => eventsA.push(event),
         ...options
@@ -28,6 +29,7 @@ function createEnginePair(options = {}) {
     const engineB = new TransferEngine({
         socket: socketB,
         myId: 'bob',
+        fetchTurnCredentials: false,
         getPeerName: () => 'Alice',
         onEvent: (event) => eventsB.push(event),
         ...options
@@ -79,7 +81,8 @@ describe('Resumable Chunk Offsets on Network Hiccups', () => {
 
     it('sender starts upload from offset and maintains accurate overall progress and SHA-256 integrity', async () => {
         const { engineA, engineB, eventsA, eventsB } = createEnginePair();
-        const file = createMockFile('large-dataset.bin', 256 * 1024); // 256 KiB = 4 chunks of 64 KiB
+        const fileSize = 2 * 1024 * 1024;
+        const file = createMockFile('large-dataset.bin', fileSize, 'application/octet-stream', 0x2a, 15);
 
         const id = await offerAndRequestId(engineA, eventsB, file);
 
@@ -94,7 +97,7 @@ describe('Resumable Chunk Offsets on Network Hiccups', () => {
 
         const receivedBeforeBlip = receiveState.received;
         expect(receivedBeforeBlip).toBeGreaterThanOrEqual(64 * 1024);
-        expect(receivedBeforeBlip).toBeLessThan(256 * 1024);
+        expect(receivedBeforeBlip).toBeLessThan(fileSize);
 
         // Simulate Wi-Fi blip by closing the file data channel on sender
         const outgoingEntry = engineA.outgoing.get(id);
