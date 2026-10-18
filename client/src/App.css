@@ -781,6 +781,7 @@ button {
   display: flex;
   flex-direction: column;
   min-height: 100vh;
+  min-height: 100dvh;
   gap: 1.5rem;
   overflow-x: hidden;
   animation: appFadeIn 180ms ease-out;
@@ -2104,7 +2105,8 @@ button {
   padding: 1.2rem 1.3rem 1rem;
   display: flex;
   flex-direction: column;
-  max-height: 440px;
+  flex: 1;
+  min-height: 240px;
 }
 
 .section-header {
@@ -2384,6 +2386,11 @@ button {
   color: var(--text-tertiary);
 }
 
+.transfer-progress-percent {
+  font-weight: 600;
+  color: var(--primary);
+}
+
 .verified-badge {
   white-space: nowrap;
   display: inline-flex;
@@ -2633,12 +2640,12 @@ button {
   }
 
   .radar-section {
-    min-height: 340px;
-    padding: 1.7rem 0 0.5rem;
+    min-height: 380px;
+    padding: 1.6rem 0 0.5rem;
   }
 
   .radar-container {
-    max-width: 320px;
+    max-width: 380px;
   }
 
   .radar-blip-icon {
@@ -2652,7 +2659,8 @@ button {
   }
 
   .history-section {
-    max-height: none;
+    flex: 1;
+    min-height: 220px;
     padding: 1rem;
     border-radius: var(--radius-lg);
   }
@@ -2778,7 +2786,8 @@ button {
 
 @media (max-width: 480px) {
   .app-container {
-    padding: 0.5rem;
+    padding: 0.5rem 0.5rem 1.25rem;
+    padding-bottom: max(1.25rem, env(safe-area-inset-bottom, 20px));
   }
 
   .app-header {

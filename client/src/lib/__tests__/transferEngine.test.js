@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { TransferEngine } from '../transferEngine';
+import { TransferEngine, createProgressTracker } from '../transferEngine';
 import {
     installMockWebRTC,
     MockSocket,
@@ -523,5 +523,73 @@ describe('TransferEngine', () => {
         expect(initiateSpy).toHaveBeenCalledWith(session);
 
         engine.destroy();
+    });
+
+    describe('createProgressTracker EMA smoothing and stall decay', () => {
+        beforeEach(() => {
+            vi.useFakeTimers();
+        });
+
+        afterEach(() => {
+            vi.useRealTimers();
+        });
+
+        it('smooths speed updates using Exponential Moving Average (alpha = 0.3)', () => {
+            const updates = [];
+            const tracker = createProgressTracker((u) => updates.push(u));
+
+            // Initial window: transfer 1 MB over 1 second (1,000,000 B/s)
+            vi.advanceTimersByTime(1000);
+            tracker.noteTransferred(1000000, 1000000, 10000000);
+
+            expect(updates.length).toBeGreaterThan(0);
+            const firstSpeed = updates[updates.length - 1].speed;
+            expect(firstSpeed).toBe(1000000);
+
+            // Second window: transfer 2 MB over 1 second (instant speed = 2,000,000 B/s)
+            // Expected smoothed speed: 0.3 * 2,000,000 + 0.7 * 1,000,000 = 1,300,000 B/s
+            vi.advanceTimersByTime(1000);
+            tracker.noteTransferred(2000000, 3000000, 10000000);
+
+            const secondSpeed = updates[updates.length - 1].speed;
+            expect(secondSpeed).toBe(1300000);
+
+            tracker.destroy();
+        });
+
+        it('decays smoothed speed to 0 and sets eta to null when transfer stalls for > 1500ms', () => {
+            const updates = [];
+            const tracker = createProgressTracker((u) => updates.push(u));
+
+            // Initial transfer
+            vi.advanceTimersByTime(500);
+            tracker.noteTransferred(500000, 500000, 5000000);
+            expect(updates[updates.length - 1].speed).toBeGreaterThan(0);
+            expect(updates[updates.length - 1].eta).not.toBeNull();
+
+            // Stall: advance timers by 1600ms without new chunks
+            vi.advanceTimersByTime(1600);
+
+            const lastUpdate = updates[updates.length - 1];
+            expect(lastUpdate.speed).toBe(0);
+            expect(lastUpdate.eta).toBeNull();
+
+            tracker.destroy();
+        });
+
+        it('cleans up stall timer on finish and destroy without leaking intervals', () => {
+            const updates = [];
+            const tracker = createProgressTracker((u) => updates.push(u));
+
+            tracker.finish();
+            expect(updates[updates.length - 1].progress).toBe(100);
+            expect(updates[updates.length - 1].speed).toBeNull();
+            expect(updates[updates.length - 1].eta).toBeNull();
+
+            // Advancing time should not trigger further updates
+            const countAfterFinish = updates.length;
+            vi.advanceTimersByTime(5000);
+            expect(updates.length).toBe(countAfterFinish);
+        });
     });
 });

@@ -1,7 +1,7 @@
 import React from 'react';
 import { describe, it, expect } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { FileItem } from '../FileItem';
+import { FileItem, formatEta } from '../FileItem';
 
 describe('FileItem component honest state rendering', () => {
     it('renders "Connecting to device…" for connecting status', () => {
@@ -70,6 +70,8 @@ describe('FileItem component honest state rendering', () => {
         expect(html).toContain('transfer-status uploading');
         expect(html).toContain('role="progressbar"');
         expect(html).toContain('aria-valuenow="45"');
+        expect(html).toContain('45%');
+        expect(html).toContain('transfer-progress-percent');
         expect(html).toContain('5 MB/s');
         expect(html).toContain('11s left');
     });
@@ -346,6 +348,36 @@ describe('FileItem component honest state rendering', () => {
             <FileItem item={item59s} getPeerName={() => 'Alice'} />
         );
         expect(html59).toContain('1m left');
+    });
+
+    describe('formatEta duration formatting', () => {
+        it('formats sub-minute durations in seconds', () => {
+            expect(formatEta(11)).toBe('11s');
+            expect(formatEta(59)).toBe('59s');
+            expect(formatEta(0)).toBe('1s');
+        });
+
+        it('formats minute durations correctly', () => {
+            expect(formatEta(60)).toBe('1m');
+            expect(formatEta(65)).toBe('1m 5s');
+            expect(formatEta(120)).toBe('2m');
+            expect(formatEta(3599)).toBe('59m 59s');
+        });
+
+        it('formats hour durations cleanly with ${hours}h ${minutes}m or ${hours}h', () => {
+            expect(formatEta(3600)).toBe('1h');
+            expect(formatEta(3660)).toBe('1h 1m');
+            expect(formatEta(4500)).toBe('1h 15m');
+            expect(formatEta(7200)).toBe('2h');
+            expect(formatEta(7260)).toBe('2h 1m');
+        });
+
+        it('returns null for null, undefined, or non-finite seconds', () => {
+            expect(formatEta(null)).toBeNull();
+            expect(formatEta(undefined)).toBeNull();
+            expect(formatEta(Infinity)).toBeNull();
+            expect(formatEta(NaN)).toBeNull();
+        });
     });
 });
 

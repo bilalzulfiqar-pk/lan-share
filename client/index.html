@@ -419,7 +419,8 @@
       }
       @media (max-width: 480px) {
         .app-container {
-          padding: 0.5rem;
+          padding: 0.5rem 0.5rem 1.25rem;
+          padding-bottom: max(1.25rem, env(safe-area-inset-bottom, 20px));
         }
         .app-header {
           margin: 0 0.25rem;

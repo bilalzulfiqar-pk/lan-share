@@ -252,9 +252,9 @@ describe('Tier 5 Adversarial: CWV, Layout Geometry & PWA Stress Testing', () => 
             expect(criticalCss).toMatch(/@media\s*\(max-width:\s*880px\)\s*\{[\s\S]*?\.app-container\s*\{[^}]*padding:\s*0\.75rem 0\.75rem 1\.5rem;/);
             expect(appCss).toMatch(/@media\s*\(max-width:\s*880px\)\s*\{[\s\S]*?\.app-container\s*\{[^}]*padding:\s*0\.75rem 0\.75rem 1\.5rem;/);
 
-            // At 480px: padding reduced to 0.5rem and header margin 0 0.25rem
-            expect(criticalCss).toMatch(/@media\s*\(max-width:\s*480px\)\s*\{[\s\S]*?\.app-container\s*\{[^}]*padding:\s*0\.5rem;/);
-            expect(appCss).toMatch(/@media\s*\(max-width:\s*480px\)\s*\{[\s\S]*?\.app-container\s*\{[^}]*padding:\s*0\.5rem;/);
+            // At 480px: padding adjusted to 0.5rem 0.5rem 1.25rem and header margin 0 0.25rem
+            expect(criticalCss).toMatch(/@media\s*\(max-width:\s*480px\)\s*\{[\s\S]*?\.app-container\s*\{[^}]*padding:\s*0\.5rem 0\.5rem 1\.25rem;/);
+            expect(appCss).toMatch(/@media\s*\(max-width:\s*480px\)\s*\{[\s\S]*?\.app-container\s*\{[^}]*padding:\s*0\.5rem 0\.5rem 1\.25rem;/);
 
             expect(criticalCss).toMatch(/@media\s*\(max-width:\s*480px\)\s*\{[\s\S]*?\.app-header\s*\{[^}]*margin:\s*0 0\.25rem;/);
             expect(appCss).toMatch(/@media\s*\(max-width:\s*480px\)\s*\{[\s\S]*?\.app-header\s*\{[^}]*margin:\s*0 0\.25rem;/);

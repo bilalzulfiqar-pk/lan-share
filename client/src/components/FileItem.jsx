@@ -7,6 +7,21 @@ const CancelIcon = () => (
   </svg>
 );
 
+// eslint-disable-next-line react-refresh/only-export-components
+export function formatEta(seconds) {
+  if (seconds == null || !Number.isFinite(seconds)) return null;
+  const total = Math.max(0, Math.round(seconds));
+  if (total < 60) return `${Math.max(1, total)}s`;
+  if (total >= 3600) {
+    const hours = Math.floor(total / 3600);
+    const minutes = Math.floor((total % 3600) / 60);
+    return minutes > 0 ? `${hours}h ${minutes}m` : `${hours}h`;
+  }
+  const minutes = Math.floor(total / 60);
+  const rest = total % 60;
+  return rest > 0 ? `${minutes}m ${rest}s` : `${minutes}m`;
+}
+
 function FileItemComponent({ item, onRequest, onSave, onCancel, getPeerName, onOpenHotspotGuide, peers, isPeerOnline }) {
   const isSender = item.direction === 'out';
   const peerName = item.peerName || (getPeerName ? getPeerName(item.peerId) : 'Unknown');
@@ -96,15 +111,6 @@ function FileItemComponent({ item, onRequest, onSave, onCancel, getPeerName, onO
     const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
     const i = Math.floor(Math.log(safeBytes) / Math.log(k));
     return `${parseFloat((safeBytes / Math.pow(k, i)).toFixed(2))} ${sizes[i]}`;
-  };
-
-  const formatEta = (seconds) => {
-    if (seconds == null || !Number.isFinite(seconds)) return null;
-    const total = Math.max(0, Math.round(seconds));
-    if (total < 60) return `${Math.max(1, total)}s`;
-    const minutes = Math.floor(total / 60);
-    const rest = total % 60;
-    return rest > 0 ? `${minutes}m ${rest}s` : `${minutes}m`;
   };
 
   const getIcon = (type) => {
@@ -271,9 +277,15 @@ function FileItemComponent({ item, onRequest, onSave, onCancel, getPeerName, onO
         </div>
       )}
 
-      {isActive && item.speed != null && item.speed > 0 && (
+      {isActive && (
         <div className="transfer-rate">
-          <span>{formatSize(item.speed)}/s</span>
+          <span className="transfer-progress-percent">{item.progress ?? 0}%</span>
+          {item.speed != null && item.speed > 0 && (
+            <>
+              <span className="meta-sep" aria-hidden="true">·</span>
+              <span>{formatSize(item.speed)}/s</span>
+            </>
+          )}
           {formatEta(item.eta) && (
             <>
               <span className="meta-sep" aria-hidden="true">·</span>

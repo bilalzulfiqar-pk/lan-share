@@ -39,9 +39,10 @@ class TransferAbortedError extends Error {
     }
 }
 
-function waitForBufferDrain(channel, targetBytes) {
+function waitForBufferDrain(channel, targetBytes, onDrainTick = null) {
     return new Promise((resolve) => {
         if (!channel || channel.bufferedAmount <= targetBytes || channel.readyState !== 'open') {
+            if (onDrainTick) onDrainTick();
             resolve();
             return;
         }
@@ -62,16 +63,21 @@ function waitForBufferDrain(channel, targetBytes) {
             channel.removeEventListener('bufferedamountlow', onLow);
             channel.removeEventListener('close', cleanup);
             channel.removeEventListener('error', cleanup);
-            if (pollTimer) clearInterval(pollTimer);
+            if (pollTimer) {
+                clearInterval(pollTimer);
+                pollTimer = null;
+            }
             try {
                 channel.bufferedAmountLowThreshold = prevThreshold;
             } catch {
                 // ignore
             }
+            if (onDrainTick) onDrainTick();
             resolve();
         };
 
         const onLow = () => {
+            if (onDrainTick) onDrainTick();
             if (channel.bufferedAmount <= targetBytes || channel.readyState !== 'open') {
                 cleanup();
             }
@@ -82,10 +88,15 @@ function waitForBufferDrain(channel, targetBytes) {
         channel.addEventListener('error', cleanup);
 
         pollTimer = setInterval(() => {
+            if (onDrainTick) onDrainTick();
             if (channel.bufferedAmount <= targetBytes || channel.readyState !== 'open') {
                 cleanup();
             }
-        }, 100);
+        }, 50);
+
+        if (typeof pollTimer?.unref === 'function') {
+            pollTimer.unref();
+        }
     });
 }
 
@@ -109,26 +120,51 @@ export async function sweepOrphanedOpfsFiles(activeFileIds = new Set()) {
     }
 }
 
-function createProgressTracker(onProgress) {
-    return {
+export function createProgressTracker(onProgress) {
+    let stallTimer = null;
+
+    const tracker = {
         lastEmitAt: 0,
         windowBytes: 0,
-        windowStartedAt: performance.now(),
+        windowStartedAt: Date.now(),
+        smoothedSpeed: 0,
+        lastChunkAt: Date.now(),
+        lastTransferred: 0,
+        lastTotalSize: 0,
+        finished: false,
+
         noteTransferred(byteCount, transferred, totalSize) {
-            this.windowBytes += byteCount;
-            const now = performance.now();
+            if (this.finished) return;
+
+            const now = Date.now();
+            if (byteCount > 0) {
+                this.windowBytes += byteCount;
+                this.lastChunkAt = now;
+            }
+            this.lastTransferred = transferred;
+            this.lastTotalSize = totalSize;
+
             if (now - this.lastEmitAt < PROGRESS_EMIT_INTERVAL_MS && transferred < totalSize) {
                 return;
             }
 
             const elapsedSeconds = (now - this.windowStartedAt) / 1000;
-            const speed = elapsedSeconds > 0 ? this.windowBytes / elapsedSeconds : 0;
-            const remaining = totalSize - transferred;
-            const eta = speed > 1 ? remaining / speed : null;
+            const instantSpeed = elapsedSeconds > 0 ? this.windowBytes / elapsedSeconds : 0;
+
+            if (instantSpeed === 0 && (now - this.lastChunkAt) >= 1500) {
+                this.smoothedSpeed = 0;
+            } else if (instantSpeed > 0) {
+                this.smoothedSpeed = this.smoothedSpeed === 0
+                    ? instantSpeed
+                    : (0.3 * instantSpeed + 0.7 * this.smoothedSpeed);
+            }
+
+            const remaining = Math.max(0, totalSize - transferred);
+            const eta = this.smoothedSpeed > 1 ? remaining / this.smoothedSpeed : null;
 
             onProgress({
                 progress: totalSize > 0 ? Math.floor((transferred / totalSize) * 100) : 100,
-                speed: Math.round(speed),
+                speed: Math.round(this.smoothedSpeed),
                 eta
             });
 
@@ -136,10 +172,44 @@ function createProgressTracker(onProgress) {
             this.windowBytes = 0;
             this.windowStartedAt = now;
         },
+
+        checkStall() {
+            if (this.finished) return;
+            const now = Date.now();
+            if ((now - this.lastChunkAt) >= 1500 && this.smoothedSpeed > 0) {
+                this.smoothedSpeed = 0;
+                onProgress({
+                    progress: this.lastTotalSize > 0 ? Math.floor((this.lastTransferred / this.lastTotalSize) * 100) : 0,
+                    speed: 0,
+                    eta: null
+                });
+            }
+        },
+
         finish() {
+            if (this.finished) return;
+            this.destroy();
             onProgress({ progress: 100, speed: null, eta: null });
+        },
+
+        destroy() {
+            this.finished = true;
+            if (stallTimer) {
+                clearInterval(stallTimer);
+                stallTimer = null;
+            }
         }
     };
+
+    stallTimer = setInterval(() => {
+        tracker.checkStall();
+    }, 500);
+
+    if (typeof stallTimer?.unref === 'function') {
+        stallTimer.unref();
+    }
+
+    return tracker;
 }
 
 // One RTCPeerConnection per remote device. Holds the negotiated connection,
@@ -1564,8 +1634,18 @@ export class TransferEngine {
                 this.historyUpdate(fileId, update);
             }
         });
+        entry.progressTracker = progress;
 
         let offset = fromOffset;
+        let lastReportedSent = fromOffset;
+
+        const reportSenderProgress = () => {
+            const buffered = Math.max(0, Number(channel.bufferedAmount) || 0);
+            const actualSent = Math.min(totalSize, Math.max(lastReportedSent, offset - buffered));
+            const deltaSent = Math.max(0, actualSent - lastReportedSent);
+            lastReportedSent = actualSent;
+            progress.noteTransferred(deltaSent, actualSent, totalSize);
+        };
 
         try {
             while (offset < totalSize) {
@@ -1574,7 +1654,7 @@ export class TransferEngine {
                 if (channel.readyState !== 'open') throw new TransferAbortedError('Connection closed during transfer.');
 
                 if (channel.bufferedAmount > SEND_HIGH_WATER_BYTES) {
-                    await waitForBufferDrain(channel, SEND_LOW_WATER_BYTES);
+                    await waitForBufferDrain(channel, SEND_LOW_WATER_BYTES, reportSenderProgress);
                     continue;
                 }
 
@@ -1589,10 +1669,10 @@ export class TransferEngine {
                     hasher.update(new Uint8Array(buffer));
                 }
                 offset += buffer.byteLength;
-                progress.noteTransferred(buffer.byteLength, offset, totalSize);
+                reportSenderProgress();
             }
 
-            await waitForBufferDrain(channel, 0);
+            await waitForBufferDrain(channel, 0, reportSenderProgress);
             const fileDigest = entry.digest || hasher.digest('hex');
             entry.digest = fileDigest;
 
@@ -1602,7 +1682,7 @@ export class TransferEngine {
                 digest: fileDigest,
                 size: totalSize
             }));
-            await waitForBufferDrain(channel, 0);
+            await waitForBufferDrain(channel, 0, reportSenderProgress);
 
             if (entry.uploadSessionId !== currentSessionId) return;
 
@@ -1650,6 +1730,9 @@ export class TransferEngine {
             }
 
             // On unexpected error, if not cancelled, let grace timer manage recovery or teardown
+        } finally {
+            progress.destroy();
+            entry.progressTracker = null;
         }
     }
 
@@ -1910,6 +1993,7 @@ export class TransferEngine {
                 this.historyUpdate(fileId, update);
             }
         });
+        state.progressTracker = progress;
 
         channel.onmessage = async (event) => {
             if (state.finalized || channel.readyState === 'closed' || state.channel !== channel) return;
@@ -1955,6 +2039,7 @@ export class TransferEngine {
         channel.onclose = () => {
             if (state.channel !== channel) return;
             this.flushStreamChunks(state);
+            progress.destroy();
             if (!state.finalized) {
                 if (state.graceTimer) {
                     clearTimeout(state.graceTimer);
@@ -1982,6 +2067,10 @@ export class TransferEngine {
         if (state.graceTimer) {
             clearTimeout(state.graceTimer);
             state.graceTimer = null;
+        }
+        if (state.progressTracker) {
+            state.progressTracker.finish();
+            state.progressTracker = null;
         }
         if (state.finalized) return;
         state.finalized = true;
@@ -2165,6 +2254,10 @@ export class TransferEngine {
         if (state.graceTimer) {
             clearTimeout(state.graceTimer);
             state.graceTimer = null;
+        }
+        if (state.progressTracker) {
+            state.progressTracker.destroy();
+            state.progressTracker = null;
         }
         state.streamPendingChunks = [];
         state.streamPendingBytes = 0;
