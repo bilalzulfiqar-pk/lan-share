@@ -57,7 +57,8 @@ describe('ConnectionModeBadge Component', () => {
         const note = 'Handshake initiated by receiver device to access local Wi-Fi IP directly.';
         const html = renderToStaticMarkup(<ConnectionModeBadge mode="direct-lan" routeNote={note} />);
         expect(html).toContain('conn-mode-popover-route-block');
-        expect(html).toContain('⚡ Route Optimization');
+        expect(html).toContain('Route Optimization');
+        expect(html).not.toContain('⚡');
         expect(html).toContain(note);
     });
 

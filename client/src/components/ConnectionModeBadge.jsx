@@ -161,7 +161,7 @@ export function ConnectionModeBadge({ mode = 'direct-lan', className = '', showI
 
                     {routeNote && resolvedMode === 'direct-lan' && (
                         <div className="conn-mode-popover-route-block" data-testid="conn-mode-route-optimization">
-                            <span className="conn-mode-route-pill">⚡ Route Optimization</span>
+                            <span className="conn-mode-route-pill">Route Optimization</span>
                             <p className="conn-mode-route-text">{routeNote}</p>
                         </div>
                     )}
