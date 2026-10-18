@@ -4139,16 +4139,6 @@ button {
     gap: 0.45rem;
   }
 
-  .file-icon {
-    width: 34px;
-    height: 34px;
-  }
-
-  .file-icon svg {
-    width: 17px;
-    height: 17px;
-  }
-
   .file-dismiss-action .btn-icon {
     width: 28px;
     height: 28px;
